@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRightIcon,
-  BuildingsIcon,
   CheckIcon,
   HardDrivesIcon,
   MinusIcon,
@@ -36,7 +35,7 @@ export const metadata: Metadata = {
   title: "Pricing",
   description:
     "Unlimited hosts, unlimited devices and zero-knowledge sync on the free tier. " +
-    "Pro is $5 per user per month, Team is $12, and the whole thing is self-hostable.",
+    "Pro is $5 per user per month and Team is $12.",
 };
 
 /* ------------------------------------------------------------------ tiers */
@@ -113,59 +112,41 @@ const TIERS: Tier[] = [
     cta: { label: "Start with Team", href: "/sign-up?plan=team" },
     variant: "outline",
   },
-  {
-    id: "self-host",
-    name: "Self-host",
-    price: "Custom",
-    unit: "priced per deployment",
-    icon: <BuildingsIcon weight="fill" />,
-    tagline: "For when the relay seeing connection metadata is already too much.",
-    features: [
-      "Everything in Team",
-      "Run the relay and the sync service yourself",
-      "Connection metadata never leaves your network",
-      "Deploy behind your own VPN or bastion",
-      "Support terms agreed in writing",
-    ],
-    cta: { label: "See self-hosting", href: "/security#self-host" },
-    variant: "outline",
-  },
 ];
 
 /* ------------------------------------------------------------ comparison */
 
 type Cell = boolean | string;
 
-const COLUMNS = ["Free", "Pro", "Team", "Self-host"] as const;
+const COLUMNS = ["Free", "Pro", "Team"] as const;
 
 const COMPARISON: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
   {
     group: "Connect",
     rows: [
-      { label: "Hosts", cells: ["Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
-      { label: "Devices", cells: ["Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
-      { label: "Vault sync", cells: [true, true, true, true] },
-      { label: "SFTP", cells: [true, true, true, true] },
-      { label: "Port forwarding", cells: [true, true, true, true] },
-      { label: "Remote editing", cells: [true, true, true, true] },
+      { label: "Hosts", cells: ["Unlimited", "Unlimited", "Unlimited"] },
+      { label: "Devices", cells: ["Unlimited", "Unlimited", "Unlimited"] },
+      { label: "Vault sync", cells: [true, true, true] },
+      { label: "SFTP", cells: [true, true, true] },
+      { label: "Port forwarding", cells: [true, true, true] },
+      { label: "Remote editing", cells: [true, true, true] },
     ],
   },
   {
     group: "Work",
     rows: [
-      { label: "AI assist", cells: [false, true, true, true] },
-      { label: "Session recording", cells: [false, true, true, true] },
-      { label: "Share links", cells: [false, true, true, true] },
+      { label: "AI assist", cells: [false, true, true] },
+      { label: "Session recording", cells: [false, true, true] },
+      { label: "Share links", cells: [false, true, true] },
     ],
   },
   {
     group: "Organisation",
     rows: [
-      { label: "Team vault", cells: [false, false, true, true] },
-      { label: "RBAC", cells: [false, false, true, true] },
-      { label: "Audit log", cells: [false, false, true, true] },
-      { label: "SSO", cells: [false, false, true, true] },
-      { label: "Self-hosting", cells: [false, false, false, true] },
+      { label: "Team vault", cells: [false, false, true] },
+      { label: "RBAC", cells: [false, false, true] },
+      { label: "Audit log", cells: [false, false, true] },
+      { label: "SSO", cells: [false, false, true] },
     ],
   },
 ];
@@ -229,19 +210,6 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     ),
   },
   {
-    q: "Can I self-host?",
-    a: (
-      <>
-        Yes. The relay is stateless and is the piece worth running first — point
-        the client at your own and the connection metadata never leaves your
-        network. The sync service can run on your infrastructure too, though the
-        blob it stores was already unreadable to us. Pricing depends on seat
-        count and support terms, so it is a conversation rather than a checkout
-        page.
-      </>
-    ),
-  },
-  {
     q: "Do you have SOC 2?",
     a: (
       <>
@@ -250,8 +218,8 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
         instead is a published threat model that states the largest residual risk
         in our own words: we serve the JavaScript, so a compromise of our
         delivery is a compromise of the client. Around that sit non-extractable
-        WebCrypto keys, a vault the server cannot decrypt, pinned host keys, and
-        the option to self-host so our infrastructure is not in your path at all.
+        WebCrypto keys, a vault the server cannot decrypt, and host keys pinned
+        on first use and verified on every reconnect.
       </>
     ),
   },
@@ -280,7 +248,7 @@ export default function PricingPage() {
         <h2 id="tiers-heading" className="sr-only">
           Plans
         </h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           {TIERS.map((tier) => (
             <TierCard key={tier.id} tier={tier} />
           ))}
@@ -308,8 +276,9 @@ export default function PricingPage() {
         <div className="mt-6 ring-1 ring-foreground/10">
           <Table>
             <TableCaption className="px-4 pb-4 text-left leading-relaxed">
-              Self-host includes every Team feature; the difference is whose
-              machines the relay and sync service run on.
+              Each tier includes everything in the one before it. The client is
+              the same in all three — the SSH session is WebAssembly in your tab
+              whichever you are on.
             </TableCaption>
             <TableHeader>
               <TableRow className="bg-card">
