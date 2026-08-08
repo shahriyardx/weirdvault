@@ -48,7 +48,7 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
               <Link href="/dashboard/terminal">
-                Launch workspace <ArrowRightIcon />
+                Launch the dashboard <ArrowRightIcon />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
@@ -63,7 +63,7 @@ export default function Home() {
       {/* -------------------------------------------------------- features */}
       <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
         <h2 className="font-heading text-xl font-semibold tracking-tight">
-          A workspace, not a web terminal
+          A dashboard, not a web terminal
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Everything rides one SSH connection, so the file explorer costs no

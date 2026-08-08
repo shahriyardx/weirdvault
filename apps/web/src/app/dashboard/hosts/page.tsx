@@ -69,11 +69,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { deleteHost, listHosts, saveHost, type Host } from "@/lib/hosts";
+import { deleteHost, listHosts, saveHost, type Host, type HostAuth } from "@/lib/hosts";
 import { listPins, type PinnedHostKey } from "@/lib/hostkeys";
 import { listStoredKeys, type StoredKey } from "@/lib/keys";
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
 import { useSshSession } from "@/lib/ssh/session-provider";
-import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
+import { useConnectHost } from "@/lib/ssh/use-connect-host";
 
 /* -------------------------------------------------------------------- form */
 
@@ -85,6 +86,7 @@ interface HostForm {
   hostname: string;
   port: string;
   username: string;
+  auth: HostAuth;
   keyId: string;
   folder: string;
   tags: string;
@@ -97,6 +99,7 @@ const blankForm = (): HostForm => ({
   hostname: "",
   port: "22",
   username: "",
+  auth: "key",
   keyId: NO_KEY,
   folder: "",
   tags: "",
@@ -110,6 +113,7 @@ const formFor = (host: Host): HostForm => ({
   hostname: host.hostname,
   port: String(host.port),
   username: host.username,
+  auth: host.auth ?? "key",
   keyId: host.keyId ?? NO_KEY,
   folder: host.folder ?? "",
   tags: (host.tags ?? []).join(", "),
@@ -119,44 +123,16 @@ const formFor = (host: Host): HostForm => ({
 
 export default function HostsPage() {
   const router = useRouter();
-  const { keys: usableKeys, activeKey, connect } = useSshSession();
-  const vaultUnlocked = useVaultUnlocked();
+  const { keys: usableKeys } = useSshSession();
 
-  /**
-   * Connect straight from the list.
-   *
-   * A saved host already carries everything the connect form would ask for, so
-   * sending someone back to that form to retype it is just friction. Falls back
-   * to the form only when there is genuinely something missing — no usable key.
-   */
-  async function connectTo(host: Host) {
-    const key = usableKeys.find((k) => k.id === host.keyId) ?? activeKey;
-    if (!key) {
-      // A locked vault is the usual reason there is no usable key: portable
-      // keys cannot be unwrapped until it opens. Ask for the password rather
-      // than reporting a dead end.
-      if (!vaultUnlocked) {
-        requestUnlock();
-        return;
-      }
-      toast.error("No usable key — create one on the Keys page first.");
-      router.push("/dashboard/keys");
-      return;
-    }
-    const toastId = toast.loading(`Connecting to ${host.username}@${host.hostname}…`);
-    try {
-      await connect({
-        hostname: host.hostname,
-        port: host.port,
-        username: host.username,
-        key,
-      });
-      toast.success(`Connected to ${host.hostname}`, { id: toastId });
-      router.push("/dashboard/terminal");
-    } catch (e) {
-      toast.error(String((e as Error).message ?? e), { id: toastId, duration: 10000 });
-    }
-  }
+  // Connecting straight from the list: a saved host already carries everything
+  // the connect form would ask for, so sending someone back to that form to
+  // retype it is friction. Whatever it genuinely lacks, the prompt asks for.
+  const prompt = useCredentialPrompt();
+  const { connectToHost, connecting } = useConnectHost({
+    askFor: prompt.askFor,
+    onConnected: () => router.push("/dashboard/terminal"),
+  });
 
   const [hosts, setHosts] = React.useState<Host[]>([]);
   const [pins, setPins] = React.useState<PinnedHostKey[]>([]);
@@ -257,7 +233,10 @@ export default function HostsPage() {
         hostname,
         port,
         username,
-        keyId: form.keyId === NO_KEY ? undefined : form.keyId,
+        auth: form.auth,
+        // A password host has no key to remember; keeping a stale one would
+        // make the row claim an authentication method it does not use.
+        keyId: form.auth === "password" || form.keyId === NO_KEY ? undefined : form.keyId,
         folder: form.folder.trim() || undefined,
         tags: tags.length ? tags : undefined,
       });
@@ -288,7 +267,7 @@ export default function HostsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Workspace"
+        eyebrow="Dashboard"
         title="Hosts"
         description="Saved connections, stored encrypted on this device and synced to your other devices as ciphertext. Editing one here changes it everywhere you are signed in."
         actions={
@@ -334,7 +313,7 @@ export default function HostsPage() {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Host</TableHead>
-                    <TableHead className="hidden md:table-cell">Key</TableHead>
+                    <TableHead className="hidden md:table-cell">Authentication</TableHead>
                     <TableHead className="hidden lg:table-cell">Host key</TableHead>
                     <TableHead className="hidden sm:table-cell">Last used</TableHead>
                     <TableHead className="w-10">
@@ -349,7 +328,8 @@ export default function HostsPage() {
                       host={host}
                       pin={pinFor(host)}
                       keyLabel={keyLabel(host.keyId)}
-                      onConnect={() => void connectTo(host)}
+                      busy={connecting === host.id}
+                      onConnect={() => void connectToHost(host)}
                       onEdit={() => setForm(formFor(host))}
                       onDelete={() => setPendingDelete(host)}
                     />
@@ -429,29 +409,56 @@ export default function HostsPage() {
                 />
               </Field>
 
+              {/* Not every server is key-authenticated — plenty of boxes are
+                  reached with a password and nothing else. Choosing the method
+                  first keeps the fields below honest. */}
               <div className="grid gap-1.5">
-                <Label htmlFor="host-key">Key</Label>
+                <Label htmlFor="host-auth">Authentication</Label>
                 <Select
-                  value={form.keyId}
-                  onValueChange={(v) => setForm({ ...form, keyId: v })}
+                  value={form.auth}
+                  onValueChange={(v) => setForm({ ...form, auth: v as HostAuth })}
                 >
-                  <SelectTrigger id="host-key" className="w-full">
-                    <SelectValue placeholder="Choose a key" />
+                  <SelectTrigger id="host-auth" className="w-full">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_KEY}>Ask on connect</SelectItem>
-                    {keys.map((k) => (
-                      <SelectItem key={k.id} value={k.id}>
-                        {k.label} · {k.mode}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="key">SSH key</SelectItem>
+                    <SelectItem value="password">Password</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Device-bound keys only work in this browser. Portable keys
-                  travel with the vault.
-                </p>
               </div>
+
+              {form.auth === "key" ? (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="host-key">Key</Label>
+                  <Select
+                    value={form.keyId}
+                    onValueChange={(v) => setForm({ ...form, keyId: v })}
+                  >
+                    <SelectTrigger id="host-key" className="w-full">
+                      <SelectValue placeholder="Choose a key" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_KEY}>Ask on connect</SelectItem>
+                      {keys.map((k) => (
+                        <SelectItem key={k.id} value={k.id}>
+                          {k.label} · {k.mode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Device-bound keys only work in this browser. Portable keys
+                    travel with the vault.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  You will be asked for the password each time you connect. We do
+                  not store it — a saved password would be a plaintext credential
+                  in your vault, and the vault is the one thing we cannot read.
+                </p>
+              )}
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field id="host-folder" label="Folder">
@@ -511,6 +518,12 @@ export default function HostsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CredentialPrompt
+        pending={prompt.pending}
+        keys={usableKeys}
+        onSettle={prompt.settle}
+      />
     </>
   );
 }
@@ -521,6 +534,7 @@ function HostRow({
   host,
   pin,
   keyLabel,
+  busy,
   onConnect,
   onEdit,
   onDelete,
@@ -528,6 +542,7 @@ function HostRow({
   host: Host;
   pin?: PinnedHostKey;
   keyLabel?: string;
+  busy: boolean;
   onConnect: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -561,10 +576,12 @@ function HostRow({
       </TableCell>
 
       <TableCell className="hidden md:table-cell">
-        {keyLabel ? (
+        {host.auth === "password" ? (
+          <span className="text-muted-foreground">Password</span>
+        ) : keyLabel ? (
           <span className="text-foreground">{keyLabel}</span>
         ) : (
-          <span className="text-muted-foreground">Ask on connect</span>
+          <span className="text-muted-foreground">Key — ask on connect</span>
         )}
       </TableCell>
 
@@ -581,8 +598,8 @@ function HostRow({
             something to go hunting for behind a menu. Edit and delete are rare
             and destructive, so they stay tucked away. */}
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="secondary" onClick={onConnect}>
-            <TerminalWindowIcon /> Connect
+          <Button size="sm" variant="secondary" onClick={onConnect} disabled={busy}>
+            <TerminalWindowIcon /> {busy ? "Connecting" : "Connect"}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

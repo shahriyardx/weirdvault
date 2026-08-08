@@ -184,7 +184,7 @@ export default function KeysPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Workspace"
+        eyebrow="Dashboard"
         title="Keys"
         description="Ed25519 keys generated inside this browser. The private half is a non-extractable WebCrypto handle: it signs the SSH handshake, and nothing — our code included — can read its bytes."
         actions={

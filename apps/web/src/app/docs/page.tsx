@@ -51,7 +51,7 @@ export default function Docs() {
         actions={
           <Button asChild size="sm">
             <Link href="/dashboard/terminal">
-              Open workspace <ArrowRightIcon />
+              Open the dashboard <ArrowRightIcon />
             </Link>
           </Button>
         }
@@ -71,8 +71,8 @@ export default function Docs() {
             </P>
 
             <ol className="mt-6 space-y-5">
-              <Step n={1} title="Open the workspace">
-                Go to <Code>/workspace</Code>. The SSH client is WebAssembly and
+              <Step n={1} title="Open the dashboard">
+                Go to <Code>/dashboard</Code>. The SSH client is WebAssembly and
                 loads with the page. You can connect without an account; create
                 one when you want hosts and keys to follow you to another device.
               </Step>
@@ -123,7 +123,7 @@ export default function Docs() {
               <span className="text-foreground"> &gt;&gt; ~/.ssh/authorized_keys</span>
             </CodeBlock>
             <p className="mt-2 text-xs text-muted-foreground">
-              Click the block to select it. The workspace shows your real public
+              Click the block to select it. The dashboard shows your real public
               key with the command already built around it.
             </p>
 
@@ -458,7 +458,7 @@ export default function Docs() {
             </p>
             <Button asChild size="sm" className="sm:ml-auto">
               <Link href="/dashboard/terminal">
-                Open workspace <ArrowRightIcon />
+                Open the dashboard <ArrowRightIcon />
               </Link>
             </Button>
           </div>

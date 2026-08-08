@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * The wordmark, shared by every surface — marketing, auth, dashboard, and the
- * workspace — so the product reads as one thing rather than a site with an app
+ * dashboard — so the product reads as one thing rather than a site with an app
  * bolted on.
  */
 export function Brand({

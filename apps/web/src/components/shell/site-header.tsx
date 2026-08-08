@@ -60,7 +60,7 @@ export function SiteHeader({ authed = false }: { authed?: boolean }) {
                 <Link href="/sign-in">Sign in</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/dashboard/terminal">Launch workspace</Link>
+                <Link href="/dashboard/terminal">Launch dashboard</Link>
               </Button>
             </>
           )}

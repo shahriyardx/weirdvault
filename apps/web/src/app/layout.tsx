@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     template: "%s · webxterm",
   },
   description:
-    "A zero-install SSH workspace. Generate a key in the browser, connect to any server, " +
+    "A zero-install SSH client. Generate a key in the browser, connect to any server, " +
     "and get a terminal, file explorer and remote editor — with keys that never leave your device.",
   applicationName: "webxterm",
 };

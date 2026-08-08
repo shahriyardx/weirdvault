@@ -40,9 +40,9 @@ export default function ConnectPage() {
   }, [refreshKeys]);
 
   const [form, setForm] = useState({
-    hostname: "127.0.0.1",
-    port: 2222,
-    username: "webxterm",
+    hostname: "",
+    port: "",
+    username: "",
     password: "",
   });
   const [usePassword, setUsePassword] = useState(false);
@@ -56,9 +56,10 @@ export default function ConnectPage() {
     }
     try {
       await connect({
-        hostname: form.hostname,
-        port: form.port,
-        username: form.username,
+        hostname: form.hostname.trim(),
+        // Blank means the default SSH port, which is what the placeholder says.
+        port: Number(form.port) || 22,
+        username: form.username.trim(),
         key: activeKey,
         password: usePassword ? form.password : undefined,
         save: opts.save,
@@ -92,6 +93,9 @@ export default function ConnectPage() {
                 <Label htmlFor="hostname">Hostname</Label>
                 <Input
                   id="hostname"
+                  placeholder="server.example.com"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={form.hostname}
                   onChange={(e) => setForm({ ...form, hostname: e.target.value })}
                   required
@@ -102,9 +106,10 @@ export default function ConnectPage() {
                 <Input
                   id="port"
                   type="number"
+                  inputMode="numeric"
+                  placeholder="22"
                   value={form.port}
-                  onChange={(e) => setForm({ ...form, port: +e.target.value })}
-                  required
+                  onChange={(e) => setForm({ ...form, port: e.target.value })}
                 />
               </div>
             </div>
@@ -113,6 +118,9 @@ export default function ConnectPage() {
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
+                placeholder="root"
+                autoComplete="off"
+                spellCheck={false}
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
                 required

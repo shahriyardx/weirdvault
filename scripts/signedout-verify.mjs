@@ -24,6 +24,14 @@ const browser = await chromium.launch({ headless: !headed });
 const page = await browser.newPage();
 page.on("pageerror", (e) => console.log(`  [page error] ${e.message}`));
 
+// The connect form ships empty now — placeholders only — so every suite that
+// reaches a shell has to type the target itself.
+const fillConnectForm = async () => {
+  await page.getByLabel("Hostname").fill("127.0.0.1");
+  await page.getByLabel("Port").fill("2222");
+  await page.getByLabel("Username").fill("webxterm");
+};
+
 const screen = () =>
   page.evaluate(() => {
     const b = window.__webxtermTerm?.buffer.active;
@@ -81,6 +89,7 @@ try {
   console.log(`\n4. Connect through the relay anonymously`);
   await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
+  await fillConnectForm();
   await page.getByRole("button", { name: /^connect$/i }).last().click();
   await page.locator('[data-sidebar="menu-button"]', { hasText: "@" })
     .first().waitFor({ timeout: 45000 });
@@ -112,7 +121,19 @@ try {
   check("terminal font is a real stack, not a CSS variable",
         !font.family.includes("var("), font.family.split(",")[0]);
 
-  console.log(`\n6. Files on the same connection`);
+  console.log(`\n6. Splitting with only one session`);
+  await page.getByRole("button", { name: /^split$/i }).click();
+  // With nothing spare to show, the second pane must ask which host to open
+  // rather than cloning the session already on screen.
+  await page.getByRole("button", { name: /select host/i }).waitFor({ timeout: 5000 });
+  check("the new pane offers a host picker instead of a duplicate", true);
+  await page.getByRole("button", { name: /select host/i }).click();
+  await page.getByRole("menuitem", { name: /webxterm@127\.0\.0\.1/ }).first().waitFor({ timeout: 5000 });
+  check("the picker lists the running session", true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /close pane 2/i }).click();
+
+  console.log(`\n7. Files on the same connection`);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await page.waitForLoadState("networkidle");
   // The listing is fetched over SFTP after the route renders, so wait for it

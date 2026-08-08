@@ -41,6 +41,14 @@ const closeAllSessions = async () => {
   }
 };
 
+// The connect form ships empty now — placeholders only — so every suite that
+// reaches a shell has to type the target itself.
+const fillConnectForm = async () => {
+  await page.getByLabel("Hostname").fill("127.0.0.1");
+  await page.getByLabel("Port").fill("2222");
+  await page.getByLabel("Username").fill("webxterm");
+};
+
 const screen = () =>
   page.evaluate(() => {
     const b = window.__webxtermTerm?.buffer.active;
@@ -88,6 +96,7 @@ try {
   docker("sh", "-c", "cp /dev/null /home/webxterm/.ssh/authorized_keys");
   await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
+  await fillConnectForm();
   await page.getByLabel(/use a password once/i).click();
   await page.getByLabel("Password", { exact: true }).fill("webxterm");
   await page.getByRole("button", { name: /^connect$/i }).click();
@@ -104,6 +113,7 @@ try {
   await closeAllSessions();
   await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
+  await fillConnectForm();
   await page.getByRole("button", { name: /save and connect/i }).click();
   await page.locator('[data-sidebar="menu-button"]', { hasText: "@" })
     .first().waitFor({ timeout: 45000 });
@@ -202,7 +212,8 @@ try {
   const open = async (mark) => {
     await page.getByRole("link", { name: "New session", exact: true }).first().click();
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: /^connect$/i }).last().click();
+    await fillConnectForm();
+  await page.getByRole("button", { name: /^connect$/i }).last().click();
     await page.waitForFunction(
       (n) => document.querySelectorAll('[data-sidebar="menu-button"]')
         .length >= n, 3, { timeout: 45000 });
@@ -292,6 +303,7 @@ try {
 
   await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
+  await fillConnectForm();
   await page.getByRole("button", { name: /^connect$/i }).last().click();
 
   await page.getByText(/Host key mismatch/i).waitFor({ timeout: 45000 });

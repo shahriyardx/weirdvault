@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ColumnsIcon,
@@ -10,8 +10,17 @@ import {
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
 import { TerminalView, type TerminalHandle } from "@/components/terminal";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -20,7 +29,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { listHosts, type Host } from "@/lib/hosts";
 import { useSshSession } from "@/lib/ssh/session-provider";
+import { useConnectHost } from "@/lib/ssh/use-connect-host";
 import { cn } from "@/lib/utils";
 
 /**
@@ -120,18 +131,141 @@ export default function TerminalPage() {
           splitDirection === "horizontal" ? "grid-flow-col auto-cols-fr" : "grid-flow-row auto-rows-fr",
         )}
       >
-        {panes.map((sessionId, index) => (
-          <Pane
-            key={`${sessionId}:${index}`}
-            sessionId={sessionId}
-            index={index}
-            focused={index === focusedPane && split}
-            showChrome={split}
-            onFocus={() => setFocusedPane(index)}
-            onClose={() => closePane(index)}
-          />
-        ))}
+        {panes.map((sessionId, index) =>
+          sessionId === "" ? (
+            <EmptyPane
+              key={`empty:${index}`}
+              index={index}
+              focused={index === focusedPane}
+              onFocus={() => setFocusedPane(index)}
+              onClose={() => closePane(index)}
+            />
+          ) : (
+            <Pane
+              key={`${sessionId}:${index}`}
+              sessionId={sessionId}
+              index={index}
+              focused={index === focusedPane && split}
+              showChrome={split}
+              onFocus={() => setFocusedPane(index)}
+              onClose={() => closePane(index)}
+            />
+          ),
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A pane that has been opened but not pointed at anything.
+ *
+ * Splitting used to clone the session you were already looking at, which is
+ * almost never the reason anyone splits. With nothing spare to show, the pane
+ * asks which host to open instead — and connects into itself.
+ */
+function EmptyPane({
+  index,
+  focused,
+  onFocus,
+  onClose,
+}: {
+  index: number;
+  focused: boolean;
+  onFocus: () => void;
+  onClose: () => void;
+}) {
+  const { keys: usableKeys, sessions, setPaneSession } = useSshSession();
+  const [hosts, setHosts] = useState<Host[]>([]);
+
+  const prompt = useCredentialPrompt();
+  const { connectToHost, connecting } = useConnectHost({
+    askFor: prompt.askFor,
+    onConnected: (id) => setPaneSession(index, id),
+  });
+
+  useEffect(() => {
+    void listHosts().then(setHosts).catch(() => setHosts([]));
+  }, []);
+
+  return (
+    <div
+      onMouseDown={onFocus}
+      className={cn(
+        "bg-terminal flex min-h-0 min-w-0 flex-col ring-1",
+        focused ? "ring-primary/50" : "ring-border",
+      )}
+    >
+      <div className="border-border flex shrink-0 items-center gap-1 border-b px-1.5 py-1">
+        <span className="text-muted-foreground px-1 text-[11px]">Empty pane</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto size-5"
+          aria-label={`Close pane ${index + 1}`}
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 place-items-center p-4">
+        <div className="flex max-w-xs flex-col items-center gap-3 text-center">
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Pick a host to open here, or a session you already have running.
+          </p>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="secondary" disabled={connecting !== null}>
+                <PlugsConnectedIcon />
+                {connecting !== null ? "Connecting" : "Select host"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-56">
+              {hosts.length === 0 && sessions.length === 0 ? (
+                <DropdownMenuItem disabled>No saved hosts</DropdownMenuItem>
+              ) : null}
+
+              {hosts.length > 0 && <DropdownMenuLabel>Saved hosts</DropdownMenuLabel>}
+              {hosts.map((host) => (
+                <DropdownMenuItem
+                  key={host.id}
+                  onSelect={() => void connectToHost(host)}
+                  className="flex-col items-start gap-0"
+                >
+                  <span className="truncate">{host.label}</span>
+                  <span className="text-muted-foreground truncate text-[11px]">
+                    {host.username}@{host.hostname}:{host.port}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+
+              {sessions.length > 0 && (
+                <>
+                  {hosts.length > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel>Running sessions</DropdownMenuLabel>
+                  {sessions.map((s) => (
+                    <DropdownMenuItem key={s.id} onSelect={() => setPaneSession(index, s.id)}>
+                      {s.label}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button asChild size="sm" variant="ghost" className="text-xs">
+            <Link href="/dashboard/connect">New connection…</Link>
+          </Button>
+        </div>
+      </div>
+
+      <CredentialPrompt
+        pending={prompt.pending}
+        keys={usableKeys}
+        onSettle={prompt.settle}
+      />
     </div>
   );
 }

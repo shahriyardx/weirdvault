@@ -99,7 +99,15 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   }
 
   await rememberHost(
-    { hostname, port, username, keyId: opts.key?.id },
+    {
+      hostname,
+      port,
+      username,
+      keyId: opts.key?.id,
+      // Record how this connection actually authenticated, so the saved host
+      // asks for the same thing next time instead of guessing.
+      auth: opts.key ? "key" : "password",
+    },
     { create: opts.save },
   );
   return session;
@@ -117,6 +125,17 @@ export async function connectAndInstallKey(
 ): Promise<{ session: SshSession; result: "installed" | "already-present" }> {
   const session = await openSession({ ...opts, key: undefined, password: opts.password });
   const result = await session.installKey(authorizedKeysLine(opts.key));
+
+  // The handshake was a password one, but the point of it was to stop needing
+  // passwords. Correct the saved record so the next connection reaches for the
+  // key we just installed.
+  await rememberHost({
+    hostname: opts.hostname,
+    port: opts.port,
+    username: opts.username,
+    keyId: opts.key.id,
+    auth: "key",
+  });
 
   void reportAudit("key.installed", {
     target: { host: opts.hostname, port: opts.port },

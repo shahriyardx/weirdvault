@@ -12,12 +12,24 @@
 import { idbDelete, idbGetAll, idbPut } from "./idb";
 import { recordDeletion } from "./vault/tombstones";
 
+/**
+ * How a host authenticates.
+ *
+ * Only the *method* is stored, never the secret. A password host prompts on
+ * every connection: writing the password into the vault would trade a real
+ * credential for skipping one dialog, and the first thing webxterm does with a
+ * password is install a key so it is not needed again.
+ */
+export type HostAuth = "key" | "password";
+
 export interface Host {
   id: string;
   label: string;
   hostname: string;
   port: number;
   username: string;
+  /** Defaults to "key" — records written before this field existed are key hosts. */
+  auth?: HostAuth;
   keyId?: string;
   folder?: string;
   tags?: string[];
@@ -52,7 +64,7 @@ export async function saveHost(
  * "Save and connect" path passes.
  */
 export async function rememberHost(
-  fields: Pick<Host, "hostname" | "port" | "username" | "keyId">,
+  fields: Pick<Host, "hostname" | "port" | "username" | "keyId" | "auth">,
   opts: { create?: boolean } = {},
 ): Promise<Host | null> {
   const existing = (await listHosts()).find(

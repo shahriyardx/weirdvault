@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRightIcon,
   CaretRightIcon,
@@ -45,9 +46,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
 import { listPins, type PinnedHostKey } from "@/lib/hostkeys";
 import { listHosts, type Host } from "@/lib/hosts";
 import { listStoredKeys, type StoredKey } from "@/lib/keys";
+import { useSshSession } from "@/lib/ssh/session-provider";
+import { useConnectHost } from "@/lib/ssh/use-connect-host";
 import { cn } from "@/lib/utils";
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
@@ -290,6 +294,14 @@ function Step({
 function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
   const { hosts, keys, pins, readAt } = snapshot;
 
+  const router = useRouter();
+  const { keys: usableKeys } = useSshSession();
+  const prompt = useCredentialPrompt();
+  const { connectToHost, connecting } = useConnectHost({
+    askFor: prompt.askFor,
+    onConnected: () => router.push("/dashboard/terminal"),
+  });
+
   const derived = useMemo(() => {
     const pinnedIds = new Set(pins.map((p) => p.id));
     const hostPinned = (h: Host) => pinnedIds.has(`${h.hostname}:${h.port}`);
@@ -313,6 +325,11 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
 
   return (
     <div className="mt-6 space-y-6">
+      <CredentialPrompt
+        pending={prompt.pending}
+        keys={usableKeys}
+        onSettle={prompt.settle}
+      />
       {/* ------------------------------------------------------------ stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
@@ -411,11 +428,15 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
                             : " · never connected"}
                         </p>
                       </div>
-                      <Button asChild variant="secondary" size="sm" className="ml-auto shrink-0">
-                        <Link href={`/workspace?host=${encodeURIComponent(h.id)}`}>
-                          <TerminalWindowIcon data-icon="inline-start" />
-                          Connect
-                        </Link>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="ml-auto shrink-0"
+                        disabled={connecting === h.id}
+                        onClick={() => void connectToHost(h)}
+                      >
+                        <TerminalWindowIcon data-icon="inline-start" />
+                        {connecting === h.id ? "Connecting" : "Connect"}
                       </Button>
                     </li>
                   ))}

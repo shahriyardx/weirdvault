@@ -53,8 +53,11 @@ export interface SessionEntry {
 }
 
 export interface ConnectRequest extends SessionTarget {
-  key: SshKey;
-  /** Connect with a password once and let webxterm install the key. */
+  /**
+   * Omit for a password-only host. With both, webxterm logs in with the
+   * password once and installs the key so the next connection does not need it.
+   */
+  key?: SshKey;
   password?: string;
   /** Add this host to the saved list. Off by default. */
   save?: boolean;
@@ -72,7 +75,10 @@ interface LiveSession {
 export type SplitDirection = "horizontal" | "vertical";
 
 interface SessionContextValue {
-  /** Session ids shown side by side. Always at least one entry when connected. */
+  /**
+   * Session ids shown side by side. An empty string is a pane that has been
+   * opened but not pointed at anything yet — it renders a host picker.
+   */
   panes: string[];
   splitDirection: SplitDirection;
   /** Index into `panes`; sidebar switches target this one. */
@@ -141,6 +147,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [panes, setPanes] = useState<string[]>([]);
   const [focusedPane, setFocusedPane] = useState(0);
   const [splitDirection, setSplitDirection] = useState<SplitDirection>("horizontal");
+
+  // `connect` is memoised without focusedPane in its deps — reading the state
+  // directly there would land a new session in whichever pane was focused when
+  // the callback was built, not the one focused now.
+  const focusedPaneRef = useRef(0);
+  focusedPaneRef.current = focusedPane;
 
   const refreshKeys = useCallback(async () => {
     const k = await listKeys(getVaultKey() ?? undefined);
@@ -236,7 +248,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
       try {
         let s: SshSession;
-        if (req.password) {
+        if (req.password && req.key) {
           const r = await connectAndInstallKey({ ...common, password: req.password, key: req.key });
           s = r.session;
           setNote(
@@ -244,6 +256,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               ? "Key installed on the server. The password is no longer needed."
               : "That key was already authorized.",
           );
+        } else if (req.password) {
+          // A password-only host: some servers are only ever reached this way,
+          // and installing a key uninvited is not our call to make.
+          s = await openSession({ ...common, password: req.password });
         } else {
           s = await openSession({ ...common, key: req.key });
         }
@@ -254,9 +270,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         pending.session = s;
         setPanes((prev) => {
           if (prev.length === 0) return [id];
-          // Replace whatever the focused pane was showing.
+          // Replace whatever the focused pane was showing — including an empty
+          // pane, which is exactly what its host picker is for.
           const next = [...prev];
-          next[Math.min(focusedPane, next.length - 1)] = id;
+          next[Math.min(focusedPaneRef.current, next.length - 1)] = id;
           return next;
         });
         setActiveId(id);
@@ -323,7 +340,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setPanes((prev) => {
           if (prev.length === 0) return [id];
           const next = [...prev];
-          next[Math.min(focusedPane, next.length - 1)] = id;
+          next[Math.min(focusedPaneRef.current, next.length - 1)] = id;
           return next;
         });
       },
@@ -333,11 +350,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setFocusedPane,
       setSplitDirection,
       splitPane: (id?: string) => {
-        const target = id ?? activeId ?? [...live.current.keys()][0];
-        if (!target) return;
         // Four panes is where a terminal stops being readable on a laptop.
-        setPanes((prev) => (prev.length >= 4 ? prev : [...prev, target]));
-        setFocusedPane((prev) => Math.min(prev + 1, 3));
+        if (panes.length >= 4) return;
+        // A duplicate of the session you are already looking at is rarely what
+        // splitting is for. Prefer a session that is not on screen; with
+        // nothing spare, open the pane empty and let it ask which host.
+        const shown = new Set(panes);
+        const spare = [...live.current.keys()].find((k) => !shown.has(k));
+        setPanes((prev) => [...prev, id ?? spare ?? ""]);
+        setFocusedPane(panes.length);
       },
       closePane: (index: number) =>
         setPanes((prev) => {
