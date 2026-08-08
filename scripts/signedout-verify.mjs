@@ -97,6 +97,17 @@ try {
   await terminalHas("ANON-42");
   check("keystrokes reach the remote PTY", true, "echo ANON-42 → ANON-42");
 
+  // xterm paints to a canvas, which cannot resolve CSS custom properties. A
+  // `var(--font-mono)` here leaves it measuring cells with one font and drawing
+  // with another, which renders as unreadable, wildly spaced text.
+  const font = await page.evaluate(() => ({
+    family: window.__webxtermTerm?.options.fontFamily ?? "",
+    // Actual measured cell width, from the renderer.
+    cellWidth: document.querySelector(".xterm-cursor-layer, .xterm-screen")?.clientWidth ?? 0,
+  }));
+  check("terminal font is a real stack, not a CSS variable",
+        !font.family.includes("var("), font.family.split(",")[0]);
+
   console.log(`\n6. Files on the same connection`);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await page.waitForLoadState("networkidle");

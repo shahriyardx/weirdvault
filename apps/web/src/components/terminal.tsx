@@ -8,6 +8,24 @@ import "@xterm/xterm/css/xterm.css";
 
 import { terminalTheme } from "@/lib/terminal-theme";
 
+/**
+ * The monospace stack as a literal font string.
+ *
+ * xterm.js renders to a canvas (and to WebGL), and neither can resolve CSS
+ * custom properties — passing `var(--font-mono)` leaves it measuring cells with
+ * one font and painting glyphs with another, which shows up as wildly spaced,
+ * unreadable text. So resolve the variable to its actual family name here and
+ * hand xterm a real stack.
+ */
+function monoFontStack(): string {
+  const fallback = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  if (typeof window === "undefined") return fallback;
+  const resolved = getComputedStyle(document.documentElement)
+    .getPropertyValue("--font-mono")
+    .trim();
+  return resolved ? `${resolved}, ${fallback}` : fallback;
+}
+
 export interface TerminalHandle {
   write(data: string | Uint8Array): void;
   clear(): void;
@@ -39,9 +57,10 @@ export function TerminalView({ ref, onInput, onResize }: Props) {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    let disposed = false;
 
     const term = new Terminal({
-      fontFamily: "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontFamily: monoFontStack(),
       fontSize: 13,
       lineHeight: 1.2,
       cursorBlink: true,
@@ -55,11 +74,28 @@ export function TerminalView({ ref, onInput, onResize }: Props) {
 
     // WebGL is a large perf win but unavailable in some environments; a
     // failure here should degrade rendering, not break the terminal.
+    let webgl: WebglAddon | null = null;
     try {
-      term.loadAddon(new WebglAddon());
+      webgl = new WebglAddon();
+      term.loadAddon(webgl);
     } catch {
       /* canvas fallback */
     }
+
+    // xterm measures the character cell once, at construction. If the webfont
+    // is still loading at that moment it measures the fallback and then paints
+    // with the real font, which renders as wildly spaced, unreadable text.
+    // Re-measure once fonts settle, and drop the glyph atlas so WebGL redraws.
+    void document.fonts.ready.then(() => {
+      if (disposed) return;
+      webgl?.clearTextureAtlas();
+      try {
+        fit.fit();
+      } catch {
+        /* not laid out yet */
+      }
+      term.refresh(0, term.rows - 1);
+    });
 
     fit.fit();
     termRef.current = term;
@@ -85,6 +121,7 @@ export function TerminalView({ ref, onInput, onResize }: Props) {
     ro.observe(containerRef.current);
 
     return () => {
+      disposed = true;
       ro.disconnect();
       term.dispose();
       termRef.current = null;

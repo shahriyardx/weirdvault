@@ -6,6 +6,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DotsThreeIcon,
   FingerprintIcon,
@@ -71,6 +72,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { deleteHost, listHosts, saveHost, type Host } from "@/lib/hosts";
 import { listPins, type PinnedHostKey } from "@/lib/hostkeys";
 import { listStoredKeys, type StoredKey } from "@/lib/keys";
+import { useSshSession } from "@/lib/ssh/session-provider";
 
 /* -------------------------------------------------------------------- form */
 
@@ -115,6 +117,38 @@ const formFor = (host: Host): HostForm => ({
 /* -------------------------------------------------------------------- page */
 
 export default function HostsPage() {
+  const router = useRouter();
+  const { keys: usableKeys, activeKey, connect } = useSshSession();
+
+  /**
+   * Connect straight from the list.
+   *
+   * A saved host already carries everything the connect form would ask for, so
+   * sending someone back to that form to retype it is just friction. Falls back
+   * to the form only when there is genuinely something missing — no usable key.
+   */
+  async function connectTo(host: Host) {
+    const key = usableKeys.find((k) => k.id === host.keyId) ?? activeKey;
+    if (!key) {
+      toast.error("No usable key — unlock the vault or create one first.");
+      router.push("/dashboard/connect");
+      return;
+    }
+    const toastId = toast.loading(`Connecting to ${host.username}@${host.hostname}…`);
+    try {
+      await connect({
+        hostname: host.hostname,
+        port: host.port,
+        username: host.username,
+        key,
+      });
+      toast.success(`Connected to ${host.hostname}`, { id: toastId });
+      router.push("/dashboard/terminal");
+    } catch (e) {
+      toast.error(String((e as Error).message ?? e), { id: toastId, duration: 10000 });
+    }
+  }
+
   const [hosts, setHosts] = React.useState<Host[]>([]);
   const [pins, setPins] = React.useState<PinnedHostKey[]>([]);
   const [keys, setKeys] = React.useState<StoredKey[]>([]);
@@ -306,6 +340,7 @@ export default function HostsPage() {
                       host={host}
                       pin={pinFor(host)}
                       keyLabel={keyLabel(host.keyId)}
+                      onConnect={() => void connectTo(host)}
                       onEdit={() => setForm(formFor(host))}
                       onDelete={() => setPendingDelete(host)}
                     />
@@ -477,12 +512,14 @@ function HostRow({
   host,
   pin,
   keyLabel,
+  onConnect,
   onEdit,
   onDelete,
 }: {
   host: Host;
   pin?: PinnedHostKey;
   keyLabel?: string;
+  onConnect: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -531,27 +568,30 @@ function HostRow({
       </TableCell>
 
       <TableCell className="text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${host.label}`}>
-              <DotsThreeIcon weight="bold" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem asChild>
-              <Link href={`/workspace?host=${encodeURIComponent(host.id)}`}>
-                <TerminalWindowIcon /> Connect
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onEdit}>
-              <PencilSimpleIcon /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-              <TrashIcon /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Connecting is why this list exists, so it is a button rather than
+            something to go hunting for behind a menu. Edit and delete are rare
+            and destructive, so they stay tucked away. */}
+        <div className="flex items-center justify-end gap-1">
+          <Button size="sm" variant="secondary" onClick={onConnect}>
+            <TerminalWindowIcon /> Connect
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${host.label}`}>
+                <DotsThreeIcon weight="bold" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onSelect={onEdit}>
+                <PencilSimpleIcon /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                <TrashIcon /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </TableCell>
     </TableRow>
   );
