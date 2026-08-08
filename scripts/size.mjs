@@ -1,11 +1,17 @@
-// Reports the WASM bundle size against the Phase 0 gate.
-// First load is the one real cost of putting the SSH stack in the browser, so
-// this number gets checked on every build rather than discovered later.
+// Fails the build if ssh.wasm gets too big to download.
+//
+// Putting the SSH stack in the browser means every first-time visitor fetches
+// the whole thing before they can connect to anything. That download is the one
+// real cost of the architecture, and it is invisible while developing — the
+// file is already cached on this machine. So the build asserts it rather than
+// leaving it to be discovered by someone on a slow connection.
+//
+// The gate is brotli because that is what a CDN actually serves.
 import { readFileSync } from "node:fs";
 import { gzipSync, brotliCompressSync, constants } from "node:zlib";
 
 const GATE_MB = 4;
-const path = process.argv[2] ?? "spike/web/ssh.wasm";
+const path = process.argv[2] ?? "apps/web/public/ssh.wasm";
 const buf = readFileSync(path);
 
 const gz = gzipSync(buf, { level: 9 }).length;

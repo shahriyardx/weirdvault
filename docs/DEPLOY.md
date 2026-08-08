@@ -32,8 +32,11 @@ openssl rand -base64 48        # RELAY_SECRET
 openssl rand -base64 32        # POSTGRES_PASSWORD
 
 docker compose -f deploy/compose.prod.yaml up -d --build
-docker compose -f deploy/compose.prod.yaml run --rm migrate
 ```
+
+The schema is applied by the web container as it starts, so there is no
+migration step to remember and no window where the code is newer than the
+database.
 
 Then put TLS in front. Both services speak plain HTTP, and **browsers refuse a
 plaintext WebSocket from an https page** — so if the app is on https, the relay
@@ -87,8 +90,18 @@ Set on Vercel:
 `NEXT_PUBLIC_*` is inlined at build time, so changing the relay URL means a
 rebuild, not a restart.
 
-Run migrations from CI or locally with `DATABASE_URL` pointed at production:
-`bun run --cwd apps/web db:push`.
+Migrations ship inside the web image and run at container start, before it
+serves a request. To apply them from elsewhere — CI, or a machine with a tunnel
+open — point `DATABASE_URL` at the database and run
+`bun run --cwd apps/web db:migrate`. It is idempotent: already-applied
+migrations are recorded in a `__migrations` table and skipped.
+
+Schema changes are made by editing `src/lib/db/schema.ts` and running
+`bun run --cwd apps/web db:generate`, which writes a new SQL file under
+`apps/web/drizzle/`. **Commit it.** The generated files are the migration
+history; without them, an upgrade has no way to tell a fresh database from one
+that is three versions behind. `db:push` diffs the schema straight against a
+live database and is for local development only.
 
 ---
 
@@ -130,8 +143,9 @@ Postgres behind a pooler.
 ```bash
 git pull
 docker compose -f deploy/compose.prod.yaml up -d --build
-docker compose -f deploy/compose.prod.yaml run --rm migrate
 ```
+
+The new web container migrates before it accepts traffic.
 
 The relay and web can be upgraded independently — the only contract between
 them is the token format in `crates/relay/src/token.rs`, which is versioned by

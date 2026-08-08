@@ -44,6 +44,14 @@ COPY --from=build --chown=webxterm:webxterm /app/apps/web/.next/standalone ./
 COPY --from=build --chown=webxterm:webxterm /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=webxterm:webxterm /app/apps/web/public ./apps/web/public
 
+# The schema travels with the image that expects it, so a container can never
+# come up against a database older than the code it is running. Applied at
+# start, not here: a build has no database to talk to.
+COPY --from=build --chown=webxterm:webxterm /app/apps/web/drizzle ./apps/web/drizzle
+COPY --chown=webxterm:webxterm apps/web/scripts/migrate.mjs ./apps/web/scripts/migrate.mjs
+COPY --chmod=755 deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
+
 USER webxterm
 EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["node", "apps/web/server.js"]

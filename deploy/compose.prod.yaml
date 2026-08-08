@@ -40,6 +40,9 @@ services:
       args:
         NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL:?set PUBLIC_RELAY_URL in deploy/.env}
     restart: unless-stopped
+    # service_healthy, not service_started: the container migrates before it
+    # serves, so it needs Postgres accepting connections rather than merely
+    # existing.
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,20 +81,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-  # One-shot: applies the schema, then exits. Run it after an upgrade.
-  #   docker compose -f deploy/compose.prod.yaml run --rm migrate
-  migrate:
-    build:
-      context: ..
-      dockerfile: deploy/web.Dockerfile
-    profiles: ["tools"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-webxterm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-webxterm}
-    entrypoint: ["node", "apps/web/node_modules/drizzle-kit/bin.cjs", "push"]
 
 volumes:
   pgdata:
