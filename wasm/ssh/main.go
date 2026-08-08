@@ -11,6 +11,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -162,8 +163,20 @@ func doConnect(cfg js.Value) (js.Value, error) {
 	}
 	status("ready", "shell running", t0)
 
+	// SFTP shares this SSH connection and opens lazily, so a shell-only session
+	// never pays for the subsystem.
+	var (
+		sftpOnce   sync.Once
+		sftpSess   *sftpSession
+		sftpHandle js.Value
+		sftpErr    error
+	)
+
 	var handleFuncs []js.Func
 	cleanup := func(reason string) {
+		if sftpSess != nil {
+			sftpSess.close()
+		}
 		session.Close()
 		client.Close()
 		conn.Close()
@@ -210,12 +223,29 @@ func doConnect(cfg js.Value) (js.Value, error) {
 		go cleanup("closed by user")
 		return nil
 	})
-	handleFuncs = []js.Func{write, resize, closeFn}
+	openSFTP := js.FuncOf(func(js.Value, []js.Value) any {
+		return newPromise(func(resolve, reject func(any)) {
+			go func() {
+				sftpOnce.Do(func() {
+					if sftpSess, sftpErr = newSFTP(client); sftpErr == nil {
+						sftpHandle = sftpSess.handle()
+					}
+				})
+				if sftpErr != nil {
+					reject(sftpErr.Error())
+					return
+				}
+				resolve(sftpHandle)
+			}()
+		})
+	})
+	handleFuncs = []js.Func{write, resize, closeFn, openSFTP}
 
 	return js.ValueOf(map[string]any{
 		"write":  write,
 		"resize": resize,
 		"close":  closeFn,
+		"sftp":   openSFTP,
 	}), nil
 }
 

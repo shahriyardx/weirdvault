@@ -81,6 +81,7 @@ loadKey().then((p) => p && useKey(p).then(() => log("restored key from IndexedDB
 
 // ---------------------------------------------------------------- connect
 let session = null;
+let sftp = null;
 let dataHooks = new Set();
 window.__bytesIn = 0;
 window.__benchMode = false;
@@ -130,6 +131,11 @@ async function connect() {
       },
     });
 
+    // The file explorer rides the same SSH connection, so it opens right
+    // alongside the shell rather than as a separate login.
+    sftp = await session.sftp();
+    window.__sftpReady = true;
+
     const ms = performance.now() - t0;
     window.__connectMs = ms;
     window.__connected = true;
@@ -148,6 +154,21 @@ $("connect").onclick = connect;
 $("disconnect").onclick = () => session?.close();
 
 term.onData((d) => session?.write(d));
+
+const heapNow = () => performance.memory?.usedJSHeapSize ?? 0;
+
+/**
+ * Heap size after giving the collector a chance to run. Requires Chromium
+ * launched with --js-flags=--expose-gc; without it this still works, just
+ * noisier.
+ */
+async function settledHeap() {
+  for (let i = 0; i < 3; i++) {
+    window.gc?.();
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  return heapNow();
+}
 
 // Hooks for the automated Phase 0 verification.
 window.__api = {
@@ -173,6 +194,60 @@ window.__api = {
       dataHooks.add(h);
       session.write("x");
     }),
+
+  // ------------------------------------------------------------ sftp
+  sftpList: (dir) => sftp.list(dir),
+  sftpStat: (p) => sftp.stat(p),
+  sftpRemove: (p) => sftp.remove(p),
+
+  /**
+   * Stream a synthetic file up from a real Blob, exactly as a drag-dropped
+   * File would arrive: read from the stream, hand chunks to WASM, never hold
+   * the whole thing.
+   *
+   * Reports *retained* heap after a forced GC, not peak. Peak measures
+   * allocation rate and GC timing; retained answers the only question that
+   * matters — are we still holding the file when the transfer is done?
+   */
+  sftpUpload: async (remotePath, sizeMB) => {
+    const chunk = new Uint8Array(1048576).fill(65);
+    let blob = new Blob(Array.from({ length: sizeMB }, () => chunk));
+    let reader = blob.stream().getReader();
+
+    const base = await settledHeap();
+    let peak = base;
+    const next = async () => {
+      const { value, done } = await reader.read();
+      peak = Math.max(peak, heapNow());
+      return done ? null : value;
+    };
+
+    const res = await sftp.upload(remotePath, next);
+    blob = reader = null;
+    const retained = (await settledHeap()) - base;
+
+    return { ...res, retainedMB: retained / 1048576, peakMB: (peak - base) / 1048576 };
+  },
+
+  /** Stream a file down, discarding bytes, to measure the wire not the disk. */
+  sftpDownload: async (remotePath) => {
+    let bytes = 0;
+    const base = await settledHeap();
+    let peak = base;
+
+    const res = await sftp.download(remotePath, (buf) => {
+      bytes += buf.length;
+      peak = Math.max(peak, heapNow());
+    });
+    const retained = (await settledHeap()) - base;
+
+    return {
+      ...res,
+      received: bytes,
+      retainedMB: retained / 1048576,
+      peakMB: (peak - base) / 1048576,
+    };
+  },
 
   /** Bytes/sec of a bulk transfer, measured at the WASM boundary. */
   throughput: (command, expectBytes, timeoutMs = 60000) =>
