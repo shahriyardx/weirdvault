@@ -10,3 +10,13 @@ out/
 spike/web/vendor/
 spike/.keys/
 target/
+
+# next.js
+.next/
+out/
+
+# env
+.env*.local
+
+# bun
+.bun/

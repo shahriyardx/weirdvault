@@ -1,23 +1,28 @@
 {
   "name": "webxterm",
-  "version": "1.0.0",
-  "description": "Zero-install web SSH workspace. Open a browser, generate or import a key, connect to any server — terminal, file explorer, uploads, remote editing, nothing to install on either end.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "private": true,
+  "type": "module",
+  "description": "Zero-install web SSH workspace: browser, key, connect. Nothing to install on either end.",
+  "workspaces": ["apps/*"],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0"
+    "dev": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd apps/web build",
+    "db:up": "docker compose -f deploy/compose.yaml up -d postgres",
+    "db:down": "docker compose -f deploy/compose.yaml down",
+    "db:push": "bun run --cwd apps/web db:push",
+    "db:studio": "bun run --cwd apps/web db:studio",
+    "spike:sshd": "make sshd",
+    "spike:wasm": "make wasm",
+    "spike:relay": "make relay",
+    "verify:phase0": "bun scripts/phase0-verify.mjs",
+    "verify:sftp": "bun scripts/sftp-verify.mjs",
+    "size": "bun scripts/size.mjs spike/web/ssh.wasm"
   },
   "devDependencies": {
     "playwright": "^1.62.1"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0"
   }
 }

@@ -20,10 +20,13 @@ authorize:
 	docker exec $(SSHD_NAME) sh -c "echo '$(KEY)' >> /home/webxterm/.ssh/authorized_keys"
 	@echo "authorized."
 
-## wasm: build the Go SSH core for the browser
+## wasm: build the Go SSH core for the browser (spike harness + Next.js app)
 wasm:
 	GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(WASM_OUT) ./wasm/ssh
 	@cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" spike/web/wasm_exec.js
+	@mkdir -p apps/web/public
+	@cp $(WASM_OUT) apps/web/public/ssh.wasm
+	@cp spike/web/wasm_exec.js apps/web/public/wasm_exec.js
 	@$(MAKE) --no-print-directory size
 
 ## size: report the WASM bundle size against the Phase 0 gate (<4 MB Brotli)
