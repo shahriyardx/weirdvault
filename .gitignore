@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+out/
+*.wasm
+*.wasm.br
+.env
+.env.local
+.DS_Store
+spike/web/vendor/
+spike/.keys/
+target/
