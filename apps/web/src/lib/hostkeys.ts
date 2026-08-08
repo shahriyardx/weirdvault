@@ -14,6 +14,7 @@
  */
 
 import { idbGet, idbPut, idbDelete, idbGetAll } from "./idb";
+import { recordDeletion } from "./vault/tombstones";
 
 export interface PinnedHostKey {
   /** host:port */
@@ -53,6 +54,11 @@ export async function pin(
   return record;
 }
 
+/** Used by vault sync to land a pin from another device. */
+export async function putPin(record: PinnedHostKey): Promise<void> {
+  await idbPut(STORE, record.id, record);
+}
+
 export async function touchPin(host: string, port: number): Promise<void> {
   const existing = await getPin(host, port);
   if (existing) {
@@ -66,7 +72,11 @@ export async function touchPin(host: string, port: number): Promise<void> {
  * the mismatch warning.
  */
 export async function unpin(host: string, port: number): Promise<void> {
-  await idbDelete(STORE, idFor(host, port));
+  const id = idFor(host, port);
+  await idbDelete(STORE, id);
+  // Tombstone it, or the next device to sync an older copy would restore the
+  // pin and keep rejecting a server the user legitimately rebuilt.
+  await recordDeletion(id);
 }
 
 export class HostKeyMismatchError extends Error {

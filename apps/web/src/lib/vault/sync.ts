@@ -6,23 +6,48 @@
  * Pull, merge, push — with the merge happening locally on plaintext, because
  * the server holds ciphertext and could not merge if it wanted to.
  *
- * Conflict resolution is last-write-wins per record, keyed by `updatedAt`,
- * with deletions recorded as tombstones so a delete on one device isn't undone
- * by a stale copy on another. That is weaker than a full CRDT, but it is
- * correct for the shape of this data (small, per-record, rarely concurrent) and
- * it is honest about what it does. Automerge can slot in behind this interface
- * when snippets grow collaborative editing.
+ * Conflict resolution is last-write-wins per record with tombstones for
+ * deletes, so a delete on one device isn't undone by a stale copy on another.
+ * That is weaker than a full CRDT, but it is correct for the shape of this data
+ * (small, per-record, rarely concurrent) and it is honest about what it does.
+ *
+ * What syncs:
+ *  - hosts, folders, tags
+ *  - **portable keys**, as the ciphertext produced at generation time. Without
+ *    these the portable key mode does its crypto and then strands the key on
+ *    one device, which defeats the entire point of the mode.
+ *  - **pinned host keys**, so a second device inherits the pin rather than
+ *    silently trusting on first use again — a fresh TOFU on every new device
+ *    is a meaningfully weaker security posture than the first device had.
  */
 
 import type { Host } from "@/lib/hosts";
 import { listHosts, saveHost } from "@/lib/hosts";
+import type { PinnedHostKey } from "@/lib/hostkeys";
+import { listPins, putPin } from "@/lib/hostkeys";
 import { idbGet, idbPut } from "@/lib/idb";
+import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys";
 
 import { decryptVault, encryptVault, type VaultEnvelope } from "./crypto";
+import { getTombstones, setTombstones } from "./tombstones";
+
+export { getTombstones, recordDeletion } from "./tombstones";
+
+/** A portable key as it travels: ciphertext plus the public half. */
+export interface SyncedKey {
+  id: string;
+  label: string;
+  mode: "portable";
+  publicKeyRaw: string; // base64
+  wrapped: { iv: string; ciphertext: string }; // base64
+  createdAt: number;
+}
 
 export interface VaultDocument {
   hosts: Host[];
-  /** id -> deletedAt, so a delete beats an older edit. */
+  keys: SyncedKey[];
+  hostKeys: PinnedHostKey[];
+  /** id -> deletedAt, so a delete beats an older edit. Shared across kinds. */
   tombstones: Record<string, number>;
   updatedAt: number;
 }
@@ -34,7 +59,13 @@ interface SyncState {
 
 const STATE_KEY = "sync-state";
 
-const emptyDoc = (): VaultDocument => ({ hosts: [], tombstones: {}, updatedAt: 0 });
+const emptyDoc = (): VaultDocument => ({
+  hosts: [],
+  keys: [],
+  hostKeys: [],
+  tombstones: {},
+  updatedAt: 0,
+});
 
 async function getState(): Promise<SyncState> {
   return (await idbGet<SyncState>("vault", STATE_KEY)) ?? { version: 0, lastSyncedAt: 0 };
@@ -44,19 +75,78 @@ async function setState(state: SyncState): Promise<void> {
   await idbPut("vault", STATE_KEY, state);
 }
 
-export async function getTombstones(): Promise<Record<string, number>> {
-  return (await idbGet<Record<string, number>>("vault", "tombstones")) ?? {};
+/* ------------------------------------------------------------- encoding --- */
+
+const b64 = (b: ArrayBuffer | Uint8Array): string => {
+  const bytes = b instanceof Uint8Array ? b : new Uint8Array(b);
+  let s = "";
+  for (const byte of bytes) s += String.fromCharCode(byte);
+  return btoa(s);
+};
+
+const unb64 = (s: string): ArrayBuffer => {
+  const bin = atob(s);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+};
+
+/**
+ * Only portable keys travel. A device-bound key is a non-extractable CryptoKey
+ * handle with no exportable representation — there is literally nothing to
+ * send, which is the property the mode is chosen for.
+ */
+function toSyncedKey(rec: StoredKey): SyncedKey | null {
+  if (rec.mode !== "portable" || !rec.wrapped) return null;
+  return {
+    id: rec.id,
+    label: rec.label,
+    mode: "portable",
+    publicKeyRaw: b64(rec.publicKeyRaw),
+    wrapped: {
+      iv: b64(rec.wrapped.iv),
+      ciphertext: b64(rec.wrapped.ciphertext),
+    },
+    createdAt: rec.createdAt,
+  };
 }
 
-export async function recordDeletion(id: string): Promise<void> {
-  const t = await getTombstones();
-  t[id] = Date.now();
-  await idbPut("vault", "tombstones", t);
+function fromSyncedKey(k: SyncedKey): StoredKey {
+  return {
+    id: k.id,
+    label: k.label,
+    mode: "portable",
+    publicKeyRaw: unb64(k.publicKeyRaw),
+    wrapped: {
+      iv: unb64(k.wrapped.iv),
+      ciphertext: unb64(k.wrapped.ciphertext),
+    },
+    createdAt: k.createdAt,
+  };
+}
+
+/* ---------------------------------------------------------------- merge --- */
+
+function mergeById<T extends { id: string }>(
+  local: T[],
+  remote: T[],
+  stamp: (item: T) => number,
+  tombstones: Record<string, number>,
+): T[] {
+  const byId = new Map<string, T>();
+  for (const item of [...remote, ...local]) {
+    const existing = byId.get(item.id);
+    if (!existing || stamp(item) > stamp(existing)) byId.set(item.id, item);
+  }
+  return [...byId.values()].filter((item) => {
+    const deletedAt = tombstones[item.id];
+    return !deletedAt || stamp(item) > deletedAt;
+  });
 }
 
 /**
- * Merge two documents. Pure, so it can be tested without a network or a
- * database — which matters, because this is where data gets lost if it's wrong.
+ * Pure, so it can be tested without a network or a database — which matters,
+ * because this is where data gets lost if it's wrong.
  */
 export function mergeVault(local: VaultDocument, remote: VaultDocument): VaultDocument {
   const tombstones = { ...remote.tombstones };
@@ -64,39 +154,51 @@ export function mergeVault(local: VaultDocument, remote: VaultDocument): VaultDo
     tombstones[id] = Math.max(tombstones[id] ?? 0, at);
   }
 
-  const byId = new Map<string, Host>();
-  for (const host of [...remote.hosts, ...local.hosts]) {
-    const existing = byId.get(host.id);
-    const stamp = (h: Host) => h.lastUsedAt ?? h.createdAt;
-    if (!existing || stamp(host) > stamp(existing)) byId.set(host.id, host);
-  }
-
-  // A deletion wins over any edit older than it.
-  const hosts = [...byId.values()].filter((h) => {
-    const deletedAt = tombstones[h.id];
-    return !deletedAt || (h.lastUsedAt ?? h.createdAt) > deletedAt;
-  });
-
-  return { hosts, tombstones, updatedAt: Math.max(local.updatedAt, remote.updatedAt) };
+  return {
+    hosts: mergeById(local.hosts, remote.hosts, (h) => h.lastUsedAt ?? h.createdAt, tombstones),
+    // Keys are immutable once created, so createdAt is a stable tiebreak.
+    keys: mergeById(local.keys, remote.keys, (k) => k.createdAt, tombstones),
+    // A pin's lastSeenAt moves, but pinnedAt is what identifies the decision.
+    // Take the most recently *pinned* record: re-pinning after a deliberate
+    // unpin must win over an older copy still carrying the previous key.
+    hostKeys: mergeById(local.hostKeys, remote.hostKeys, (k) => k.pinnedAt, tombstones),
+    tombstones,
+    updatedAt: Math.max(local.updatedAt, remote.updatedAt),
+  };
 }
 
+/* ----------------------------------------------------------- local state --- */
+
 async function localDocument(): Promise<VaultDocument> {
+  const [hosts, stored, hostKeys, tombstones] = await Promise.all([
+    listHosts(),
+    listStoredKeys(),
+    listPins(),
+    getTombstones(),
+  ]);
+
   return {
-    hosts: await listHosts(),
-    tombstones: await getTombstones(),
+    hosts,
+    keys: stored.map(toSyncedKey).filter((k): k is SyncedKey => k !== null),
+    hostKeys,
+    tombstones,
     updatedAt: Date.now(),
   };
 }
 
 async function applyLocally(doc: VaultDocument): Promise<void> {
   for (const host of doc.hosts) await saveHost(host);
-  await idbPut("vault", "tombstones", doc.tombstones);
+  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key));
+  for (const pin of doc.hostKeys) await putPin(pin);
+  await setTombstones(doc.tombstones);
 }
 
 export interface SyncResult {
   status: "synced" | "up-to-date" | "conflict-resolved" | "offline";
   version: number;
   hosts: number;
+  keys: number;
+  hostKeys: number;
 }
 
 /**
@@ -110,18 +212,18 @@ export async function syncVault(vaultKey: CryptoKey, retries = 2): Promise<SyncR
   try {
     res = await fetch("/api/vault", { cache: "no-store" });
   } catch {
-    return { status: "offline", version: state.version, hosts: 0 };
+    return { status: "offline", version: state.version, hosts: 0, keys: 0, hostKeys: 0 };
   }
   if (res.status === 401) throw new Error("not signed in");
   if (!res.ok) throw new Error(`vault pull failed: ${res.status}`);
 
-  const pulled = (await res.json()) as {
-    version: number;
-    blob: string | null;
-  };
+  const pulled = (await res.json()) as { version: number; blob: string | null };
 
   const remote: VaultDocument = pulled.blob
-    ? await decryptVault<VaultDocument>(vaultKey, JSON.parse(pulled.blob) as VaultEnvelope)
+    ? {
+        ...emptyDoc(),
+        ...(await decryptVault<VaultDocument>(vaultKey, JSON.parse(pulled.blob) as VaultEnvelope)),
+      }
     : emptyDoc();
 
   const local = await localDocument();
@@ -149,5 +251,7 @@ export async function syncVault(vaultKey: CryptoKey, retries = 2): Promise<SyncR
     status: pulled.version === 0 ? "synced" : "conflict-resolved",
     version,
     hosts: merged.hosts.length,
+    keys: merged.keys.length,
+    hostKeys: merged.hostKeys.length,
   };
 }

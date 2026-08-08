@@ -10,6 +10,7 @@
  */
 
 import { idbDelete, idbGetAll, idbPut } from "./idb";
+import { recordDeletion } from "./vault/tombstones";
 
 export interface Host {
   id: string;
@@ -63,4 +64,5 @@ export async function rememberHost(
 
 export async function deleteHost(id: string): Promise<void> {
   await idbDelete(STORE, id);
+  await recordDeletion(id);
 }

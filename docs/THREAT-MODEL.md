@@ -157,9 +157,12 @@ Requirements: pin on first use, store per (host, port), **refuse to connect on
 mismatch** with an unmissable warning, and never offer a one-click "trust
 anyway" that is easier than reading the message.
 
-> As of this writing the WASM core accepts any host key (TOFU, not persisted).
-> This is the largest open gap in the implementation and is tracked as the next
-> task.
+**Implemented.** Keys are pinned on first use, verified on every reconnect, and
+a mismatch aborts the handshake in the WASM core before any authentication is
+attempted. Clearing a pin requires typing a confirmation phrase; there is no
+button beside the warning that does it in one click. Pins sync through the
+vault, so a second device inherits the decision instead of trusting on first
+use all over again.
 
 ---
 
@@ -196,13 +199,18 @@ attached.
 
 ## 9. Residual risks, ranked
 
-1. **We serve the JavaScript.** Mitigable only by CSP + SRI + reproducible
-   builds + self-hosting. Never fully eliminated for a hosted web app.
-2. **No host key pinning yet.** Open gap; a hostile relay could MITM today.
-3. **Relay metadata.** Removed only by self-hosting.
-4. **Deterministic KDF salt.** Acceptable, with a known upgrade path.
-5. **Signing oracle while the tab is open.** Inherent to the design.
-6. **No third-party audit yet.** Must happen before charging for Team.
+1. **We serve the JavaScript.** A strict CSP is now enforced (`src/proxy.ts`):
+   `script-src` is nonce + `strict-dynamic`, with `'wasm-unsafe-eval'` because
+   the SSH core is WebAssembly. `style-src` permits `'unsafe-inline'` — a
+   deliberate, documented weakening, because xterm.js and Monaco both inject
+   `<style>` at runtime and neither can be nonced; inline styles cannot execute
+   code, and script-src is the control that protects the vault key. Still
+   outstanding: SRI, reproducible builds. Never fully eliminated for a hosted
+   web app.
+2. **Relay metadata.** Removed only by self-hosting.
+3. **Deterministic KDF salt.** Acceptable, with a known upgrade path.
+4. **Signing oracle while the tab is open.** Inherent to the design.
+5. **No third-party audit yet.** Must happen before charging for Team.
 
 ---
 

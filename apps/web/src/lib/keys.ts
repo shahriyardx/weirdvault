@@ -18,6 +18,7 @@
  */
 
 import { idbDelete, idbGet, idbGetAll, idbPut } from "./idb";
+import { recordDeletion } from "./vault/tombstones";
 
 export type KeyMode = "portable" | "device-bound";
 
@@ -162,6 +163,12 @@ export async function listStoredKeys(): Promise<StoredKey[]> {
 
 export async function deleteKey(id: string): Promise<void> {
   await idbDelete(STORE, id);
+  await recordDeletion(id);
+}
+
+/** Used by vault sync to land a portable key pulled from another device. */
+export async function putStoredKey(rec: StoredKey): Promise<void> {
+  await idbPut(STORE, rec.id, rec);
 }
 
 export async function getStoredKey(id: string): Promise<StoredKey | undefined> {
