@@ -28,7 +28,7 @@ The second is the one that could have forced a redesign.
 
 Measured with the standalone SFTP spike, since deleted; see git history.
 That streaming holds in the shipped app is checked by the upload and
-download steps of `scripts/phase2-verify.mjs`.
+download steps of `tests/signed-in.mjs`.
 
 ## How streaming was actually proven
 

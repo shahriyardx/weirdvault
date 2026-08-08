@@ -1,10 +1,19 @@
-// Phase 2/3 verification: the full workspace.
+// End to end with an account: everything the signed-in app can do.
 //
-// Covers the things added after Phase 1 — host key pinning, password-first key
-// installation, the file explorer, streaming downloads, directory upload with
-// the tar fast path, Monaco editing, and vault sync.
+// Signs up, unlocks the vault, and works through the product in one browser
+// session: portable key generation, password-first key installation, reconnect
+// against the pinned host key, the file explorer over SFTP, directory upload
+// via the tar fast path, remote editing in Monaco, vault sync, several
+// concurrent sessions, split panes, and a host key that changes underneath you.
 //
-//   node scripts/phase2-verify.mjs [--headed]
+// Some checks assert a *negative* — that the raw password never reaches the
+// wire, that the stored vault ciphertext holds no plaintext hostname, that a
+// changed host key is refused rather than silently re-pinned. Those are the
+// product's central claims, and they are the ones a refactor breaks quietly.
+//
+// Needs: `bun run dev`, `bun run sshd`, and the relay running.
+//
+//   bun tests/signed-in.mjs [--headed]
 
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";

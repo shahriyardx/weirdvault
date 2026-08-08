@@ -27,14 +27,14 @@ thing the whole product thesis exists to avoid.
 | Bulk throughput | > 20 MB/s | **33.6 MB/s** | PASS |
 | WASM cold boot | — | 46 ms | — |
 
-These numbers were measured on the standalone Phase 0 harness, which has
-since been deleted — it is recoverable from git history if the measurement
-ever needs repeating. The *properties* it established are now checked
-against the real app by `scripts/phase2-verify.mjs` and
-`scripts/signedout-verify.mjs`; the timings are not, since they were taken
-on a bare page with no framework in the way.
 Browser: Chromium 151 headless. Target: `alpine:3` + stock `openssh-server`, no
 patches, no agent, no webxterm-specific configuration.
+
+Measured on the standalone Phase 0 harness, since deleted — `git log -- spike/`
+if the measurement ever needs repeating. The *properties* it established are now
+checked against the shipped app by `tests/signed-in.mjs` and
+`tests/signed-out.mjs`. The timings are not: they were taken on a bare page with
+no framework in the way, which is what made them meaningful.
 
 ## What was actually proven
 

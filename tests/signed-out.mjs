@@ -1,11 +1,17 @@
-// Signed-out verification: the free tier, with no account at all.
+// End to end with no account at all: the promise the landing page makes.
 //
-// phase2-verify covers the signed-in path. This covers the one the landing page
-// promises and which is easy to break without noticing — someone who has never
-// signed up should still be able to generate a key, connect, and get a shell.
-// It regressed exactly once already, when the relay started requiring a token.
+// signed-in.mjs covers the app once you have signed up. This covers the path
+// that is easy to break without noticing — someone who has never created an
+// account should still generate a key, connect through the relay, and get a
+// real shell. It regressed exactly once already, when the relay started
+// requiring a token that only a session could mint.
 //
-//   node scripts/signedout-verify.mjs [--headed]
+// Also the only place the single-session split is exercised, since it needs
+// exactly one session open to trigger the empty pane's host picker.
+//
+// Needs: `bun run dev`, `bun run sshd`, and the relay running.
+//
+//   bun tests/signed-out.mjs [--headed]
 
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";

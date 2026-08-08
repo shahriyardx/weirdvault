@@ -1,6 +1,6 @@
 # webxterm
 
-Zero-install web SSH workspace. Open a browser, generate or import a key, connect
+Zero-install web SSH client. Open a browser, generate or import a key, connect
 to any server — terminal, file explorer, uploads, remote editing, nothing to install
 on either end.
 
@@ -63,11 +63,11 @@ Needs Go 1.26+, Bun, Rust, and Docker.
 
 ```bash
 bun install
-make sshd            # stock OpenSSH target on :2222
-make wasm            # build the SSH core into apps/web/public
+bun run sshd         # stock OpenSSH target on :2222
+bun run wasm         # build the SSH core into apps/web/public
 bun run db:up        # Postgres
 bun run db:push      # apply the schema
-make relay           # Rust relay on :8080   (leave running)
+bun run relay        # Rust relay on :8080   (leave running)
 bun run dev          # app on :3000
 ```
 
@@ -76,10 +76,14 @@ Open http://localhost:3000/dashboard.
 ## Verifying
 
 ```bash
-make test-relay                    # SSRF guards, token binding, quotas
-node scripts/phase2-verify.mjs     # signed in: pinning, SFTP, tar, Monaco, vault
-node scripts/signedout-verify.mjs  # no account at all: key, connect, shell, files
+bun run relay:test   # SSRF guards, token binding, quotas
+bun run test         # both browser suites, in order
 ```
+
+`tests/signed-in.mjs` covers the app with an account — pinning, SFTP, tar
+upload, Monaco, vault sync, concurrent sessions, split panes.
+`tests/signed-out.mjs` covers the path with no account at all, which is what
+the landing page promises and the easiest thing to break without noticing.
 
 Both browser suites drive headless Chromium against the dockerized sshd and
 check real behaviour — that the raw password never appears in any request body,
@@ -92,5 +96,5 @@ for a different destination.
 - This machine's npm cache has root-owned files from an old npm bug, which
   breaks `npx`. The project uses Bun, so it rarely matters; fix with
   `sudo chown -R 501:20 ~/.npm`.
-- `RELAY_ALLOW_PRIVATE=1` is set by `make relay` so the local test container is
+- `RELAY_ALLOW_PRIVATE=1` is set by `bun run relay` so the local test container is
   reachable. It must never be set in production.
