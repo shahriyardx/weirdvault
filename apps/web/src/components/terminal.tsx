@@ -82,20 +82,27 @@ export function TerminalView({ ref, onInput, onResize }: Props) {
       /* canvas fallback */
     }
 
-    // xterm measures the character cell once, at construction. If the webfont
-    // is still loading at that moment it measures the fallback and then paints
-    // with the real font, which renders as wildly spaced, unreadable text.
-    // Re-measure once fonts settle, and drop the glyph atlas so WebGL redraws.
-    void document.fonts.ready.then(() => {
-      if (disposed) return;
-      webgl?.clearTextureAtlas();
-      try {
-        fit.fit();
-      } catch {
-        /* not laid out yet */
-      }
-      term.refresh(0, term.rows - 1);
-    });
+    // xterm measures the character cell once, at construction, and if the
+    // webfont is not loaded it measures a fallback while painting with
+    // something else — which renders as wildly spaced, unreadable text.
+    //
+    // `document.fonts.ready` is not enough: next/font only declares the family,
+    // and the browser never fetches a font nothing uses, so `ready` resolves
+    // immediately with the font still absent. Request it explicitly, then
+    // re-measure and drop the WebGL glyph atlas so it redraws.
+    void document.fonts
+      .load(`${term.options.fontSize}px ${term.options.fontFamily}`)
+      .catch(() => [])
+      .then(() => {
+        if (disposed) return;
+        webgl?.clearTextureAtlas();
+        try {
+          fit.fit();
+        } catch {
+          /* not laid out yet */
+        }
+        term.refresh(0, term.rows - 1);
+      });
 
     fit.fit();
     termRef.current = term;
@@ -128,5 +135,5 @@ export function TerminalView({ ref, onInput, onResize }: Props) {
     };
   }, []);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="h-full w-full font-mono" />;
 }
