@@ -11,10 +11,13 @@ export function Brand({
   className,
   href = "/",
   size = "md",
+  labelClassName,
 }: {
   className?: string;
   href?: string;
   size?: "sm" | "md";
+  /** Lets a collapsed sidebar hide the wordmark and keep the glyph. */
+  labelClassName?: string;
 }) {
   return (
     <Link
@@ -35,7 +38,7 @@ export function Brand({
       >
         {">_"}
       </span>
-      <span>webxterm</span>
+      <span className={labelClassName}>webxterm</span>
     </Link>
   );
 }

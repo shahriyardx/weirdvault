@@ -51,7 +51,7 @@ export function SiteHeader({ authed = false }: { authed?: boolean }) {
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/workspace">Open terminal</Link>
+                <Link href="/dashboard/terminal">Open terminal</Link>
               </Button>
             </>
           ) : (
@@ -60,7 +60,7 @@ export function SiteHeader({ authed = false }: { authed?: boolean }) {
                 <Link href="/sign-in">Sign in</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/workspace">Launch workspace</Link>
+                <Link href="/dashboard/terminal">Launch workspace</Link>
               </Button>
             </>
           )}

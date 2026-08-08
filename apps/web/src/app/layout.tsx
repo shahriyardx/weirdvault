@@ -35,7 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={cn("h-full font-mono antialiased", geistSans.variable, jetbrainsMono.variable)}
+      className={cn("h-full font-sans antialiased", geistSans.variable, jetbrainsMono.variable)}
       suppressHydrationWarning
     >
       <body className="bg-background text-foreground flex min-h-full flex-col">

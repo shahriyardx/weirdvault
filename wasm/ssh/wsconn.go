@@ -102,6 +102,19 @@ func dialWS(url string) (*wsConn, error) {
 	return c, nil
 }
 
+// CloseReason reports why the relay hung up, if it said. The SSH handshake
+// error on its own is just "EOF", which tells the user nothing.
+func (c *wsConn) CloseReason() error {
+	select {
+	case <-c.closed:
+		if c.closeErr != nil && !errors.Is(c.closeErr, errConnClosed) {
+			return c.closeErr
+		}
+	default:
+	}
+	return nil
+}
+
 func (c *wsConn) signal() {
 	select {
 	case c.notify <- struct{}{}:

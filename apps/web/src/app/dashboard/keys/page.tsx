@@ -55,7 +55,7 @@ import {
   type KeyMode,
   type StoredKey,
 } from "@/lib/keys";
-import { getVaultKey } from "@/lib/vault/session";
+import { getVaultKey, useVaultUnlocked } from "@/lib/vault/session";
 import { syncVault } from "@/lib/vault/sync";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +87,7 @@ function formatDate(ts: number) {
 export default function KeysPage() {
   const [keys, setKeys] = React.useState<StoredKey[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [unlocked, setUnlocked] = React.useState(false);
+  const unlocked = useVaultUnlocked();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [label, setLabel] = React.useState("webxterm");
@@ -109,7 +109,6 @@ export default function KeysPage() {
         if (!cancelled) {
           // The vault key is held in memory only, so this is a per-tab fact and
           // can only be read after mount.
-          setUnlocked(getVaultKey() !== null);
           setLoading(false);
         }
       }
@@ -131,10 +130,8 @@ export default function KeysPage() {
   }, []);
 
   function openDialog() {
-    // Re-read the lock state: the vault can be locked from anywhere in the tab.
-    const isUnlocked = getVaultKey() !== null;
-    setUnlocked(isUnlocked);
-    setMode(isUnlocked ? "portable" : "device-bound");
+    // `unlocked` is reactive, so it is already current here.
+    setMode(unlocked ? "portable" : "device-bound");
     setLabel("webxterm");
     setDialogOpen(true);
   }
@@ -144,7 +141,6 @@ export default function KeysPage() {
     const vaultKey = getVaultKey();
 
     if (mode === "portable" && !vaultKey) {
-      setUnlocked(false);
       toast.error("The vault is locked, so a portable key cannot be wrapped.");
       return;
     }
@@ -574,7 +570,7 @@ function EmptyState({ onGenerate }: { onGenerate: () => void }) {
             <PlusIcon /> Generate key
           </Button>
           <Button asChild variant="outline">
-            <Link href="/workspace">Connect with a password once</Link>
+            <Link href="/dashboard/terminal">Connect with a password once</Link>
           </Button>
         </div>
       </CardContent>

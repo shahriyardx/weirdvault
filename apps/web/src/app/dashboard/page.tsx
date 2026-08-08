@@ -98,7 +98,7 @@ export default function DashboardOverview() {
         description="Read out of this browser's vault. The server holds the same records as ciphertext it cannot open, so this page is assembled locally, on this device."
         actions={
           <Button asChild>
-            <Link href="/workspace">
+            <Link href="/dashboard/terminal">
               Open terminal
               <ArrowRightIcon data-icon="inline-end" />
             </Link>
@@ -228,7 +228,7 @@ function EmptyState() {
 
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             <Button asChild>
-              <Link href="/workspace">
+              <Link href="/dashboard/terminal">
                 <TerminalWindowIcon data-icon="inline-start" />
                 Open terminal
               </Link>
@@ -378,7 +378,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
                   icon={<PlugsConnectedIcon />}
                   title="No hosts saved yet"
                   body="A host is remembered the first time you connect to it."
-                  action={{ href: "/workspace", label: "Open terminal" }}
+                  action={{ href: "/dashboard/terminal", label: "Open terminal" }}
                 />
               ) : (
                 <ul className="divide-y divide-border">

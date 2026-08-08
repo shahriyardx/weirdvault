@@ -1,21 +1,28 @@
-import { DashboardNav } from "@/components/shell/dashboard-nav";
-import { SiteHeader } from "@/components/shell/site-header";
+import { AppSidebar } from "@/components/shell/app-sidebar";
+import { DashboardContent } from "@/components/shell/dashboard-content";
+import { DashboardTopBar } from "@/components/shell/dashboard-top-bar";
+import { VaultUnlock } from "@/components/vault-unlock";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SessionProvider } from "@/lib/ssh/session-provider";
 
 /**
- * The dashboard reuses the public site header rather than introducing separate
- * app chrome, so signing in reads as going deeper into the same product instead
- * of crossing into a different one.
+ * The dashboard is the application, not a section of the website.
+ *
+ * It gets an app shell — collapsible sidebar, full height, no marketing
+ * chrome — and the SSH session lives above the router so navigating between
+ * Terminal and Files keeps one connection alive rather than reconnecting.
  */
 export default function DashboardLayout({ children }: LayoutProps<"/dashboard">) {
   return (
-    <div className="flex min-h-svh flex-col">
-      <SiteHeader authed />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 sm:px-6">
-        <aside className="hidden w-52 shrink-0 border-r border-border pr-2 md:block">
-          <DashboardNav />
-        </aside>
-        <main className="min-w-0 flex-1 pb-16">{children}</main>
-      </div>
-    </div>
+    <SessionProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="flex h-svh min-w-0 flex-col overflow-hidden">
+          <DashboardTopBar />
+          <DashboardContent>{children}</DashboardContent>
+          <VaultUnlock />
+        </SidebarInset>
+      </SidebarProvider>
+    </SessionProvider>
   );
 }

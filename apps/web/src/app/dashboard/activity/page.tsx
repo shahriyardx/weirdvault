@@ -812,7 +812,7 @@ function NoEvents() {
           the first time one of those happens.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
-          <Link href="/workspace">Open workspace</Link>
+          <Link href="/dashboard/terminal">Open workspace</Link>
         </Button>
       </CardContent>
     </Card>

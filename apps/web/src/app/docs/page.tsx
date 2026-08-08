@@ -50,7 +50,7 @@ export default function Docs() {
         description="From an empty tab to a live shell. Everything below is the whole setup — there is no agent to install on the server and no client to install on the machine you are sitting at."
         actions={
           <Button asChild size="sm">
-            <Link href="/workspace">
+            <Link href="/dashboard/terminal">
               Open workspace <ArrowRightIcon />
             </Link>
           </Button>
@@ -457,7 +457,7 @@ export default function Docs() {
               That is the whole of it. The next step is a terminal.
             </p>
             <Button asChild size="sm" className="sm:ml-auto">
-              <Link href="/workspace">
+              <Link href="/dashboard/terminal">
                 Open workspace <ArrowRightIcon />
               </Link>
             </Button>

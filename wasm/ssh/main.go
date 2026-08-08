@@ -157,6 +157,13 @@ func doConnect(cfg js.Value) (js.Value, error) {
 	addr := net.JoinHostPort(host, fmt.Sprint(port))
 	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientCfg)
 	if err != nil {
+		// A relay that refused or could not reach the destination knows exactly
+		// why; prefer its explanation over "handshake failed: EOF", which is
+		// what the SSH layer reports when the stream simply ends.
+		if reason := conn.CloseReason(); reason != nil {
+			conn.Close()
+			return js.Undefined(), reason
+		}
 		conn.Close()
 		return js.Undefined(), fmt.Errorf("ssh handshake: %w", err)
 	}

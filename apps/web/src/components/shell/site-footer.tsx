@@ -6,7 +6,7 @@ const GROUPS = [
   {
     title: "Product",
     links: [
-      { href: "/workspace", label: "Workspace" },
+      { href: "/dashboard/terminal", label: "Workspace" },
       { href: "/pricing", label: "Pricing" },
       { href: "/dashboard", label: "Dashboard" },
     ],

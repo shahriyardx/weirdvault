@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The floating dev badge overlaps the sidebar footer.
+  devIndicators: false,
+
   experimental: {
     /**
      * Subresource Integrity.

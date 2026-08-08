@@ -459,7 +459,7 @@ function EmptyState() {
           to keep and it will enrol with a new key.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
-          <Link href="/workspace">Open workspace</Link>
+          <Link href="/dashboard/terminal">Open workspace</Link>
         </Button>
       </CardContent>
     </Card>

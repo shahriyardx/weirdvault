@@ -46,7 +46,7 @@ export default function Home() {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
-              <Link href="/workspace">
+              <Link href="/dashboard/terminal">
                 Launch workspace <ArrowRightIcon />
               </Link>
             </Button>

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "description": "Zero-install web SSH workspace: browser, key, connect. Nothing to install on either end.",
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "bun run --cwd apps/web dev",
     "build": "bun run --cwd apps/web build",
@@ -14,9 +16,11 @@
     "spike:sshd": "make sshd",
     "spike:wasm": "make wasm",
     "spike:relay": "make relay",
-    "verify:phase0": "bun scripts/phase0-verify.mjs",
     "verify:sftp": "bun scripts/sftp-verify.mjs",
-    "size": "bun scripts/size.mjs spike/web/ssh.wasm"
+    "size": "bun scripts/size.mjs spike/web/ssh.wasm",
+    "verify:signedout": "bun scripts/signedout-verify.mjs",
+    "verify:app": "bun scripts/phase2-verify.mjs",
+    "verify:spike": "bun scripts/phase0-verify.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1"

@@ -623,7 +623,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
             <PlusIcon /> Add host
           </Button>
           <Button asChild variant="outline">
-            <Link href="/workspace">Connect without saving</Link>
+            <Link href="/dashboard/terminal">Connect without saving</Link>
           </Button>
         </div>
       </CardContent>

@@ -51,7 +51,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           : await signInWithVault(email, password);
 
       setVaultKey(vaultKey);
-      router.push("/workspace");
+      router.push("/dashboard");
     } catch (err) {
       setError(String((err as Error).message ?? err));
     } finally {

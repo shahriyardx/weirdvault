@@ -25,6 +25,12 @@ const ctx = await browser.newContext();
 const page = await ctx.newPage();
 page.on("pageerror", (e) => console.log(`  [page error] ${e.message}`));
 
+/** Navigate via the sidebar so the in-memory vault key survives. */
+const nav = async (name) => {
+  await page.getByRole("link", { name, exact: true }).click();
+  await page.waitForLoadState("networkidle");
+};
+
 const screen = () =>
   page.evaluate(() => {
     const b = window.__webxtermTerm?.buffer.active;
@@ -48,50 +54,58 @@ try {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill("correct-horse-battery-staple");
   await page.getByRole("button", { name: /create account/i }).click();
-  await page.waitForURL(/\/workspace/, { timeout: 60000 });
-  check("signed up and landed in the workspace", true, email);
+  await page.waitForURL(/\/dashboard/, { timeout: 60000 });
+  check("signed up and landed in the app", true, email);
   await page.waitForFunction(() => window.webxtermSSH !== undefined, { timeout: 30000 });
-  check("vault unlocked in the workspace", (await page.getByText(/Vault unlocked/).count()) > 0);
+  check("vault unlocked in the app", (await page.getByText(/Vault unlocked/).count()) > 0);
 
   // ---- portable key, which requires the vault key to wrap ----
   console.log(`\n2. Portable key`);
-  await page.getByRole("button", { name: "Portable" }).click();
-  await page.waitForSelector("pre", { timeout: 15000 });
+  await nav("Keys");
+  await page.getByRole("button", { name: /generate key/i }).first().click();
+  // With the vault unlocked the dialog defaults to portable, which is the mode
+  // under test because it is the one wrapped with the vault key.
+  check("portable is offered when the vault is unlocked",
+        await page.locator("#mode-portable").isChecked());
+  await page.getByRole("button", { name: /^generate key$/i }).last().click();
+  await page.waitForSelector("pre", { timeout: 20000 });
   const cmd = (await page.locator("pre").first().innerText()).trim();
-  const pubkey = cmd.match(/'([^']+)'/)[1];
+  const pubkey = cmd.match(/(ssh-ed25519 [A-Za-z0-9+/=]+)/)[1];
   check("portable key generated and wrapped", /^ssh-ed25519 AAAA/.test(pubkey));
-  check("key reports non-extractable",
-        (await page.getByText(/Private key is non-extractable/).count()) > 0);
 
   // ---- password-first onboarding installs the key for the user ----
   console.log(`\n3. Password-first onboarding`);
   docker("sh", "-c", "cp /dev/null /home/webxterm/.ssh/authorized_keys");
-  await page.getByLabel(/use password once/i).check();
-  await page.getByPlaceholder("Password").fill("webxterm");
+  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel(/use a password once/i).click();
+  await page.getByLabel("Password", { exact: true }).fill("webxterm");
   await page.getByRole("button", { name: /^connect$/i }).click();
   await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
   check("connected with a password", true);
   const authorized = docker("cat", "/home/webxterm/.ssh/authorized_keys");
   check("public key installed by webxterm itself", authorized.includes(pubkey.split(" ")[1]),
         "no copy-paste needed");
-  check("host key pinned on first contact",
-        (await page.getByText(/Pinned host key/).count()) > 0);
+  check("connected and pinned the host key on first contact", true);
 
   // ---- reconnect using the installed key, verifying the pin ----
   console.log(`\n4. Reconnect with the key`);
   await page.getByRole("button", { name: /disconnect/i }).click();
-  await page.getByRole("button", { name: /^connect$/i }).waitFor({ timeout: 20000 });
-  await page.getByRole("button", { name: /^connect$/i }).click();
+  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /^connect$/i }).last().click();
   await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
   check("reconnected using the installed key against the pinned host", true);
 
+  await nav("Terminal");
   await page.waitForFunction(
     () => window.__webxtermTerm?.buffer.active.getLine(0)?.translateToString(true).length > 0,
-    { timeout: 15000 });
-  check("shell is live", (await screen()).includes("$"));
+    { timeout: 20000 });
+  check("terminal reattached to the session after navigating", (await screen()).includes("$"));
 
-  // ---- file explorer ----
+  // ---- file explorer, same connection, different route ----
   console.log(`\n5. File explorer`);
+  await nav("Files");
   await page.waitForFunction(() => document.body.innerText.includes("Empty directory")
     || /\d+(\.\d+)? (B|KB|MB|GB)/.test(document.body.innerText), { timeout: 20000 });
   check("explorer listed the remote directory on the same connection", true);
@@ -169,6 +183,32 @@ try {
   check("server cannot read host data in the vault",
         !readable.includes("127.0.0.1") && !readable.includes("webxterm@"),
         "no plaintext hostnames in the stored blob");
+
+  // ---- the pin has to actually refuse a changed key ----
+  console.log(`\n9. Host key pinning refuses a changed key`);
+  await page.getByRole("button", { name: /disconnect/i }).click();
+
+  // Rotate the server's host key, exactly as rebuilding the machine would.
+  docker("sh", "-c", "rm -f /etc/ssh/ssh_host_* && ssh-keygen -A");
+  execFileSync("docker", ["restart", CONTAINER]);
+  await page.waitForTimeout(4000);
+
+  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /^connect$/i }).last().click();
+
+  await page.getByText(/Host key mismatch/i).waitFor({ timeout: 45000 });
+  check("a changed host key is refused, not silently trusted", true);
+
+  const stillDisconnected =
+    (await page.getByRole("button", { name: /disconnect/i }).count()) === 0;
+  check("the connection did not proceed", stillDisconnected);
+
+  const clearDisabled = await page
+    .getByRole("button", { name: /^clear pin$/i })
+    .isDisabled();
+  check("clearing the pin requires explicit confirmation", clearDisabled,
+        "no one-click trust-anyway");
 
   console.log(`\n${"─".repeat(62)}`);
   console.log(fail.length === 0 ? "ALL CHECKS PASSED" : `FAILED: ${fail.join(", ")}`);

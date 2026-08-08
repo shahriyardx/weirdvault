@@ -172,21 +172,58 @@ async fn ws_handler(
     })
 }
 
+/// Turns a dial failure into something a person can act on.
+///
+/// The browser cannot see the HTTP status of a failed WebSocket upgrade, and a
+/// dropped socket surfaces in the SSH client as "handshake failed: EOF" — which
+/// tells the user nothing. The relay knows precisely why the dial failed, so it
+/// says so in the close frame, which the client can read.
+fn dial_failure_reason(err: &std::io::Error, target: SocketAddr) -> String {
+    use std::io::ErrorKind;
+    match err.kind() {
+        ErrorKind::ConnectionRefused => format!(
+            "{target} refused the connection — is sshd running and listening on that port?"
+        ),
+        ErrorKind::TimedOut => format!(
+            "{target} did not respond — it may be firewalled, or the address may be wrong"
+        ),
+        ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable => format!(
+            "no route to {target} — the relay cannot reach that address. \
+             Private addresses are only reachable from a relay on the same network"
+        ),
+        _ => format!("could not connect to {target}: {err}"),
+    }
+}
+
 /// Copies bytes between the WebSocket and the TCP socket until either closes.
 async fn bridge(
-    socket: WebSocket,
+    mut socket: WebSocket,
     target: SocketAddr,
     dial_timeout: Duration,
     guard: &quota::ConnectionGuard,
 ) -> std::io::Result<()> {
-    let tcp = match tokio::time::timeout(dial_timeout, TcpStream::connect(target)).await {
-        Ok(Ok(s)) => s,
-        Ok(Err(e)) => return Err(e),
-        Err(_) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("dialling {target} timed out"),
-            ))
+    let dialled = match tokio::time::timeout(dial_timeout, TcpStream::connect(target)).await {
+        Ok(result) => result,
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "timed out",
+        )),
+    };
+
+    let tcp = match dialled {
+        Ok(s) => s,
+        Err(e) => {
+            // Close with the reason rather than dropping the socket, so the
+            // client reports why instead of "handshake failed: EOF".
+            let reason = dial_failure_reason(&e, target);
+            let _ = socket
+                .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                    // 1011: the server encountered an unexpected condition.
+                    code: 1011,
+                    reason: reason.clone().into(),
+                })))
+                .await;
+            return Err(std::io::Error::new(e.kind(), reason));
         }
     };
     tcp.set_nodelay(true)?; // interactive typing must not wait on Nagle
