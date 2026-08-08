@@ -1,4 +1,4 @@
-.PHONY: sshd sshd-stop authorize wasm relay dev clean size verify
+.PHONY: sshd sshd-stop authorize wasm relay spike-relay test-relay dev clean size verify
 
 SSHD_NAME  := webxterm-sshd
 SSHD_PORT  := 2222
@@ -33,9 +33,20 @@ wasm:
 size:
 	@node scripts/size.mjs $(WASM_OUT)
 
-## relay: serve the harness and relay on :8080 (dev mode allows loopback)
+## relay: run the production Rust relay on :8080 (dev mode allows loopback)
 relay:
+	RELAY_SECRET=$${RELAY_SECRET:-dev-relay-secret-change-me} \
+	RELAY_ALLOW_PRIVATE=1 RELAY_PORTS=22,2222 RELAY_ADDR=127.0.0.1:8080 \
+	cargo run --release -p webxterm-relay
+
+## spike-relay: the Go spike relay, which also serves the standalone harness
+## used by verify:phase0 and verify:sftp
+spike-relay:
 	go run ./spike/relay -allow-private -ports 22,2222
+
+## test-relay: unit tests for the SSRF guards, token format, and quotas
+test-relay:
+	cargo test -p webxterm-relay
 
 ## dev: sshd + wasm + relay
 dev: sshd wasm relay

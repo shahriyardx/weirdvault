@@ -4,80 +4,96 @@ Zero-install web SSH workspace. Open a browser, generate or import a key, connec
 to any server — terminal, file explorer, uploads, remote editing, nothing to install
 on either end.
 
-See [`PLAN.md`](PLAN.md) for the product and architecture plan.
+- [`PLAN.md`](PLAN.md) — product and architecture plan
+- [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md) — what each party can and cannot see
+- [`docs/PHASE0-RESULTS.md`](docs/PHASE0-RESULTS.md) · [`docs/PHASE2-SPIKE.md`](docs/PHASE2-SPIKE.md) — de-risking results
 
-## Status
+## How it works
 
-**Phase 1 — the app runs end to end.** Both de-risking spikes passed:
+The SSH client runs **inside the browser tab** as WebAssembly. A stateless Rust
+relay bridges WebSocket to TCP but only ever forwards ciphertext — the handshake
+and all encryption terminate in the tab. Private keys are generated
+non-extractable in WebCrypto, so the WASM core, our own JavaScript, an injected
+script, and a browser extension are all equally unable to read them;
+authentication works by handing the challenge to WebCrypto and getting back a
+signature.
 
-- [`docs/PHASE0-RESULTS.md`](docs/PHASE0-RESULTS.md) — a Go/WASM SSH client
-  authenticates to stock OpenSSH using a **non-extractable WebCrypto key** it
-  cannot read. 1.25 MB Brotli, 63 ms connect, 1.5 ms keystroke echo.
-- [`docs/PHASE2-SPIKE.md`](docs/PHASE2-SPIKE.md) — SFTP transfers **stream**:
-  doubling the file moved peak memory 0.92×, retained heap after GC is negative.
-  21 MB/s up, 38 MB/s down.
+Host keys are pinned on first use and verified on every reconnect. That check is
+what keeps the relay honest — without it, a hostile relay could present its own
+key and the encryption would be end-to-relay rather than end-to-end.
 
-Working today: key generation and custody, host management, terminal, SFTP file
-explorer, accounts with organizations, and the split KDF that keeps the server
-from ever seeing anything that can decrypt a vault.
+**On the server: nothing to install.** One line, once:
 
-## Architecture in one paragraph
+```bash
+echo 'ssh-ed25519 AAAA… you@webxterm' >> ~/.ssh/authorized_keys
+```
 
-The SSH client runs **inside the browser tab** as WASM. A stateless relay bridges
-WebSocket to TCP but only ever forwards ciphertext — the SSH handshake and all
-encryption terminate in the tab. Private keys are generated non-extractable in
-WebCrypto, so the WASM core, our JavaScript, an injected script, and a browser
-extension are all equally incapable of reading them; authentication works by
-handing the challenge to WebCrypto and getting a signature back.
+Or tick "use password once" and webxterm installs the key itself.
+
+## Working today
+
+| | |
+|---|---|
+| Terminal | xterm.js + WebGL, resize, full VT |
+| Keys | Ed25519, non-extractable; portable (vault-wrapped, syncs) or device-bound |
+| Host keys | pinned on first use, hard refusal on mismatch |
+| Files | SFTP explorer on the same connection, context menu, transfer queue |
+| Uploads | streaming, drag-and-drop folders, tar fast path for many small files |
+| Downloads | streaming to disk via File System Access API, service worker fallback |
+| Editing | Monaco, lazy-loaded, saves back over SFTP |
+| Accounts | Better Auth with organizations; split KDF keeps the vault key local |
+| Sync | zero-knowledge vault blob with optimistic concurrency |
+| Relay | Rust, SSRF-guarded, destination-bound tokens, per-account quotas |
 
 ## Layout
 
 ```
-apps/web/              Next.js app — marketing, auth, workspace, control plane
-  src/app/(workspace)/ the terminal app (client island)
-  src/lib/keys.ts      non-extractable key custody
-  src/lib/vault/kdf.ts the split KDF: auth branch vs vault branch
-  src/lib/db/          Drizzle schema
-wasm/ssh/              Go → WASM SSH + SFTP core, WebCrypto signer
-spike/relay/           WebSocket ↔ TCP relay (production relay will be Rust)
-spike/web/             standalone harness used for the spikes
-docs/                  spike results, threat model
+apps/web/            Next.js app — marketing, auth, workspace, control plane
+  src/lib/keys.ts    non-extractable key custody
+  src/lib/vault/     split KDF, vault crypto, sync
+  src/lib/transfers/ streaming upload/download, USTAR writer
+wasm/ssh/            Go → WASM SSH + SFTP core, WebCrypto signer
+crates/relay/        Rust relay: SSRF guards, tokens, quotas
+spike/               standalone harness used for the de-risking spikes
+docs/                threat model and spike results
 ```
 
 ## Running it
 
-Needs Go 1.26+, Bun, and Docker.
+Needs Go 1.26+, Bun, Rust, and Docker.
 
 ```bash
 bun install
-make sshd              # stock OpenSSH test target on :2222
-make wasm              # build the SSH core into apps/web/public
-bun run db:up          # Postgres
-bun run db:push        # apply the schema
-make relay             # relay on :8080  (leave running)
-bun run dev            # app on :3000
+make sshd            # stock OpenSSH target on :2222
+make wasm            # build the SSH core into apps/web/public
+bun run db:up        # Postgres
+bun run db:push      # apply the schema
+make relay           # Rust relay on :8080   (leave running)
+bun run dev          # app on :3000
 ```
 
-Then open http://localhost:3000/workspace, generate a key, and run the printed
-one-liner on your server. For the local test container:
-
-```bash
-make authorize KEY='ssh-ed25519 AAAA…'
-```
+Open http://localhost:3000/workspace.
 
 ## Verifying
 
 ```bash
-bun run verify:phase0    # WASM SSH + WebCrypto signer gates
-bun run verify:sftp      # streaming transfer gates
-node scripts/app-verify.mjs   # the real Next.js workspace, end to end
+make test-relay                 # SSRF guards, token binding, quotas
+node scripts/app-verify.mjs     # Phase 1 workspace, end to end
+node scripts/phase2-verify.mjs  # pinning, explorer, tar upload, Monaco, vault
 ```
 
-Each drives headless Chromium against the dockerized sshd and checks real gates,
-including that the raw password never appears in any request body.
+Each drives headless Chromium against the dockerized sshd and checks real
+behaviour — that the raw password never appears in any request body, that the
+stored vault ciphertext contains no plaintext hostnames, that the relay refuses
+a token minted for a different destination.
 
-## Note on npm
+The two spike scripts (`verify:phase0`, `verify:sftp`) target the standalone
+harness and need `make spike-relay` instead, since they predate the Next.js app.
 
-This machine's npm cache contains root-owned files from an old npm bug, which
-breaks `npx`. The project uses Bun, so this only matters if you reach for npm;
-fix it with `sudo chown -R 501:20 ~/.npm`.
+## Notes
+
+- This machine's npm cache has root-owned files from an old npm bug, which
+  breaks `npx`. The project uses Bun, so it rarely matters; fix with
+  `sudo chown -R 501:20 ~/.npm`.
+- `RELAY_ALLOW_PRIVATE=1` is set by `make relay` so the local test container is
+  reachable. It must never be set in production.

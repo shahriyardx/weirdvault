@@ -39,7 +39,7 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   let seen: HostKeyInfo | null = null;
 
   const session = await rawConnect({
-    relay: relayUrl(hostname, port),
+    relay: await relayUrl(hostname, port),
     host: hostname,
     port,
     user: username,
