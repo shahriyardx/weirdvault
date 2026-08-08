@@ -45,8 +45,9 @@ cd apps/ssh && go test ./...      # 23 tests, no browser needed
 GOOS=js GOARCH=wasm go vet ./...  # vet the parts that only exist in the browser
 ```
 
-Everything else — the handshake, PTY, SFTP — needs a browser and a real server,
-so it is covered by `tests/` at the repo root instead.
+Everything else — the handshake, PTY, SFTP — needs a browser and a real server.
+There is no automated coverage of it; check those by hand against the container
+`bun run sshd` starts on :2222.
 
 ## Dependencies
 

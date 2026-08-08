@@ -31,10 +31,9 @@ Browser: Chromium 151 headless. Target: `alpine:3` + stock `openssh-server`, no
 patches, no agent, no webxterm-specific configuration.
 
 Measured on the standalone Phase 0 harness, since deleted — `git log -- spike/`
-if the measurement ever needs repeating. The *properties* it established are now
-checked against the shipped app by `tests/signed-in.mjs` and
-`tests/signed-out.mjs`. The timings are not: they were taken on a bare page with
-no framework in the way, which is what made them meaningful.
+if the measurement ever needs repeating. The browser suites that later checked
+these properties against the shipped app were removed too; see
+`git log -- tests/`.
 
 ## What was actually proven
 

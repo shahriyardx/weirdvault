@@ -295,7 +295,7 @@ webxterm/
 │  └─ public/ssh.wasm           # Go SSH core, Brotli-served
 ├─ apps/ssh/                    # Go → WASM SSH + SFTP, JS signer callback
 ├─ apps/relay/                  # WebSocket ↔ TCP, SSRF guard, quotas
-├─ tests/                       # browser suites + the dockerized sshd target
+├─ sshd/                        # stock OpenSSH container to develop against
 └─ docs/                        # THREAT-MODEL.md, PHASE0-RESULTS.md, DEPLOY.md
 ```
 

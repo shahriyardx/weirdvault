@@ -5,13 +5,7 @@
   "description": "Zero-install web SSH client: browser, key, connect. Nothing to install on either end.",
   "scripts": {
     "wasm": "bun scripts/build-wasm.mjs",
-    "sshd": "docker build -q -t webxterm-sshd tests/sshd && (docker rm -f webxterm-sshd >/dev/null 2>&1 || true) && docker run -d --name webxterm-sshd -p 2222:22 webxterm-sshd",
-    "sshd:stop": "docker rm -f webxterm-sshd",
-    "test": "bun tests/signed-in.mjs && bun tests/signed-out.mjs",
-    "test:signed-in": "bun tests/signed-in.mjs",
-    "test:signed-out": "bun tests/signed-out.mjs"
-  },
-  "devDependencies": {
-    "playwright": "^1.62.1"
+    "sshd": "docker build -q -t webxterm-sshd sshd && (docker rm -f webxterm-sshd >/dev/null 2>&1 || true) && docker run -d --name webxterm-sshd -p 2222:22 webxterm-sshd",
+    "sshd:stop": "docker rm -f webxterm-sshd"
   }
 }

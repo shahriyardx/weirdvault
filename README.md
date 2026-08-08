@@ -54,7 +54,7 @@ Three programs, each with its own README covering how to run and test it.
 | [`apps/web/`](apps/web/README.md) | TypeScript | The app and control plane. Serves the pages, holds the encrypted vault it cannot read |
 | [`apps/ssh/`](apps/ssh/README.md) | Go → WASM | The SSH and SFTP client that runs in the tab. Where the encryption actually happens |
 | [`apps/relay/`](apps/relay/README.md) | Rust | The WebSocket-to-TCP bridge. Forwards ciphertext, guards against SSRF |
-| [`tests/`](tests/README.md) | | Browser suites against a real dockerized sshd |
+| `sshd/` | | A stock OpenSSH container to develop against, on :2222 |
 | `docs/` | | Threat model, deployment, and the spike results behind the architecture |
 
 Each app owns its own manifest — `apps/web/package.json`, `apps/ssh/go.mod`,
@@ -67,8 +67,7 @@ Needs Go 1.26+, Bun, Rust, and Docker. Start here, then read the app you are
 working on:
 
 ```bash
-bun install                        # root: test tooling only
-bun install --cwd apps/web         # the app's own dependencies
+bun install --cwd apps/web         # the only package with dependencies
 bun run wasm                       # apps/ssh → apps/web/public/ssh.wasm
 
 docker compose up -d postgres      # database
@@ -85,14 +84,14 @@ Open http://localhost:3000/dashboard.
 ## Verifying
 
 ```bash
-bun run sshd     # the test target on :2222
-bun run test     # both browser suites
+bun run sshd                    # a stock OpenSSH target on :2222
+cd apps/relay && cargo test     # SSRF guards, token binding, quotas
+cd apps/ssh   && go test ./...  # key and ssh_config parsing
+cd apps/web   && bun test       # audit event shapes, vault merge
 ```
 
-They drive headless Chromium against a stock `sshd` and check real behaviour,
-including the negatives: that the raw password never reaches the wire, that the
-stored vault ciphertext holds no plaintext hostname, that a changed host key is
-refused rather than re-pinned. See [`tests/README.md`](tests/README.md).
+There is no automated coverage of the browser path — connecting, SFTP, pinning,
+vault sync. Exercise those against `bun run sshd` by hand.
 
 ## Deploying
 

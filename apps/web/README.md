@@ -38,20 +38,14 @@ Without `ssh.wasm` in `public/` the app loads but cannot connect to anything.
 
 ## Test
 
-There are no unit tests for the UI, and that is on purpose — the claims worth
-checking are about a real browser talking to a real SSH server, so they live in
-`tests/` at the repo root and drive headless Chromium.
-
 ```bash
-bun run typecheck                  # tsc, from here
-cd ../.. && bun run test           # both browser suites
+bun run typecheck    # tsc
+bun test             # audit event shapes, vault merge — pure logic only
 ```
 
-Two small unit suites do exist for pure logic:
-
-```bash
-bun test src/lib/audit/events.test.ts src/lib/vault/sync.test.ts
-```
+The browser path — connecting, SFTP, pinning, vault sync — has no automated
+coverage. Start a target with `bun run sshd` from the repo root and check it by
+hand.
 
 ## Database
 

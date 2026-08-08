@@ -14,7 +14,7 @@ target
 .gitignore
 
 # Test fixtures and tooling: never part of a runtime image.
-tests
+sshd
 docs
 scripts
 
