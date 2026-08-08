@@ -14,10 +14,10 @@ FROM golang:1.26 AS wasm
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-COPY wasm ./wasm
+COPY core/ssh ./core/ssh
 # The SSH core is a build input to the web image: the app serves it from
 # /public, and a mismatched or missing ssh.wasm means no connections at all.
-RUN GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /ssh.wasm ./wasm/ssh \
+RUN GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /ssh.wasm ./core/ssh \
  && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /wasm_exec.js
 
 FROM oven/bun:1 AS build

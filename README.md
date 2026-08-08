@@ -52,8 +52,8 @@ apps/web/            Next.js app — marketing, auth, dashboard, control plane
   src/lib/keys.ts    non-extractable key custody
   src/lib/vault/     split KDF, vault crypto, sync
   src/lib/transfers/ streaming upload/download, USTAR writer
-wasm/ssh/            Go → WASM SSH + SFTP core, WebCrypto signer
-crates/relay/        Rust relay: SSRF guards, tokens, quotas
+core/ssh/            Go → WASM SSH + SFTP core, WebCrypto signer
+core/relay/          Rust relay: SSRF guards, tokens, quotas
 docs/                threat model, deployment, spike results
 ```
 

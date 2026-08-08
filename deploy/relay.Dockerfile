@@ -13,15 +13,15 @@ WORKDIR /src
 # Cache dependency compilation separately from the source, so an edit to
 # main.rs does not rebuild the whole dependency tree.
 COPY Cargo.toml Cargo.lock ./
-COPY crates/relay/Cargo.toml crates/relay/
-RUN mkdir -p crates/relay/src \
- && echo 'fn main() {}' > crates/relay/src/main.rs \
+COPY core/relay/Cargo.toml core/relay/
+RUN mkdir -p core/relay/src \
+ && echo 'fn main() {}' > core/relay/src/main.rs \
  && cargo build --release -p webxterm-relay \
- && rm -rf crates/relay/src
+ && rm -rf core/relay/src
 
-COPY crates ./crates
+COPY core ./core
 # Touch so cargo rebuilds the real source rather than trusting the stub's mtime.
-RUN touch crates/relay/src/main.rs && cargo build --release -p webxterm-relay
+RUN touch core/relay/src/main.rs && cargo build --release -p webxterm-relay
 
 # Distroless: the relay opens sockets and nothing else. No shell means a
 # compromised process has no shell to use.

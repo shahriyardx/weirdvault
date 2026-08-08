@@ -24,8 +24,8 @@ const capture = (cmd, args) =>
 
 mkdirSync(OUT_DIR, { recursive: true });
 
-console.log(`building ./wasm/ssh → ${WASM}`);
-run("go", ["build", "-ldflags=-s -w", "-o", WASM, "./wasm/ssh"], {
+console.log(`building ./core/ssh → ${WASM}`);
+run("go", ["build", "-ldflags=-s -w", "-o", WASM, "./core/ssh"], {
   GOOS: "js",
   GOARCH: "wasm",
 });

@@ -12,7 +12,7 @@ import { auth } from "@/lib/auth";
  * could point the relay at anything the SSRF rules allow and use it as a
  * general TCP proxy.
  *
- * Must stay byte-compatible with crates/relay/src/token.rs.
+ * Must stay byte-compatible with core/relay/src/token.rs.
  */
 
 const TTL_SECONDS = 60;
