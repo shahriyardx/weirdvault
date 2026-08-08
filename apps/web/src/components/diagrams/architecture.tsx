@@ -1,3 +1,10 @@
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 /**
@@ -82,69 +89,97 @@ export function ArchitectureDiagram({ className }: { className?: string }) {
 }
 
 /**
- * What each party can and cannot see. A two-column comparison rather than a
- * wall of prose, because the asymmetry is the point.
+ * What each party can and cannot see.
+ *
+ * A grid of mostly-"No" was unreadable and buried the point. Two columns, each
+ * splitting into what that party observes and what it cannot, puts the
+ * asymmetry — which is the entire argument — in front of you at a glance.
  */
 export function VisibilityDiagram({ className }: { className?: string }) {
-  const rows = [
-    { label: "Destination host and port", relay: true, control: false },
-    { label: "Connection timing and volume", relay: true, control: false },
-    { label: "Your host list and labels", relay: false, control: false },
-    { label: "Keystrokes and terminal output", relay: false, control: false },
-    { label: "File contents you transfer", relay: false, control: false },
-    { label: "SSH private keys", relay: false, control: false },
-    { label: "Your password", relay: false, control: false },
+  const parties = [
+    {
+      name: "The relay",
+      role: "Forwards bytes between your browser and your server",
+      sees: [
+        "Which host and port you connect to",
+        "When you connect, and for how long",
+        "How many bytes move, in each direction",
+      ],
+      blind: [
+        "Any plaintext byte of the session",
+        "Keystrokes, commands and output",
+        "Files you transfer",
+        "Your SSH keys",
+      ],
+    },
+    {
+      name: "The control plane",
+      role: "Stores your account and your encrypted vault",
+      sees: [
+        "Your email and sign-in times",
+        "The size of your vault, and when it changed",
+        "Which devices you use",
+      ],
+      blind: [
+        "Your host list, usernames and labels",
+        "Your snippets and saved settings",
+        "Your SSH keys, even the synced ones",
+        "Your password and vault key",
+      ],
+    },
   ];
 
   return (
-    <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full min-w-[26rem] text-left text-sm">
-        <caption className="sr-only">
-          What the relay and control plane can observe
-        </caption>
-        <thead>
-          <tr className="border-border border-b">
-            <th scope="col" className="text-muted-foreground py-2 pr-4 text-xs font-medium">
-              Can they see it?
-            </th>
-            <th scope="col" className="text-muted-foreground py-2 pr-4 text-xs font-medium">
-              Relay
-            </th>
-            <th scope="col" className="text-muted-foreground py-2 text-xs font-medium">
-              Control plane
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label} className="border-border/60 border-b last:border-0">
-              <td className="py-2 pr-4">{r.label}</td>
-              <td className="py-2 pr-4">
-                <Verdict yes={r.relay} />
-              </td>
-              <td className="py-2">
-                <Verdict yes={r.control} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className={cn("grid gap-4 sm:grid-cols-2", className)}>
+      {parties.map((p) => (
+        <Card key={p.name}>
+          <CardHeader>
+            <CardTitle className="text-sm">{p.name}</CardTitle>
+            <CardDescription>{p.role}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Visibility tone="warning" heading="Can see" items={p.sees} />
+            <Visibility tone="success" heading="Cannot see" items={p.blind} />
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
 
-function Verdict({ yes }: { yes: boolean }) {
-  return yes ? (
-    <span className="text-warning inline-flex items-center gap-1.5 text-xs">
-      <span aria-hidden className="bg-warning size-1.5 rounded-full" />
-      Yes
-      <span className="sr-only">— visible</span>
-    </span>
-  ) : (
-    <span className="text-success inline-flex items-center gap-1.5 text-xs">
-      <span aria-hidden className="bg-success size-1.5 rounded-full" />
-      No
-      <span className="sr-only">— not visible</span>
-    </span>
+function Visibility({
+  tone,
+  heading,
+  items,
+}: {
+  tone: "warning" | "success";
+  heading: string;
+  items: string[];
+}) {
+  return (
+    <div>
+      <p
+        className={cn(
+          "mb-1.5 text-[11px] font-medium tracking-wide uppercase",
+          tone === "warning" ? "text-warning" : "text-success",
+        )}
+      >
+        {heading}
+      </p>
+      <ul className="space-y-1">
+        {items.map((item) => (
+          <li key={item} className="text-muted-foreground flex gap-2 text-xs leading-relaxed">
+            <span
+              aria-hidden
+              className={cn(
+                "mt-1.5 size-1 shrink-0 rounded-full",
+                tone === "warning" ? "bg-warning" : "bg-success",
+              )}
+            />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

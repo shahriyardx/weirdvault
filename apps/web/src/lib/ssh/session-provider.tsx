@@ -69,7 +69,22 @@ interface LiveSession {
   bufferedBytes: number;
 }
 
+export type SplitDirection = "horizontal" | "vertical";
+
 interface SessionContextValue {
+  /** Session ids shown side by side. Always at least one entry when connected. */
+  panes: string[];
+  splitDirection: SplitDirection;
+  /** Index into `panes`; sidebar switches target this one. */
+  focusedPane: number;
+  setFocusedPane: (index: number) => void;
+  setSplitDirection: (d: SplitDirection) => void;
+  /** Adds a pane showing `id`, or the active session if omitted. */
+  splitPane: (id?: string) => void;
+  closePane: (index: number) => void;
+  /** Points an existing pane at a different session. */
+  setPaneSession: (index: number, id: string) => void;
+
   /** Global state: loading the WASM core, or mid-connect. */
   phase: Phase;
   sessions: SessionEntry[];
@@ -123,6 +138,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [note, setNote] = useState<string | null>(null);
   const [pinned, setPinned] = useState<HostKeyInfo | null>(null);
   const [mismatch, setMismatch] = useState<HostKeyMismatchError | null>(null);
+  const [panes, setPanes] = useState<string[]>([]);
+  const [focusedPane, setFocusedPane] = useState(0);
+  const [splitDirection, setSplitDirection] = useState<SplitDirection>("horizontal");
 
   const refreshKeys = useCallback(async () => {
     const k = await listKeys(getVaultKey() ?? undefined);
@@ -207,6 +225,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           live.current.delete(id);
           syncEntries();
           setActiveId((prev) => (prev === id ? ([...live.current.keys()][0] ?? null) : prev));
+          // A closed session must not leave a pane pointing at nothing.
+          setPanes((prev) => {
+            const next = prev.filter((p) => p !== id);
+            return next.length > 0 ? next : ([...live.current.keys()].slice(0, 1) as string[]);
+          });
         },
         onPinned: setPinned,
       };
@@ -229,6 +252,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // this one is already in the map.
         pending.entry = { ...pending.entry, label: labelFor(target, id) };
         pending.session = s;
+        setPanes((prev) => {
+          if (prev.length === 0) return [id];
+          // Replace whatever the focused pane was showing.
+          const next = [...prev];
+          next[Math.min(focusedPane, next.length - 1)] = id;
+          return next;
+        });
         setActiveId(id);
         syncEntries();
         setPhase("idle");
@@ -288,7 +318,36 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       sessions,
       activeId,
       active: sessions.find((s) => s.id === activeId) ?? null,
-      setActive: setActiveId,
+      setActive: (id: string) => {
+        setActiveId(id);
+        setPanes((prev) => {
+          if (prev.length === 0) return [id];
+          const next = [...prev];
+          next[Math.min(focusedPane, next.length - 1)] = id;
+          return next;
+        });
+      },
+      panes,
+      splitDirection,
+      focusedPane,
+      setFocusedPane,
+      setSplitDirection,
+      splitPane: (id?: string) => {
+        const target = id ?? activeId ?? [...live.current.keys()][0];
+        if (!target) return;
+        // Four panes is where a terminal stops being readable on a laptop.
+        setPanes((prev) => (prev.length >= 4 ? prev : [...prev, target]));
+        setFocusedPane((prev) => Math.min(prev + 1, 3));
+      },
+      closePane: (index: number) =>
+        setPanes((prev) => {
+          if (prev.length <= 1) return prev;
+          const next = prev.filter((_, i) => i !== index);
+          setFocusedPane((f) => Math.min(f, next.length - 1));
+          return next;
+        }),
+      setPaneSession: (index: number, id: string) =>
+        setPanes((prev) => prev.map((p, i) => (i === index ? id : p))),
       keys,
       hosts,
       activeKey,
@@ -311,6 +370,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [
       phase, sessions, activeId, keys, hosts, activeKey, refreshKeys,
       refreshHosts, connect, disconnect, error, note, pinned, mismatch, subscribe,
+      panes, splitDirection, focusedPane,
     ],
   );
 

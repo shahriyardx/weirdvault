@@ -264,11 +264,9 @@ export default function SecurityPage() {
             </p>
           </div>
 
-          <Card className="min-w-0 overflow-hidden">
-            <CardContent className="p-0">
-              <VisibilityDiagram />
-            </CardContent>
-          </Card>
+          <div className="min-w-0">
+            <VisibilityDiagram />
+          </div>
         </div>
       </Section>
 
@@ -636,17 +634,17 @@ function Risk({
   body: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-sm border border-border bg-card p-5 sm:flex-row sm:gap-5">
-      <div className="flex shrink-0 items-start gap-3 sm:w-40 sm:flex-col sm:gap-2">
-        <div className="grid size-8 shrink-0 place-items-center rounded-sm border border-border bg-secondary text-warning">
-          {icon}
-        </div>
-        <Badge variant="outline" className="font-normal text-muted-foreground">
-          {severity}
-        </Badge>
+    <div className="flex gap-4 rounded-sm border border-border bg-card p-5">
+      <div className="grid size-8 shrink-0 place-items-center rounded-sm border border-border bg-secondary text-warning">
+        {icon}
       </div>
       <div className="min-w-0">
-        <h4 className="font-heading text-sm font-medium">{title}</h4>
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="font-heading text-sm font-medium">{title}</h4>
+          <Badge variant="outline" className="font-normal text-muted-foreground">
+            {severity}
+          </Badge>
+        </div>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
       </div>
     </div>

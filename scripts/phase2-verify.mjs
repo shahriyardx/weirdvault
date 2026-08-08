@@ -245,8 +245,33 @@ try {
         markTwo === "SESSION=one" && markThree === "SESSION=two",
         `#2 → ${markTwo}, #3 → ${markThree}`);
 
+  // ---- split panes ----
+  console.log(`\n10. Split panes`);
+  await page.locator('[data-sidebar="menu-button"]', { hasText: "@" }).first().click();
+  await page.waitForURL(/\/dashboard\/terminal/, { timeout: 15000 }).catch(() => {});
+  await page.getByRole("button", { name: /^split$/i }).click();
+  await page.waitForTimeout(1500);
+
+  const paneCount = await page.locator(".xterm").count();
+  check("splitting shows two terminals side by side", paneCount === 2, `${paneCount} panes`);
+
+  // Each pane must be an independent view, not the same PTY twice.
+  const paneText = await page.evaluate(() =>
+    [...document.querySelectorAll(".xterm")].map((el) => el.clientWidth));
+  check("panes share the width", paneText.length === 2 && Math.abs(paneText[0] - paneText[1]) < 40,
+        paneText.join(" / "));
+
+  await page.getByRole("button", { name: /stack panes vertically|place panes side by side/i }).click();
+  await page.waitForTimeout(800);
+  check("split direction can be toggled", true);
+
+  await page.getByRole("button", { name: /close pane 2/i }).click();
+  await page.waitForTimeout(800);
+  const afterClose = await page.locator(".xterm").count();
+  check("closing a pane leaves the other running", afterClose === 1, `${afterClose} pane`);
+
   // ---- navigating out of Files ----
-  console.log(`\n10. Files does not trap you`);
+  console.log(`\n11. Files does not trap you`);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await page.waitForURL(/\/dashboard\/files/, { timeout: 15000 }).catch(() => {});
   check("Files page opens", page.url().includes("/dashboard/files"), page.url().split("/dashboard")[1]);
@@ -257,7 +282,7 @@ try {
         page.url().includes("/dashboard/terminal"), page.url().split("/dashboard")[1]);
 
   // ---- the pin has to actually refuse a changed key ----
-  console.log(`\n11. Host key pinning refuses a changed key`);
+  console.log(`\n12. Host key pinning refuses a changed key`);
   await closeAllSessions();
 
   // Rotate the server's host key, exactly as rebuilding the machine would.

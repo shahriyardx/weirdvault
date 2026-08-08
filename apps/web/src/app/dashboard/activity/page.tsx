@@ -9,7 +9,6 @@
  * readable label requires the vault, which only this browser can decrypt.
  */
 
-import { AuditBlindingDiagram } from "@/components/diagrams/flows";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -24,7 +23,6 @@ import {
   FunnelIcon,
   HardDrivesIcon,
   KeyIcon,
-  LockKeyIcon,
   MagnifyingGlassIcon,
   MonitorIcon,
   PlugsConnectedIcon,
@@ -43,9 +41,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -469,90 +464,17 @@ export default function ActivityPage() {
         }
       />
 
-      {/* ------------------------------------------------- the framing callout */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardHeader className="border-b border-border">
-            <CardTitle className="flex items-center gap-2">
-              <LockKeyIcon className="size-4 text-primary" />
-              The server groups by host without knowing the host
-            </CardTitle>
-            <CardDescription>
-              Why the Target column below is filled in here and nowhere else.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-3 text-muted-foreground">
-            <p>
-              Every event that concerns a host is stored against a blinded
-              reference. Your browser computes an HMAC of the hostname and port
-              under a key derived on this device, and sends only that. The server
-              gets a stable, opaque handle: it can group your activity by host and
-              count connections to it, without ever learning which host it is.
-            </p>
-            <AuditBlindingDiagram />
-            <p>
-              The readable labels are not in the API response. They are resolved
-              here, after the vault is decrypted, by hashing your saved hosts with
-              the same key and matching the results. A reference to a host this
-              device has no record of stays opaque — which is the honest thing to
-              show, rather than guessing at a name.
-            </p>
-            <p>
-              The deliberate leak: the reference is deterministic, so the server
-              can tell that two events concern the same unknown host. That is what
-              makes grouping work, and the relay already sees each connection as it
-              happens.{" "}
-              <Link href="/security" className="text-primary hover:underline">
-                Read the threat model
-              </Link>
-              .
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader className="border-b border-border">
-            <CardTitle>What each row can prove</CardTitle>
-            <CardDescription>
-              Not every line in an audit log is worth the same.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-3 px-0">
-            <ul className="divide-y divide-border">
-              {(Object.keys(SOURCE_META) as AuditSource[]).map((key) => {
-                const meta = SOURCE_META[key];
-                return (
-                  <li key={key} className="flex gap-2.5 px-(--card-spacing) py-2.5">
-                    <meta.Icon className={cn("mt-0.5 size-4 shrink-0", meta.tone)} />
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground">{meta.label}</p>
-                      <p className="text-muted-foreground">{meta.note}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <div className="space-y-3 px-(--card-spacing) text-muted-foreground">
-              <p>
-                Rows marked <span className="text-foreground">client</span> are
-                self-reported: a browser told us a host key was pinned or a key
-                installed. A tab that has been compromised can lie about those, or
-                stay quiet and never send them at all.
-              </p>
-              <p>
-                Rows marked <span className="text-foreground">server</span> and{" "}
-                <span className="text-foreground">relay</span> are written outside
-                your browser, on the machines that handled the request. A
-                compromised tab cannot suppress, backdate or forge them — a
-                connection it opens is recorded whether or not it admits to it.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <p className="text-muted-foreground mt-4 text-xs leading-relaxed">
+        Hosts are stored as blinded references and resolved to names here, on
+        this device. Rows marked <span className="text-foreground">client</span>{" "}
+        are self-reported by a browser;{" "}
+        <span className="text-foreground">server</span> and{" "}
+        <span className="text-foreground">relay</span> rows are written outside
+        it.{" "}
+        <Link href="/security#threat-model" className="underline underline-offset-4 hover:text-foreground">
+          How this works
+        </Link>
+      </p>
 
       {/* --------------------------------------------------------- the filters */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
