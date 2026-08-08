@@ -39,6 +39,12 @@ export const session = pgTable("session", {
     .references(() => user.id, { onDelete: "cascade" }),
   // Added by the organization plugin.
   activeOrganizationId: text("active_organization_id"),
+  /**
+   * Which registered device this session belongs to, so revoking a device can
+   * end exactly its sessions. Without it, "revoked" would only mean "cannot
+   * register again" while the existing cookie kept working.
+   */
+  deviceId: text("device_id"),
 });
 
 export const account = pgTable("account", {
@@ -156,17 +162,47 @@ export const device = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
-    // X25519 public key used to wrap team keys to this device.
+    platform: text("platform"),
+    /** Ed25519 identity of this browser. Distinct from the X25519 key below. */
+    signingKey: text("signing_key"),
+    /** X25519 public key used to wrap team keys to this device. */
     publicKey: text("public_key"),
+    /** Truncated: /24 for v4, /48 for v6. Enough for "was that me?", no more. */
+    lastSeenIpPrefix: text("last_seen_ip_prefix"),
+    /**
+     * Tombstone rather than delete: audit rows keep a resolvable reference, and
+     * a revoked device id can never be re-claimed.
+     */
+    revokedAt: timestamp("revoked_at"),
     lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("device_user_idx").on(t.userId)],
+  (t) => [
+    index("device_user_idx").on(t.userId),
+    uniqueIndex("device_user_signing_key_idx").on(t.userId, t.signingKey),
+  ],
 );
 
 /**
- * Audit trail. Records that a connection happened and to where — never what
- * was typed or transferred, which the server cannot see anyway.
+ * Audit trail.
+ *
+ * Records that something happened and roughly where — never what was typed or
+ * transferred, which the server cannot see anyway.
+ *
+ * `targetRef` is deliberately NOT a hostname. A plaintext hostname column
+ * indexed by user and time rebuilds, in the clear and durably, precisely the
+ * infrastructure map the vault exists to hide (THREAT-MODEL §1). Instead the
+ * browser writes HMAC(auditKey, host|port) truncated to 16 bytes, so the server
+ * can group a timeline by host without ever learning which host.
+ *
+ * The accepted, deliberate leak: the ref is deterministic, so the server can
+ * correlate the same host across time and count connections to it. That
+ * correlation IS the feature — a timeline you cannot group is not an audit log.
+ *
+ * `source` records provenance because the three sources have very different
+ * integrity: server- and relay-written rows cannot be suppressed by a
+ * compromised tab, client-written rows are self-reported. Recording that stops
+ * the log from over-claiming what it proves.
  */
 export const auditEvent = pgTable(
   "audit_event",
@@ -176,13 +212,23 @@ export const auditEvent = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "cascade",
     }),
+    deviceId: text("device_id").references(() => device.id, { onDelete: "set null" }),
+    /** Closed enum, validated server-side. Never free text. */
     eventType: text("event_type").notNull(),
-    targetHost: text("target_host"),
+    /** "server" | "relay" | "client" */
+    source: text("source").notNull(),
+    /** Blinded host reference. Never a hostname. */
+    targetRef: text("target_ref"),
+    /** Truncated network, not the full address. */
+    ipPrefix: text("ip_prefix"),
+    /** Per-eventType allowlist, enforced server-side. Never free text. */
     metadata: jsonb("metadata"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
     index("audit_org_time_idx").on(t.organizationId, t.createdAt),
     index("audit_user_time_idx").on(t.userId, t.createdAt),
+    index("audit_user_target_idx").on(t.userId, t.targetRef, t.createdAt),
+    index("audit_created_idx").on(t.createdAt),
   ],
 );

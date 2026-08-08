@@ -32,6 +32,7 @@ export const ARGON2_PARAMS = {
 
 const AUTH_INFO = "webxterm/auth/v1";
 const VAULT_INFO = "webxterm/vault/v1";
+const AUDIT_INFO = "webxterm/audit/v1";
 
 const enc = new TextEncoder();
 
@@ -79,6 +80,16 @@ export interface DerivedSecrets {
   authToken: string;
   /** Stays on the device. Unwraps everything in the vault. */
   vaultKey: CryptoKey;
+  /**
+   * Blinds hostnames before they reach the audit log. Stays on the device.
+   *
+   * An audit table with a plaintext hostname column, indexed by user and time,
+   * rebuilds in the clear exactly the infrastructure map the vault exists to
+   * hide — and does it durably and queryably, which is worse than the relay's
+   * transient view of the same fact. HMAC under this key gives the server a
+   * stable opaque handle it can group a timeline by, and nothing more.
+   */
+  auditKey: CryptoKey;
 }
 
 export async function deriveSecrets(
@@ -94,13 +105,16 @@ export async function deriveSecrets(
     outputType: "binary",
   });
 
-  const [authBytes, vaultBytes] = await Promise.all([
+  // Branches are domain-separated by the info string, so adding one leaves the
+  // existing two byte-identical — no vault re-encryption, no migration.
+  const [authBytes, vaultBytes, auditBytes] = await Promise.all([
     hkdf(master, AUTH_INFO),
     hkdf(master, VAULT_INFO),
+    hkdf(master, AUDIT_INFO),
   ]);
 
-  // Non-extractable: once derived, the vault key cannot be read back out,
-  // only used. Same principle as the SSH keys.
+  // Non-extractable: once derived, these cannot be read back out, only used.
+  // Same principle as the SSH keys.
   const vaultKey = await crypto.subtle.importKey(
     "raw",
     vaultBytes as BufferSource,
@@ -108,13 +122,21 @@ export async function deriveSecrets(
     false,
     ["encrypt", "decrypt"],
   );
+  const auditKey = await crypto.subtle.importKey(
+    "raw",
+    auditBytes as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
 
   // Wipe what we can. JS gives no guarantees here, but leaving copies around
   // deliberately would be worse.
   master.fill(0);
   vaultBytes.fill(0);
+  auditBytes.fill(0);
 
-  return { authToken: b64(authBytes), vaultKey };
+  return { authToken: b64(authBytes), vaultKey, auditKey };
 }
 
 function b64(b: Uint8Array): string {

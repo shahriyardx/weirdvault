@@ -22,26 +22,28 @@ import (
 
 func main() {
 	js.Global().Set("webxtermSSH", js.ValueOf(map[string]any{
-		"connect": js.FuncOf(connect),
-		"version": "phase0",
+		"connect":        js.FuncOf(connect),
+		"importKey":      js.FuncOf(importKeyJS),
+		"parseSSHConfig": js.FuncOf(parseSSHConfigJS),
+		"version":        "1",
 	}))
 	select {} // keep the runtime alive for callbacks
 }
 
 // connect returns a Promise resolving to a session handle.
 //
-// config: {
-//   relay:     string       ws:// URL of the relay, already carrying host/port
-//   host, port                 for the SSH host key check + logging
-//   user:      string
-//   auth:      { kind: "publickey", keyType, publicKey: Uint8Array, sign: fn }
-//            | { kind: "password",  password: string }
-//   cols, rows: number
-//   onData:    (Uint8Array) => void
-//   onStatus:  ({phase, detail, ms}) => void
-//   onHostKey: ({fingerprint, type}) => void
-//   onClose:   (reason: string) => void
-// }
+//	config: {
+//	  relay:     string       ws:// URL of the relay, already carrying host/port
+//	  host, port                 for the SSH host key check + logging
+//	  user:      string
+//	  auth:      { kind: "publickey", keyType, publicKey: Uint8Array, sign: fn }
+//	           | { kind: "password",  password: string }
+//	  cols, rows: number
+//	  onData:    (Uint8Array) => void
+//	  onStatus:  ({phase, detail, ms}) => void
+//	  onHostKey: ({fingerprint, type}) => void
+//	  onClose:   (reason: string) => void
+//	}
 func connect(_ js.Value, args []js.Value) any {
 	if len(args) < 1 || args[0].Type() != js.TypeObject {
 		return rejected("connect(config) requires a config object")
