@@ -17,7 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/auth-client";
 import { deriveSecrets } from "@/lib/vault/kdf";
-import { setVaultKey, useVaultUnlocked } from "@/lib/vault/session";
+import {
+  dismissUnlock,
+  setVaultKey,
+  useUnlockRequested,
+  useVaultUnlocked,
+} from "@/lib/vault/session";
+import { useSshSession } from "@/lib/ssh/session-provider";
 
 /**
  * Re-unlocking after a page load.
@@ -32,13 +38,18 @@ import { setVaultKey, useVaultUnlocked } from "@/lib/vault/session";
 export function VaultUnlock() {
   const { data: session, isPending } = useSession();
   const unlocked = useVaultUnlocked();
+  const requested = useUnlockRequested();
+  const { refreshKeys } = useSshSession();
 
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
-  const needsUnlock = !isPending && Boolean(session?.user) && !unlocked && !dismissed;
+  // Show on arrival, and again whenever something actually needs the vault —
+  // "dismissed" only silences the automatic prompt, never an explicit request.
+  const needsUnlock =
+    !isPending && Boolean(session?.user) && !unlocked && (requested || !dismissed);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +63,8 @@ export function VaultUnlock() {
       // that; we cannot verify it here without weakening the model.
       setVaultKey(vaultKey, auditKey);
       setPassword("");
+      // Portable keys only become usable once the vault is open.
+      await refreshKeys();
     } catch (err) {
       setError(String((err as Error).message ?? err));
     } finally {
@@ -60,8 +73,16 @@ export function VaultUnlock() {
   }
 
   return (
-    <Dialog open={needsUnlock} onOpenChange={(open) => !open && setDismissed(true)}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog
+      open={needsUnlock}
+      onOpenChange={(open) => {
+        if (!open) {
+          setDismissed(true);
+          dismissUnlock();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <LockKeyIcon className="text-primary" />
@@ -95,7 +116,15 @@ export function VaultUnlock() {
           )}
 
           <DialogFooter className="gap-2 sm:justify-between">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setDismissed(true)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setDismissed(true);
+                dismissUnlock();
+              }}
+            >
               Continue locked
             </Button>
             <Button type="submit" disabled={busy || !password}>

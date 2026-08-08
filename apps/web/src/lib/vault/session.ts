@@ -25,12 +25,22 @@ interface VaultSession {
 let current: VaultSession | null = null;
 const listeners = new Set<() => void>();
 
+/**
+ * Whether the unlock prompt is showing.
+ *
+ * Anything that needs the vault — connecting with a portable key, syncing —
+ * can ask for it rather than failing with "no usable key", which tells the user
+ * nothing about what to do next.
+ */
+let unlockOpen = false;
+
 function emit() {
   for (const fn of listeners) fn();
 }
 
 export function setVaultKey(vaultKey: CryptoKey, auditKey: CryptoKey | null = null) {
   current = { vaultKey, auditKey };
+  unlockOpen = false;
   emit();
 }
 
@@ -51,6 +61,17 @@ export function lock() {
   emit();
 }
 
+export function requestUnlock() {
+  if (current) return; // already unlocked; nothing to ask for
+  unlockOpen = true;
+  emit();
+}
+
+export function dismissUnlock() {
+  unlockOpen = false;
+  emit();
+}
+
 function subscribe(fn: () => void) {
   listeners.add(fn);
   return () => {
@@ -67,6 +88,15 @@ export function useVaultUnlocked(): boolean {
     subscribe,
     () => current !== null,
     // Server render: always locked, since the key only exists in the browser.
+    () => false,
+  );
+}
+
+/** Reactive: is the unlock prompt currently requested? */
+export function useUnlockRequested(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => unlockOpen,
     () => false,
   );
 }

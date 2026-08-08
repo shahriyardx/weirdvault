@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useSshSession } from "@/lib/ssh/session-provider";
+import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
 
 export default function ConnectPage() {
   const router = useRouter();
   const { keys, hosts, activeKey, setActiveKey, connect, phase, error, pinned, mismatch, refreshKeys } =
     useSshSession();
+  const vaultUnlocked = useVaultUnlocked();
 
   // Keys may have been created on another page since the provider loaded, and
   // arriving here to find "no usable keys" would be wrong.
@@ -42,7 +44,11 @@ export default function ConnectPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!activeKey) return;
+    if (!activeKey) {
+      // Almost always a locked vault hiding the portable keys.
+      if (!vaultUnlocked) requestUnlock();
+      return;
+    }
     try {
       await connect({
         hostname: form.hostname,
@@ -219,11 +225,16 @@ export default function ConnectPage() {
             <PlugsConnectedIcon />
             {phase === "connecting" ? "Connecting…" : "Connect"}
           </Button>
-          {keys.length === 0 && (
-            <Badge variant="outline" className="font-normal">
-              Create a key first
-            </Badge>
-          )}
+          {keys.length === 0 &&
+            (vaultUnlocked ? (
+              <Badge variant="outline" className="font-normal">
+                Create a key first
+              </Badge>
+            ) : (
+              <Button type="button" variant="outline" onClick={requestUnlock}>
+                Unlock vault to use your keys
+              </Button>
+            ))}
         </div>
       </form>
     </div>

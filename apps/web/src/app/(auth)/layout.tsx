@@ -1,3 +1,4 @@
+import { SplitKdfDiagram } from "@/components/diagrams/flows";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -71,18 +72,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             other.
           </p>
 
-          <pre className="bg-terminal mt-7 overflow-x-auto border border-border p-4 text-[11px] leading-relaxed text-muted-foreground">
-{`  password + email
-       │
-       │  Argon2id · 64 MiB · 3 passes
-       ▼
-   master key
-       ├─ HKDF auth/v1  ──▶ `}
-            <span className="text-warning">token, sent to us</span>
-{`
-       └─ HKDF vault/v1 ──▶ `}
-            <span className="text-success">vault key, never sent</span>
-          </pre>
+          <SplitKdfDiagram />
 
           <dl className="mt-8 space-y-5">
             <Point

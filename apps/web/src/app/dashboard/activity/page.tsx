@@ -9,6 +9,7 @@
  * readable label requires the vault, which only this browser can decrypt.
  */
 
+import { AuditBlindingDiagram } from "@/components/diagrams/flows";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -489,15 +490,7 @@ export default function ActivityPage() {
               gets a stable, opaque handle: it can group your activity by host and
               count connections to it, without ever learning which host it is.
             </p>
-            <pre className="bg-terminal overflow-x-auto border border-border px-3 py-3 text-[11px] leading-relaxed">
-{`  prod-web-1:22
-     │  HMAC(auditKey, host|port)   ← key never leaves this device
-     ▼
-  h/7f3c9d2a41b6e5c8               ← all the server stores, and all it can group by
-     │
-     ▼  matched against the vault, decrypted in this tab
-  "prod-web-1"                     ← resolved locally, never sent`}
-            </pre>
+            <AuditBlindingDiagram />
             <p>
               The readable labels are not in the API response. They are resolved
               here, after the vault is decrypted, by hashing your saved hosts with

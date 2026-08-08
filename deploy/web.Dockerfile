@@ -1,0 +1,49 @@
+# The control plane: Next.js app, auth, and encrypted vault storage.
+#
+# This never sees a plaintext vault or an SSH key — it stores ciphertext and
+# serves the JavaScript that does the real work. Build from the repo root:
+#   docker build -f deploy/web.Dockerfile -t webxterm-web .
+
+FROM oven/bun:1 AS deps
+WORKDIR /app
+COPY package.json bun.lock* ./
+COPY apps/web/package.json apps/web/
+RUN bun install --frozen-lockfile
+
+FROM golang:1.26 AS wasm
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY wasm ./wasm
+# The SSH core is a build input to the web image: the app serves it from
+# /public, and a mismatched or missing ssh.wasm means no connections at all.
+RUN GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /ssh.wasm ./wasm/ssh \
+ && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /wasm_exec.js
+
+FROM oven/bun:1 AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY . .
+COPY --from=wasm /ssh.wasm apps/web/public/ssh.wasm
+COPY --from=wasm /wasm_exec.js apps/web/public/wasm_exec.js
+
+# NEXT_PUBLIC_* is inlined at build time, so the relay URL must be known here.
+ARG NEXT_PUBLIC_RELAY_URL
+ENV NEXT_PUBLIC_RELAY_URL=$NEXT_PUBLIC_RELAY_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN bun run --cwd apps/web build
+
+FROM node:22-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+
+RUN groupadd -r webxterm && useradd -r -g webxterm webxterm
+
+COPY --from=build --chown=webxterm:webxterm /app/apps/web/.next/standalone ./
+COPY --from=build --chown=webxterm:webxterm /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=webxterm:webxterm /app/apps/web/public ./apps/web/public
+
+USER webxterm
+EXPOSE 3000
+CMD ["node", "apps/web/server.js"]

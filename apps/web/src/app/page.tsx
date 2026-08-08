@@ -14,6 +14,7 @@ import { PageShell } from "@/components/shell/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ArchitectureDiagram } from "@/components/diagrams/architecture";
 
 export default function Home() {
   return (
@@ -130,23 +131,8 @@ export default function Home() {
             </div>
 
             <Card className="overflow-hidden">
-              <CardContent className="p-0">
-                <pre className="bg-terminal overflow-x-auto p-5 text-[11px] leading-relaxed text-muted-foreground">
-{`  ┌─ your browser ────────────────────────┐
-  │  terminal · SFTP · editor             │
-  │  WASM SSH client                      │
-  │  non-extractable keys ────────────┐   │
-  └───────────────┬───────────────────┼───┘
-                  │  SSH ciphertext   │
-          ┌───────▼────────┐          │
-          │  webxterm relay│  cannot decrypt
-          │  stateless     │
-          └───────┬────────┘
-                  │ TCP :22
-            ┌─────▼──────┐
-            │ your server│  unmodified sshd
-            └────────────┘`}
-                </pre>
+              <CardContent className="p-5">
+                <ArchitectureDiagram />
               </CardContent>
             </Card>
           </div>

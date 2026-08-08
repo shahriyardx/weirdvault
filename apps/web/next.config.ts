@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Emits a self-contained server bundle with only the node_modules it
+  // actually uses, so the runtime image does not ship the whole workspace.
+  output: "standalone",
+
   // The floating dev badge overlaps the sidebar footer.
   devIndicators: false,
 

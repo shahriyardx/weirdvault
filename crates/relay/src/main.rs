@@ -57,6 +57,12 @@ struct ConnectParams {
 
 #[tokio::main]
 async fn main() {
+    // The runtime image is distroless: no shell, no curl. A container
+    // healthcheck therefore has to be the binary itself.
+    if std::env::args().any(|a| a == "--healthcheck") {
+        std::process::exit(healthcheck().await);
+    }
+
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -112,6 +118,23 @@ async fn main() {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .expect("serve");
+}
+
+/// Probes our own /healthz. Exit 0 healthy, 1 not.
+async fn healthcheck() -> i32 {
+    let addr = std::env::var("RELAY_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
+    // Connect to loopback regardless of the bind address: 0.0.0.0 is not a
+    // destination, and the check runs inside the same container.
+    let port = addr.rsplit(':').next().unwrap_or("8080");
+    match tokio::time::timeout(
+        Duration::from_secs(3),
+        TcpStream::connect(format!("127.0.0.1:{port}")),
+    )
+    .await
+    {
+        Ok(Ok(_)) => 0,
+        _ => 1,
+    }
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {

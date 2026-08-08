@@ -19,6 +19,7 @@
  *    works" — is specified but not implemented. It is marked as such.
  */
 
+import { TeamKeyDiagram } from "@/components/diagrams/flows";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -706,23 +707,7 @@ function TeamVaultExplainer() {
           </Alert>
         </div>
 
-        <pre className="bg-terminal min-w-0 overflow-x-auto border border-border p-4 text-[11px] leading-relaxed text-muted-foreground">
-{`  team vault (hosts, keys, snippets)
-         │  AES-GCM
-         ▼
-   ┌───────────┐
-   │ team key  │  never stored in the clear
-   └─────┬─────┘
-         │ wrapped to each member
-    ┌────┼─────────────┬─────────────┐
-    ▼    ▼             ▼             ▼
-  ana  dmitri        priya       (removed)
-   pk    pk            pk            ✗
-    │     │             │
-    └─────┴──── server holds ciphertext only
-              remove a member → new team key
-              → re-wrap to everyone remaining`}
-        </pre>
+        <TeamKeyDiagram />
       </CardContent>
     </Card>
   );

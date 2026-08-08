@@ -1,3 +1,4 @@
+import { ArchitectureDiagram, VisibilityDiagram } from "@/components/diagrams/architecture";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -111,22 +112,7 @@ export default function SecurityPage() {
               <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
                 trust boundary
               </div>
-              <pre className="bg-terminal overflow-x-auto p-4 text-[11px] leading-relaxed text-muted-foreground">
-{`┌─ your browser ─────────────────────────────┐
-│  xterm.js · SFTP · Monaco                  │
-│  WASM SSH client   ← handshake, ciphers    │
-│  WebCrypto key     ← non-extractable       │
-└─────────────────────┬──────────────────────┘
-                      │  wss:// — SSH ciphertext
-           ┌──────────▼──────────┐
-           │  webxterm relay     │  holds no session key
-           │  stateless bridge   │  sees host, port, timing
-           └──────────┬──────────┘
-                      │  tcp :22 — same ciphertext
-           ┌──────────▼──────────┐
-           │  your server, sshd  │  unmodified
-           └─────────────────────┘`}
-              </pre>
+              <ArchitectureDiagram className="max-w-md" />
             </CardContent>
           </Card>
         </div>
@@ -280,19 +266,7 @@ export default function SecurityPage() {
 
           <Card className="min-w-0 overflow-hidden">
             <CardContent className="p-0">
-              <pre className="bg-terminal overflow-x-auto p-4 text-[11px] leading-relaxed text-muted-foreground">
-{`password + salt
-      │
-      ▼
-  Argon2id            ← in the browser
-      │
-      ▼
-   HKDF-SHA256
-      │
-      ├──▶ auth token   sent      · proves it is you
-      │
-      └──▶ vault key    never sent · decrypts the blob`}
-              </pre>
+              <VisibilityDiagram />
             </CardContent>
           </Card>
         </div>

@@ -73,6 +73,7 @@ import { deleteHost, listHosts, saveHost, type Host } from "@/lib/hosts";
 import { listPins, type PinnedHostKey } from "@/lib/hostkeys";
 import { listStoredKeys, type StoredKey } from "@/lib/keys";
 import { useSshSession } from "@/lib/ssh/session-provider";
+import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
 
 /* -------------------------------------------------------------------- form */
 
@@ -119,6 +120,7 @@ const formFor = (host: Host): HostForm => ({
 export default function HostsPage() {
   const router = useRouter();
   const { keys: usableKeys, activeKey, connect } = useSshSession();
+  const vaultUnlocked = useVaultUnlocked();
 
   /**
    * Connect straight from the list.
@@ -130,8 +132,15 @@ export default function HostsPage() {
   async function connectTo(host: Host) {
     const key = usableKeys.find((k) => k.id === host.keyId) ?? activeKey;
     if (!key) {
-      toast.error("No usable key — unlock the vault or create one first.");
-      router.push("/dashboard/connect");
+      // A locked vault is the usual reason there is no usable key: portable
+      // keys cannot be unwrapped until it opens. Ask for the password rather
+      // than reporting a dead end.
+      if (!vaultUnlocked) {
+        requestUnlock();
+        return;
+      }
+      toast.error("No usable key — create one on the Keys page first.");
+      router.push("/dashboard/keys");
       return;
     }
     const toastId = toast.loading(`Connecting to ${host.username}@${host.hostname}…`);
