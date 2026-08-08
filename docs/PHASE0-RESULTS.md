@@ -83,14 +83,14 @@ Stated plainly so nobody quotes them as production figures:
 
 ## Files
 
-As they stood when this was measured. The `core/ssh/` files are still there and
+As they stood when this was measured. The `apps/ssh/` files are still there and
 still carry the argument; the rest lived in the Phase 0 harness and were deleted
 once the app superseded them — `git log -- spike/` if you need them back.
 
 ```
-core/ssh/signer.go     webCryptoSigner — the load-bearing 100 lines
-core/ssh/wsconn.go     net.Conn over a browser WebSocket
-core/ssh/main.go       connect(), PTY session, JS handle
+apps/ssh/signer.go     webCryptoSigner — the load-bearing 100 lines
+apps/ssh/wsconn.go     net.Conn over a browser WebSocket
+apps/ssh/main.go       connect(), PTY session, JS handle
 spike/relay/main.go    WebSocket ↔ TCP with SSRF guards        (deleted)
 spike/web/keys.js      non-extractable key custody             (deleted)
 scripts/phase0-verify.mjs  this test                           (deleted)

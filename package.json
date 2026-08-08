@@ -3,23 +3,10 @@
   "private": true,
   "type": "module",
   "description": "Zero-install web SSH client: browser, key, connect. Nothing to install on either end.",
-  "workspaces": [
-    "apps/*"
-  ],
   "scripts": {
-    "dev": "bun run --cwd apps/web dev",
-    "build": "bun run --cwd apps/web build",
     "wasm": "bun scripts/build-wasm.mjs",
-    "size": "bun scripts/size.mjs apps/web/public/ssh.wasm",
-    "clean": "rm -f apps/web/public/ssh.wasm apps/web/public/wasm_exec.js",
-    "db:up": "docker compose -f deploy/compose.yaml up -d postgres",
-    "db:down": "docker compose -f deploy/compose.yaml down",
-    "db:push": "bun run --cwd apps/web db:push",
-    "db:studio": "bun run --cwd apps/web db:studio",
-    "sshd": "docker build -q -t webxterm-sshd deploy/sshd && (docker rm -f webxterm-sshd >/dev/null 2>&1 || true) && docker run -d --name webxterm-sshd -p 2222:22 webxterm-sshd",
+    "sshd": "docker build -q -t webxterm-sshd tests/sshd && (docker rm -f webxterm-sshd >/dev/null 2>&1 || true) && docker run -d --name webxterm-sshd -p 2222:22 webxterm-sshd",
     "sshd:stop": "docker rm -f webxterm-sshd",
-    "relay": "RELAY_SECRET=${RELAY_SECRET:-dev-relay-secret-change-me} RELAY_ALLOW_PRIVATE=1 RELAY_PORTS=22,2222 RELAY_ADDR=127.0.0.1:8080 cargo run --release -p webxterm-relay",
-    "relay:test": "cargo test -p webxterm-relay",
     "test": "bun tests/signed-in.mjs && bun tests/signed-out.mjs",
     "test:signed-in": "bun tests/signed-in.mjs",
     "test:signed-out": "bun tests/signed-out.mjs"

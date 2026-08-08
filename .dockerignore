@@ -1,0 +1,29 @@
+# Keep the build context small, and keep host artefacts from overwriting what
+# the image built for itself. The web image copies node_modules from its deps
+# stage and then copies the source with `COPY . .` — without this, a host
+# node_modules built on macOS would land on top of the Linux one.
+node_modules
+**/node_modules
+
+.next
+**/.next
+target
+**/target
+
+.git
+.gitignore
+
+# Test fixtures and tooling: never part of a runtime image.
+tests
+docs
+scripts
+
+# Build outputs regenerated inside the image.
+apps/web/public/ssh.wasm
+apps/web/public/wasm_exec.js
+
+.env
+.env.local
+**/.env
+**/.env.local
+.DS_Store

@@ -2,27 +2,26 @@
 #
 # This never sees a plaintext vault or an SSH key — it stores ciphertext and
 # serves the JavaScript that does the real work. Build from the repo root:
-#   docker build -f deploy/web.Dockerfile -t webxterm-web .
+#   docker build -f apps/web/Dockerfile -t webxterm-web .
 
 FROM oven/bun:1 AS deps
 WORKDIR /app
-COPY package.json bun.lock* ./
-COPY apps/web/package.json apps/web/
-RUN bun install --frozen-lockfile
+COPY apps/web/package.json apps/web/bun.lock* ./apps/web/
+RUN cd apps/web && bun install --frozen-lockfile
 
 FROM golang:1.26 AS wasm
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY core/ssh ./core/ssh
+COPY apps/ssh/go.mod apps/ssh/go.sum ./apps/ssh/
+RUN cd apps/ssh && go mod download
+COPY apps/ssh ./apps/ssh
 # The SSH core is a build input to the web image: the app serves it from
 # /public, and a mismatched or missing ssh.wasm means no connections at all.
-RUN GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /ssh.wasm ./core/ssh \
+RUN cd apps/ssh \
+ && GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /ssh.wasm . \
  && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /wasm_exec.js
 
 FROM oven/bun:1 AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 COPY --from=wasm /ssh.wasm apps/web/public/ssh.wasm
@@ -49,7 +48,7 @@ COPY --from=build --chown=webxterm:webxterm /app/apps/web/public ./apps/web/publ
 # start, not here: a build has no database to talk to.
 COPY --from=build --chown=webxterm:webxterm /app/apps/web/drizzle ./apps/web/drizzle
 COPY --chown=webxterm:webxterm apps/web/scripts/migrate.mjs ./apps/web/scripts/migrate.mjs
-COPY --chmod=755 deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 apps/web/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER webxterm
 EXPOSE 3000

@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# apps/web — the app and the control plane
 
-## Getting Started
+Next.js. Serves the marketing pages, the dashboard, authentication, and the
+encrypted vault API. It also serves `ssh.wasm`, which is the part that actually
+talks SSH.
 
-First, run the development server:
+What it deliberately cannot do is read your data. Hosts, keys and snippets are
+encrypted in the browser with a key derived from your password, and the server
+stores the ciphertext as an opaque blob. That is why search runs in the tab —
+there is nothing on the server to query.
+
+| Path | What lives there |
+|---|---|
+| `src/lib/keys.ts` | Non-extractable WebCrypto key custody |
+| `src/lib/vault/` | Split KDF, vault encryption, sync with optimistic concurrency |
+| `src/lib/ssh/` | Session orchestration, host key pinning policy, connect flows |
+| `src/lib/transfers/` | Streaming upload and download, USTAR writer |
+| `src/app/api/` | Auth, vault, devices, audit, relay tokens |
+| `drizzle/` | Generated SQL migrations — **commit these** |
+
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install                    # this app has its own lockfile
+bun run wasm                   # from the repo root — writes ssh.wasm into public/
+bun run --cwd . db:push        # or from the root: bun run db:up first
+bun run dev                    # :3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Needs Postgres and the relay. From the repo root:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker compose -f compose.yaml up -d postgres
+cd apps/relay && cargo run --release    # see apps/relay/README.md for env
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Without `ssh.wasm` in `public/` the app loads but cannot connect to anything.
 
-## Learn More
+## Test
 
-To learn more about Next.js, take a look at the following resources:
+There are no unit tests for the UI, and that is on purpose — the claims worth
+checking are about a real browser talking to a real SSH server, so they live in
+`tests/` at the repo root and drive headless Chromium.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+bun run typecheck                  # tsc, from here
+cd ../.. && bun run test           # both browser suites
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Two small unit suites do exist for pure logic:
 
-## Deploy on Vercel
+```bash
+bun test src/lib/audit/events.test.ts src/lib/vault/sync.test.ts
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Database
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+bun run db:push       # local development: diffs the schema straight at Postgres
+bun run db:generate   # after editing src/lib/db/schema.ts — writes drizzle/*.sql
+bun run db:migrate    # applies pending migrations; what the container runs at start
+```
+
+`db:push` is for local iteration only. Production applies the committed SQL in
+`drizzle/`, so a schema change is not finished until `db:generate` has run and
+the result is committed.
+
+## Build the image
+
+From the repo root, since the Dockerfile expects that context:
+
+```bash
+docker build -f apps/web/Dockerfile -t webxterm-web .
+```
+
+The image builds `ssh.wasm` itself in a Go stage, so it never ships a stale one.
+It migrates the database at container start, before the server binds — see
+`entrypoint.sh`.
+
+`NEXT_PUBLIC_RELAY_URL` is inlined at build time, so changing the relay URL
+means a rebuild, not a restart.

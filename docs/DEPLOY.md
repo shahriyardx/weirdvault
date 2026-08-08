@@ -25,13 +25,13 @@ The whole product on one machine. This is what removes relay metadata exposure:
 run it on your own network and no third party learns which hosts you connect to.
 
 ```bash
-cp deploy/.env.example deploy/.env
+cp .env.example .env
 # fill in the secrets, then:
 openssl rand -base64 48        # BETTER_AUTH_SECRET
 openssl rand -base64 48        # RELAY_SECRET
 openssl rand -base64 32        # POSTGRES_PASSWORD
 
-docker compose -f deploy/compose.prod.yaml up -d --build
+docker compose -f compose.prod.yaml up -d --build
 ```
 
 The schema is applied by the web container as it starts, so there is no
@@ -69,7 +69,7 @@ sessions, and it will look like a webxterm bug.
 
 ```bash
 # relay
-fly launch --dockerfile deploy/relay.Dockerfile --no-deploy
+fly launch --dockerfile apps/relay/Dockerfile --no-deploy
 fly secrets set RELAY_SECRET=...
 fly deploy
 
@@ -131,7 +131,7 @@ Ordered by how badly it goes wrong if you skip it.
 
 The relay is stateless: run as many as you like behind a load balancer, ideally
 near your users, because relay latency is felt directly in typing. Quotas are
-per-process (see `core/relay/src/quota.rs`), so a user spread across instances
+per-process (see `apps/relay/src/quota.rs`), so a user spread across instances
 gets a looser limit than the number suggests — that is a deliberate trade to
 keep a network round trip out of the data path.
 
@@ -142,13 +142,13 @@ Postgres behind a pooler.
 
 ```bash
 git pull
-docker compose -f deploy/compose.prod.yaml up -d --build
+docker compose -f compose.prod.yaml up -d --build
 ```
 
 The new web container migrates before it accepts traffic.
 
 The relay and web can be upgraded independently — the only contract between
-them is the token format in `core/relay/src/token.rs`, which is versioned by
+them is the token format in `apps/relay/src/token.rs`, which is versioned by
 its claims shape. Roll the relay first.
 
 ## What you are trusting

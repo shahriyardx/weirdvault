@@ -9,14 +9,21 @@
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
+const SRC_DIR = "apps/ssh";
 const OUT_DIR = "apps/web/public";
-const WASM = join(OUT_DIR, "ssh.wasm");
+// go build runs with its own module as the working directory, so the output
+// path has to be absolute or it lands next to the source.
+const WASM = resolve(OUT_DIR, "ssh.wasm");
 
 /** Runs a command, inheriting stdio. Throws on a non-zero exit. */
-const run = (cmd, args, env) =>
-  execFileSync(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } });
+const run = (cmd, args, opts = {}) =>
+  execFileSync(cmd, args, {
+    stdio: "inherit",
+    ...opts,
+    env: { ...process.env, ...opts.env },
+  });
 
 /** Runs a command and returns its stdout. */
 const capture = (cmd, args) =>
@@ -24,10 +31,10 @@ const capture = (cmd, args) =>
 
 mkdirSync(OUT_DIR, { recursive: true });
 
-console.log(`building ./core/ssh → ${WASM}`);
-run("go", ["build", "-ldflags=-s -w", "-o", WASM, "./core/ssh"], {
-  GOOS: "js",
-  GOARCH: "wasm",
+console.log(`building ${SRC_DIR} → ${WASM}`);
+run("go", ["build", "-ldflags=-s -w", "-o", WASM, "."], {
+  cwd: SRC_DIR,
+  env: { GOOS: "js", GOARCH: "wasm" },
 });
 
 const goroot = capture("go", ["env", "GOROOT"]);

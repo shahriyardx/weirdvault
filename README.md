@@ -47,54 +47,67 @@ Or tick "use password once" and webxterm installs the key itself.
 
 ## Layout
 
-```
-apps/web/            Next.js app — marketing, auth, dashboard, control plane
-  src/lib/keys.ts    non-extractable key custody
-  src/lib/vault/     split KDF, vault crypto, sync
-  src/lib/transfers/ streaming upload/download, USTAR writer
-core/ssh/            Go → WASM SSH + SFTP core, WebCrypto signer
-core/relay/          Rust relay: SSRF guards, tokens, quotas
-docs/                threat model, deployment, spike results
-```
+Three programs, each with its own README covering how to run and test it.
+
+| | | |
+|---|---|---|
+| [`apps/web/`](apps/web/README.md) | TypeScript | The app and control plane. Serves the pages, holds the encrypted vault it cannot read |
+| [`apps/ssh/`](apps/ssh/README.md) | Go → WASM | The SSH and SFTP client that runs in the tab. Where the encryption actually happens |
+| [`apps/relay/`](apps/relay/README.md) | Rust | The WebSocket-to-TCP bridge. Forwards ciphertext, guards against SSRF |
+| [`tests/`](tests/README.md) | | Browser suites against a real dockerized sshd |
+| `docs/` | | Threat model, deployment, and the spike results behind the architecture |
+
+Each app owns its own manifest — `apps/web/package.json`, `apps/ssh/go.mod`,
+`apps/relay/Cargo.toml` — so nothing at the root has to know how any of them
+build.
 
 ## Running it
 
-Needs Go 1.26+, Bun, Rust, and Docker.
+Needs Go 1.26+, Bun, Rust, and Docker. Start here, then read the app you are
+working on:
 
 ```bash
-bun install
-bun run sshd         # stock OpenSSH target on :2222
-bun run wasm         # build the SSH core into apps/web/public
-bun run db:up        # Postgres
-bun run db:push      # apply the schema
-bun run relay        # Rust relay on :8080   (leave running)
-bun run dev          # app on :3000
+bun install                        # root: test tooling only
+bun install --cwd apps/web         # the app's own dependencies
+bun run wasm                       # apps/ssh → apps/web/public/ssh.wasm
+
+docker compose up -d postgres      # database
+bun run --cwd apps/web db:push     # schema
+bun run --cwd apps/web dev         # app on :3000
 ```
+
+The relay runs from its own directory, because it takes several environment
+variables that matter — [`apps/relay/README.md`](apps/relay/README.md) lists
+them.
 
 Open http://localhost:3000/dashboard.
 
 ## Verifying
 
 ```bash
-bun run relay:test   # SSRF guards, token binding, quotas
-bun run test         # both browser suites, in order
+bun run sshd     # the test target on :2222
+bun run test     # both browser suites
 ```
 
-`tests/signed-in.mjs` covers the app with an account — pinning, SFTP, tar
-upload, Monaco, vault sync, concurrent sessions, split panes.
-`tests/signed-out.mjs` covers the path with no account at all, which is what
-the landing page promises and the easiest thing to break without noticing.
+They drive headless Chromium against a stock `sshd` and check real behaviour,
+including the negatives: that the raw password never reaches the wire, that the
+stored vault ciphertext holds no plaintext hostname, that a changed host key is
+refused rather than re-pinned. See [`tests/README.md`](tests/README.md).
 
-Both browser suites drive headless Chromium against the dockerized sshd and
-check real behaviour — that the raw password never appears in any request body,
-that the stored vault ciphertext contains no plaintext hostnames, that a changed
-host key is refused rather than re-pinned, that the relay rejects a token minted
-for a different destination.
+## Deploying
+
+```bash
+cp .env.example .env      # fill in the secrets
+docker compose -f compose.prod.yaml up -d --build
+```
+
+The web container applies database migrations at start, before it serves.
+Full guide, including TLS: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Notes
 
+- `RELAY_ALLOW_PRIVATE=1` makes the local test container reachable by disabling
+  the SSRF guard. It must never be set in production.
 - This machine's npm cache has root-owned files from an old npm bug, which
   breaks `npx`. The project uses Bun, so it rarely matters; fix with
   `sudo chown -R 501:20 ~/.npm`.
-- `RELAY_ALLOW_PRIVATE=1` is set by `bun run relay` so the local test container is
-  reachable. It must never be set in production.

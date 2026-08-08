@@ -5,23 +5,22 @@
 # of, close to users — relay latency is felt directly in typing.
 #
 # Build from the repo root:
-#   docker build -f deploy/relay.Dockerfile -t webxterm-relay .
+#   docker build -f apps/relay/Dockerfile -t webxterm-relay .
 
 FROM rust:1-slim AS build
 WORKDIR /src
 
 # Cache dependency compilation separately from the source, so an edit to
 # main.rs does not rebuild the whole dependency tree.
-COPY Cargo.toml Cargo.lock ./
-COPY core/relay/Cargo.toml core/relay/
-RUN mkdir -p core/relay/src \
- && echo 'fn main() {}' > core/relay/src/main.rs \
- && cargo build --release -p webxterm-relay \
- && rm -rf core/relay/src
+COPY apps/relay/Cargo.toml apps/relay/Cargo.lock ./
+RUN mkdir -p src \
+ && echo 'fn main() {}' > src/main.rs \
+ && cargo build --release \
+ && rm -rf src
 
-COPY core ./core
+COPY apps/relay/src ./src
 # Touch so cargo rebuilds the real source rather than trusting the stub's mtime.
-RUN touch core/relay/src/main.rs && cargo build --release -p webxterm-relay
+RUN touch src/main.rs && cargo build --release
 
 # Distroless: the relay opens sockets and nothing else. No shell means a
 # compromised process has no shell to use.

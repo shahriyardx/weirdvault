@@ -293,10 +293,10 @@ webxterm/
 │  ├─ components/files/         # explorer, transfer queue, streaming IO
 │  ├─ components/editor/        # Monaco remote editing
 │  └─ public/ssh.wasm           # Go SSH core, Brotli-served
-├─ core/ssh/                    # Go → WASM SSH + SFTP, JS signer callback
-├─ core/relay/                # WebSocket ↔ TCP, SSRF guard, quotas
-├─ docs/                        # THREAT-MODEL.md, COMPETITORS.md, PHASE0-RESULTS.md
-└─ deploy/
+├─ apps/ssh/                    # Go → WASM SSH + SFTP, JS signer callback
+├─ apps/relay/                  # WebSocket ↔ TCP, SSRF guard, quotas
+├─ tests/                       # browser suites + the dockerized sshd target
+└─ docs/                        # THREAT-MODEL.md, PHASE0-RESULTS.md, DEPLOY.md
 ```
 
 ---
@@ -361,7 +361,7 @@ Undercuts Termius ($10/$20/$30) while giving away the thing they charge for. Ope
 
 1. `git init`; scaffold pnpm + Go + cargo workspace
 2. `docs/THREAT-MODEL.md` — write it *before* vault code
-3. Phase 0 spike: `core/ssh` + `core/relay` + 100-line xterm harness
+3. Phase 0 spike: `apps/ssh` + `apps/relay` + 100-line xterm harness
 4. **Hardest thing first: the WebCrypto `ssh.Signer` callback**, against a throwaway VPS
 5. `docs/PHASE0-RESULTS.md` → go/no-go
 

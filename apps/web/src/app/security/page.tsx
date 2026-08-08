@@ -391,7 +391,7 @@ export default function SecurityPage() {
           ciphertext.
         </P>
 
-        <Command>docker compose -f deploy/compose.prod.yaml up -d</Command>
+        <Command>docker compose -f compose.prod.yaml up -d</Command>
 
         <div className="mt-8 flex flex-wrap gap-3 border-t border-border pt-8">
           <Button asChild>

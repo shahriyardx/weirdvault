@@ -4,8 +4,8 @@
 # relay metadata that a hosted deployment would see — which host, when, how
 # much — never leaves your infrastructure.
 #
-#   cp deploy/.env.example deploy/.env   # then fill in the secrets
-#   docker compose -f deploy/compose.prod.yaml up -d
+#   cp .env.example .env   # then fill in the secrets
+#   docker compose -f compose.prod.yaml up -d
 #
 # Put a TLS terminator in front (Caddy, nginx, a load balancer). Both services
 # speak plain HTTP; the browser requires wss:// for the relay on an https page,
@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-webxterm}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-webxterm}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -35,10 +35,10 @@ services:
 
   web:
     build:
-      context: ..
-      dockerfile: deploy/web.Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL:?set PUBLIC_RELAY_URL in deploy/.env}
+        NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL:?set PUBLIC_RELAY_URL in .env}
     restart: unless-stopped
     # service_healthy, not service_started: the container migrates before it
     # serves, so it needs Postgres accepting connections rather than merely
@@ -48,19 +48,19 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-webxterm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-webxterm}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in deploy/.env}
-      BETTER_AUTH_URL: ${PUBLIC_APP_URL:?set PUBLIC_APP_URL in deploy/.env}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
+      BETTER_AUTH_URL: ${PUBLIC_APP_URL:?set PUBLIC_APP_URL in .env}
       # Must match the relay exactly: it is how the relay verifies that a
       # connection request came from this control plane.
-      RELAY_SECRET: ${RELAY_SECRET:?set RELAY_SECRET in deploy/.env}
+      RELAY_SECRET: ${RELAY_SECRET:?set RELAY_SECRET in .env}
       NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL}
     ports:
       - "${WEB_PORT:-3000}:3000"
 
   relay:
     build:
-      context: ..
-      dockerfile: deploy/relay.Dockerfile
+      context: .
+      dockerfile: apps/relay/Dockerfile
     restart: unless-stopped
     environment:
       RELAY_SECRET: ${RELAY_SECRET}
