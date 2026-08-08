@@ -19,7 +19,7 @@ export function DashboardTopBar() {
 
   return (
     <header className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
-      <SidebarTrigger />
+      <SidebarTrigger className="size-7" />
       <Separator orientation="vertical" className="h-5" />
 
       <Badge variant={connected ? "default" : "outline"} className="gap-1.5 text-[10px] font-normal">

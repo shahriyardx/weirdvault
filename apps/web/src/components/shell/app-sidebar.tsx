@@ -86,7 +86,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="h-12 justify-center px-3 group-data-[collapsible=icon]:px-1.5">
+      <SidebarHeader className="border-sidebar-border h-12 shrink-0 justify-center border-b p-0 px-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
         <Brand
           size="sm"
           href="/dashboard"

@@ -178,21 +178,48 @@ async fn ws_handler(
 /// dropped socket surfaces in the SSH client as "handshake failed: EOF" — which
 /// tells the user nothing. The relay knows precisely why the dial failed, so it
 /// says so in the close frame, which the client can read.
+///
+/// RFC 6455 caps a close reason at 123 bytes. Exceed it and the frame is
+/// invalid, the browser discards the reason, and the user is back to a bare
+/// EOF — so these stay short, and the full detail goes to the log.
+const MAX_CLOSE_REASON: usize = 123;
+
 fn dial_failure_reason(err: &std::io::Error, target: SocketAddr) -> String {
     use std::io::ErrorKind;
-    match err.kind() {
-        ErrorKind::ConnectionRefused => format!(
-            "{target} refused the connection — is sshd running and listening on that port?"
-        ),
-        ErrorKind::TimedOut => format!(
-            "{target} did not respond — it may be firewalled, or the address may be wrong"
-        ),
-        ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable => format!(
-            "no route to {target} — the relay cannot reach that address. \
-             Private addresses are only reachable from a relay on the same network"
-        ),
+    let msg = match err.kind() {
+        ErrorKind::ConnectionRefused => {
+            format!("{target} refused the connection — is sshd listening there?")
+        }
+        ErrorKind::TimedOut => {
+            format!("{target} did not respond — firewalled, or wrong address?")
+        }
+        ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable => {
+            if is_private(target.ip()) {
+                // On macOS 15+ an unapproved process has its LAN packets
+                // dropped silently, which looks exactly like this.
+                format!("no route to {target} — relay not on that network, or missing macOS Local Network permission")
+            } else {
+                format!("no route to {target} — the relay cannot reach that address")
+            }
+        }
         _ => format!("could not connect to {target}: {err}"),
+    };
+    truncate_utf8(msg, MAX_CLOSE_REASON)
+}
+
+/// Truncates on a character boundary, never mid-codepoint — an invalid UTF-8
+/// close reason is discarded by the browser just like an over-long one.
+fn truncate_utf8(mut s: String, max: usize) -> String {
+    if s.len() <= max {
+        return s;
     }
+    let mut end = max.saturating_sub(1);
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s.truncate(end);
+    s.push('…');
+    s
 }
 
 /// Copies bytes between the WebSocket and the TCP socket until either closes.
@@ -215,6 +242,7 @@ async fn bridge(
         Err(e) => {
             // Close with the reason rather than dropping the socket, so the
             // client reports why instead of "handshake failed: EOF".
+            warn!(%target, error = %e, "dial failed");
             let reason = dial_failure_reason(&e, target);
             let _ = socket
                 .send(Message::Close(Some(axum::extract::ws::CloseFrame {
@@ -289,6 +317,15 @@ async fn bridge(
         "connection closed"
     );
     Ok(())
+}
+
+fn is_private(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local(),
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
 }
 
 async fn shutdown_signal() {

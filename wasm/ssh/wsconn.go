@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"syscall/js"
 	"time"
 )
@@ -43,8 +44,15 @@ func dialWS(url string) (*wsConn, error) {
 	}
 
 	opened := make(chan error, 1)
+	// Whether the socket ever reached OPEN. Browsers fire a generic `error`
+	// event just before `close` on an abnormal shutdown, and that generic
+	// message would otherwise overwrite the specific reason the relay sent in
+	// the close frame — turning "no route to 192.168.0.100:22" back into
+	// "relay unreachable or refused".
+	var didOpen atomic.Bool
 
 	onOpen := js.FuncOf(func(js.Value, []js.Value) any {
+		didOpen.Store(true)
 		select {
 		case opened <- nil:
 		default:
@@ -66,7 +74,11 @@ func dialWS(url string) (*wsConn, error) {
 		return nil
 	})
 	onError := js.FuncOf(func(js.Value, []js.Value) any {
-		err := errors.New("websocket error (relay unreachable or refused)")
+		if didOpen.Load() {
+			// Already connected: the close event carries the real reason.
+			return nil
+		}
+		err := errors.New("could not reach the relay at " + url)
 		select {
 		case opened <- err:
 		default:
@@ -78,7 +90,8 @@ func dialWS(url string) (*wsConn, error) {
 		err := errConnClosed
 		if len(args) > 0 {
 			if reason := args[0].Get("reason"); !reason.IsUndefined() && reason.String() != "" {
-				err = errors.New("websocket closed: " + reason.String())
+				// The relay already phrased this for a person; do not prefix it.
+				err = errors.New(reason.String())
 			}
 		}
 		select {
