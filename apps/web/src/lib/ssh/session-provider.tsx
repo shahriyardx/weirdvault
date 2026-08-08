@@ -20,36 +20,59 @@ import { getVaultKey } from "@/lib/vault/session";
 import { syncVault } from "@/lib/vault/sync";
 
 /**
- * One SSH connection, shared across the whole dashboard.
+ * Many concurrent SSH sessions, held above the router.
  *
- * The terminal and the file explorer are separate routes but the same session —
- * that is the entire reason SFTP costs no second login. Holding the session in
- * a provider above the router means navigating from Terminal to Files does not
- * drop the connection, and a long-running command keeps producing output while
- * you are looking at something else.
+ * The same host can be opened several times — one shell tailing logs while
+ * another runs a deploy is the ordinary way people work, and a client that
+ * allows only one connection per host forces them back to a native terminal.
+ * Each session is independent: its own PTY, its own SFTP channel, its own
+ * output buffer.
  *
- * Output is buffered so the terminal can be unmounted and remounted (which is
- * what a route change does) without losing scrollback.
+ * Buffering per session is what makes navigation free. Routes unmount the
+ * terminal component, and without a buffer everything printed while you were
+ * looking at the file explorer would be lost.
  */
 
 const OUTPUT_BUFFER_BYTES = 512 * 1024;
 
 export type Phase = "loading" | "idle" | "connecting" | "connected";
 
-export interface ConnectRequest {
+export interface SessionTarget {
   hostname: string;
   port: number;
   username: string;
+}
+
+export interface SessionEntry {
+  id: string;
+  target: SessionTarget;
+  /** Distinguishes several sessions to the same host: "web #2". */
+  label: string;
+  sftp: SftpHandle | null;
+  openedAt: number;
+}
+
+export interface ConnectRequest extends SessionTarget {
   key: SshKey;
   /** Connect with a password once and let webxterm install the key. */
   password?: string;
 }
 
+interface LiveSession {
+  entry: SessionEntry;
+  session: SshSession;
+  listeners: Set<(b: Uint8Array) => void>;
+  buffer: Uint8Array[];
+  bufferedBytes: number;
+}
+
 interface SessionContextValue {
+  /** Global state: loading the WASM core, or mid-connect. */
   phase: Phase;
-  session: SshSession | null;
-  sftp: SftpHandle | null;
-  target: { hostname: string; port: number; username: string } | null;
+  sessions: SessionEntry[];
+  activeId: string | null;
+  active: SessionEntry | null;
+  setActive: (id: string) => void;
 
   keys: SshKey[];
   hosts: Host[];
@@ -58,8 +81,9 @@ interface SessionContextValue {
   refreshKeys: () => Promise<void>;
   refreshHosts: () => Promise<void>;
 
-  connect: (req: ConnectRequest) => Promise<void>;
-  disconnect: () => void;
+  /** Opens a NEW session; never replaces an existing one. */
+  connect: (req: ConnectRequest) => Promise<string>;
+  disconnect: (id?: string) => void;
 
   error: string | null;
   note: string | null;
@@ -67,10 +91,12 @@ interface SessionContextValue {
   mismatch: HostKeyMismatchError | null;
   dismissMismatch: () => void;
 
-  /** Terminal I/O. Subscribing replays the buffer so nothing is lost. */
-  subscribe: (fn: (bytes: Uint8Array) => void) => () => void;
-  write: (data: string) => void;
-  resize: (cols: number, rows: number) => void;
+  /** Terminal I/O, per session. Subscribing replays that session's buffer. */
+  subscribe: (id: string, fn: (bytes: Uint8Array) => void) => () => void;
+  write: (id: string, data: string) => void;
+  resize: (id: string, cols: number, rows: number) => void;
+  sftpFor: (id: string) => SftpHandle | null;
+  sessionFor: (id: string) => SshSession | null;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -82,14 +108,11 @@ export function useSshSession(): SessionContextValue {
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const sessionRef = useRef<SshSession | null>(null);
-  const listeners = useRef(new Set<(b: Uint8Array) => void>());
-  const buffer = useRef<Uint8Array[]>([]);
-  const bufferedBytes = useRef(0);
+  const live = useRef(new Map<string, LiveSession>());
 
   const [phase, setPhase] = useState<Phase>("loading");
-  const [sftp, setSftp] = useState<SftpHandle | null>(null);
-  const [target, setTarget] = useState<SessionContextValue["target"]>(null);
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [keys, setKeys] = useState<SshKey[]>([]);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [activeKey, setActiveKey] = useState<SshKey | null>(null);
@@ -97,8 +120,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [note, setNote] = useState<string | null>(null);
   const [pinned, setPinned] = useState<HostKeyInfo | null>(null);
   const [mismatch, setMismatch] = useState<HostKeyMismatchError | null>(null);
-
-  const vaultKey = getVaultKey();
 
   const refreshKeys = useCallback(async () => {
     const k = await listKeys(getVaultKey() ?? undefined);
@@ -119,44 +140,52 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     });
   }, [refreshKeys, refreshHosts]);
 
-  const emit = useCallback((bytes: Uint8Array) => {
-    // Keep a bounded tail so a remounted terminal can replay recent output.
-    const copy = bytes.slice();
-    buffer.current.push(copy);
-    bufferedBytes.current += copy.length;
-    while (bufferedBytes.current > OUTPUT_BUFFER_BYTES && buffer.current.length > 1) {
-      bufferedBytes.current -= buffer.current.shift()!.length;
-    }
-    for (const fn of listeners.current) fn(copy);
+  const syncEntries = useCallback(() => {
+    setSessions([...live.current.values()].map((l) => l.entry));
   }, []);
 
-  const subscribe = useCallback((fn: (b: Uint8Array) => void) => {
-    for (const chunk of buffer.current) fn(chunk);
-    listeners.current.add(fn);
-    return () => {
-      listeners.current.delete(fn);
-    };
+  /** "web", then "web #2" — so two shells on one host stay distinguishable. */
+  const labelFor = useCallback((target: SessionTarget) => {
+    const base = `${target.username}@${target.hostname}`;
+    const existing = [...live.current.values()].filter(
+      (l) => `${l.entry.target.username}@${l.entry.target.hostname}` === base,
+    ).length;
+    return existing === 0 ? base : `${base} #${existing + 1}`;
   }, []);
 
   const connect = useCallback(
-    async (req: ConnectRequest) => {
+    async (req: ConnectRequest): Promise<string> => {
       setError(null);
       setMismatch(null);
       setPinned(null);
       setPhase("connecting");
-      buffer.current = [];
-      bufferedBytes.current = 0;
 
-      const common = {
+      const id = crypto.randomUUID();
+      const target: SessionTarget = {
         hostname: req.hostname,
         port: req.port,
         username: req.username,
-        onData: emit,
+      };
+
+      const push = (bytes: Uint8Array) => {
+        const l = live.current.get(id);
+        if (!l) return;
+        const copy = bytes.slice();
+        l.buffer.push(copy);
+        l.bufferedBytes += copy.length;
+        while (l.bufferedBytes > OUTPUT_BUFFER_BYTES && l.buffer.length > 1) {
+          l.bufferedBytes -= l.buffer.shift()!.length;
+        }
+        for (const fn of l.listeners) fn(copy);
+      };
+
+      const common = {
+        ...target,
+        onData: push,
         onClose: () => {
-          setPhase("idle");
-          sessionRef.current = null;
-          setSftp(null);
-          setTarget(null);
+          live.current.delete(id);
+          syncEntries();
+          setActiveId((prev) => (prev === id ? ([...live.current.keys()][0] ?? null) : prev));
         },
         onPinned: setPinned,
       };
@@ -175,17 +204,42 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           s = await openSession({ ...common, key: req.key });
         }
 
-        sessionRef.current = s;
-        setTarget({ hostname: req.hostname, port: req.port, username: req.username });
-        setPhase("connected");
-        setSftp(await s.sftp());
+        const entry: SessionEntry = {
+          id,
+          target,
+          label: labelFor(target),
+          sftp: null,
+          openedAt: Date.now(),
+        };
+        live.current.set(id, {
+          entry,
+          session: s,
+          listeners: new Set(),
+          buffer: [],
+          bufferedBytes: 0,
+        });
+        setActiveId(id);
+        syncEntries();
+        setPhase("idle");
+
+        // SFTP rides the same connection, so open it eagerly — the file
+        // explorer should be usable the moment the shell is.
+        void s.sftp().then((handle) => {
+          const l = live.current.get(id);
+          if (!l) return;
+          l.entry = { ...l.entry, sftp: handle };
+          syncEntries();
+        });
+
         await refreshHosts();
 
+        const vaultKey = getVaultKey();
         if (vaultKey) {
           void syncVault(vaultKey)
             .then((r) => setNote(`Vault ${r.status} — ${r.hosts} hosts, ${r.keys} keys`))
             .catch((e) => setNote(`Sync failed: ${e.message}`));
         }
+        return id;
       } catch (e) {
         if (e instanceof HostKeyMismatchError) setMismatch(e);
         else setError(String((e as Error).message ?? e));
@@ -193,15 +247,35 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         throw e;
       }
     },
-    [emit, refreshHosts, vaultKey],
+    [labelFor, refreshHosts, syncEntries],
   );
+
+  const disconnect = useCallback(
+    (id?: string) => {
+      const target = id ?? activeId;
+      if (!target) return;
+      live.current.get(target)?.session.close();
+    },
+    [activeId],
+  );
+
+  const subscribe = useCallback((id: string, fn: (b: Uint8Array) => void) => {
+    const l = live.current.get(id);
+    if (!l) return () => {};
+    for (const chunk of l.buffer) fn(chunk);
+    l.listeners.add(fn);
+    return () => {
+      l.listeners.delete(fn);
+    };
+  }, []);
 
   const value = useMemo<SessionContextValue>(
     () => ({
       phase,
-      session: sessionRef.current,
-      sftp,
-      target,
+      sessions,
+      activeId,
+      active: sessions.find((s) => s.id === activeId) ?? null,
+      setActive: setActiveId,
       keys,
       hosts,
       activeKey,
@@ -209,19 +283,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       refreshKeys,
       refreshHosts,
       connect,
-      disconnect: () => sessionRef.current?.close(),
+      disconnect,
       error,
       note,
       pinned,
       mismatch,
       dismissMismatch: () => setMismatch(null),
       subscribe,
-      write: (d) => sessionRef.current?.write(d),
-      resize: (c, r) => sessionRef.current?.resize(c, r),
+      write: (id, d) => live.current.get(id)?.session.write(d),
+      resize: (id, c, r) => live.current.get(id)?.session.resize(c, r),
+      sftpFor: (id) => live.current.get(id)?.entry.sftp ?? null,
+      sessionFor: (id) => live.current.get(id)?.session ?? null,
     }),
     [
-      phase, sftp, target, keys, hosts, activeKey, refreshKeys, refreshHosts,
-      connect, error, note, pinned, mismatch, subscribe,
+      phase, sessions, activeId, keys, hosts, activeKey, refreshKeys,
+      refreshHosts, connect, disconnect, error, note, pinned, mismatch, subscribe,
     ],
   );
 

@@ -97,7 +97,8 @@ try {
   await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
   check("reconnected using the installed key against the pinned host", true);
 
-  await nav("Terminal");
+  await page.locator('[data-sidebar="menu-button"]', { hasText: "@" }).first().click();
+  await page.waitForLoadState("networkidle");
   await page.waitForFunction(
     () => window.__webxtermTerm?.buffer.active.getLine(0)?.translateToString(true).length > 0,
     { timeout: 20000 });
@@ -184,8 +185,56 @@ try {
         !readable.includes("127.0.0.1") && !readable.includes("webxterm@"),
         "no plaintext hostnames in the stored blob");
 
+  // ---- several sessions, including two to the same host ----
+  console.log(`\n9. Multiple concurrent sessions`);
+  const open = async (mark) => {
+    await page.getByRole("link", { name: "New session", exact: true }).first().click();
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /^connect$/i }).last().click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll('[data-sidebar="menu-button"]')
+        .length >= n, 3, { timeout: 45000 });
+    // Mark this shell so we can tell the two apart.
+    await page.waitForTimeout(1200);
+    await page.locator(".xterm").click();
+    await page.keyboard.type(`export MARK=${mark}`);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(600);
+  };
+
+  await open("one");
+  await open("two");
+
+  const labels = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-sidebar="menu-button"]')]
+      .map((b) => b.textContent?.trim() ?? "")
+      .filter((t) => t.includes("@")));
+  check("both sessions listed in the sidebar", labels.length >= 2, labels.join(" | "));
+  check("a second session to the same host is distinguished",
+        labels.some((l) => l.includes("#2")), labels.join(" | "));
+
+  // Switching must land on that session's own shell. The two marked sessions
+  // are the ones just opened; the first entry is the original from step 4 and
+  // deliberately carries no mark.
+  const readMark = async (label) => {
+    await page.locator('[data-sidebar="menu-button"]', { hasText: label }).first().click();
+    await page.waitForTimeout(900);
+    await page.locator(".xterm").click();
+    await page.keyboard.type("echo SESSION=$MARK");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(1200);
+    const text = await screen();
+    return text.split("\n").filter((l) => l.startsWith("SESSION=")).pop() ?? "";
+  };
+
+  const markTwo = await readMark("#2");
+  const markThree = await readMark("#3");
+  check("each session keeps its own shell state",
+        markTwo === "SESSION=one" && markThree === "SESSION=two",
+        `#2 → ${markTwo}, #3 → ${markThree}`);
+
   // ---- the pin has to actually refuse a changed key ----
-  console.log(`\n9. Host key pinning refuses a changed key`);
+  console.log(`\n10. Host key pinning refuses a changed key`);
   await page.getByRole("button", { name: /disconnect/i }).click();
 
   // Rotate the server's host key, exactly as rebuilding the machine would.

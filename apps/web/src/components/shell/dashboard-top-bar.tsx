@@ -13,8 +13,8 @@ import { useSshSession } from "@/lib/ssh/session-provider";
 import { useVaultUnlocked } from "@/lib/vault/session";
 
 export function DashboardTopBar() {
-  const { phase, target, disconnect } = useSshSession();
-  const connected = phase === "connected";
+  const { phase, active, sessions, disconnect } = useSshSession();
+  const connected = Boolean(active);
   const vaultUnlocked = useVaultUnlocked();
 
   return (
@@ -30,9 +30,12 @@ export function DashboardTopBar() {
         {phase === "connecting" ? "Connecting" : connected ? "Live" : "Not connected"}
       </Badge>
 
-      {connected && target && (
+      {active && (
         <span className="text-muted-foreground truncate text-xs">
-          {target.username}@{target.hostname}:{target.port}
+          {active.label}:{active.target.port}
+          {sessions.length > 1 && (
+            <span className="ml-1.5">· {sessions.length} sessions</span>
+          )}
         </span>
       )}
 
@@ -54,7 +57,7 @@ export function DashboardTopBar() {
         </Tooltip>
 
         {connected ? (
-          <Button variant="outline" size="sm" onClick={disconnect}>
+          <Button variant="outline" size="sm" onClick={() => disconnect()}>
             Disconnect
           </Button>
         ) : (

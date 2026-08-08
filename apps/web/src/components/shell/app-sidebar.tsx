@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ClockCounterClockwiseIcon,
   DevicesIcon,
@@ -10,22 +10,25 @@ import {
   HardDrivesIcon,
   KeyIcon,
   PlugsConnectedIcon,
+  PlusIcon,
   SquaresFourIcon,
   TerminalWindowIcon,
   UsersThreeIcon,
+  XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
 import { Brand } from "@/components/shell/brand";
-import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -36,144 +39,179 @@ import { useSshSession } from "@/lib/ssh/session-provider";
 /**
  * The application sidebar.
  *
- * Everything the product actually does is reachable from here — terminal,
- * files, hosts, keys — rather than being buried inside a single workspace
- * route. Items that need a live SSH connection are disabled and say so when
- * there isn't one, which is more honest than letting someone click into an
- * empty file browser and wonder what broke.
+ * Live sessions are listed individually rather than hidden behind a single
+ * "Terminal" entry. With several open at once — often several to the same host,
+ * one tailing logs while another deploys — the list *is* the navigation.
+ * Clicking one switches to it; the × closes that session and leaves the rest
+ * alone.
  */
 export function AppSidebar() {
   const pathname = usePathname();
-  const { phase, target, hosts, keys } = useSshSession();
-  const connected = phase === "connected";
+  const router = useRouter();
+  const { sessions, activeId, setActive, disconnect, hosts, keys } = useSshSession();
 
-  const groups = [
-    {
-      label: "Session",
-      items: [
-        {
-          href: "/dashboard/terminal",
-          label: "Terminal",
-          icon: TerminalWindowIcon,
-          needsSession: true,
-        },
-        {
-          href: "/dashboard/files",
-          label: "Files",
-          icon: FolderOpenIcon,
-          needsSession: true,
-        },
-      ],
-    },
-    {
-      label: "Manage",
-      items: [
-        { href: "/dashboard", label: "Overview", icon: SquaresFourIcon, exact: true },
-        { href: "/dashboard/hosts", label: "Hosts", icon: HardDrivesIcon, badge: hosts.length },
-        { href: "/dashboard/keys", label: "Keys", icon: KeyIcon, badge: keys.length },
-      ],
-    },
-    {
-      label: "Account",
-      items: [
-        { href: "/dashboard/devices", label: "Devices", icon: DevicesIcon },
-        { href: "/dashboard/activity", label: "Activity", icon: ClockCounterClockwiseIcon },
-        { href: "/dashboard/team", label: "Team", icon: UsersThreeIcon },
-        { href: "/dashboard/settings", label: "Settings", icon: GearSixIcon },
-      ],
-    },
+  const manage = [
+    { href: "/dashboard", label: "Overview", icon: SquaresFourIcon, exact: true },
+    { href: "/dashboard/hosts", label: "Hosts", icon: HardDrivesIcon, badge: hosts.length },
+    { href: "/dashboard/keys", label: "Keys", icon: KeyIcon, badge: keys.length },
   ] as const;
+
+  const account = [
+    { href: "/dashboard/devices", label: "Devices", icon: DevicesIcon },
+    { href: "/dashboard/activity", label: "Activity", icon: ClockCounterClockwiseIcon },
+    { href: "/dashboard/team", label: "Team", icon: UsersThreeIcon },
+    { href: "/dashboard/settings", label: "Settings", icon: GearSixIcon },
+  ] as const;
+
+  const onSessionRoute =
+    pathname.startsWith("/dashboard/terminal") || pathname.startsWith("/dashboard/files");
+
+  function openSession(id: string) {
+    setActive(id);
+    // Stay on Files if that is where you were; otherwise show the shell.
+    if (!onSessionRoute) router.push("/dashboard/terminal");
+  }
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-sidebar-border h-12 shrink-0 justify-center border-b p-0 px-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
-        <Brand
-          size="sm"
-          href="/dashboard"
-          labelClassName="group-data-[collapsible=icon]:hidden"
-        />
+        <Brand size="sm" href="/dashboard" labelClassName="group-data-[collapsible=icon]:hidden" />
       </SidebarHeader>
 
       <SidebarContent>
-        {groups.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const active =
-                    "exact" in item && item.exact
-                      ? pathname === item.href
-                      : pathname.startsWith(item.href);
-                  const disabled = "needsSession" in item && item.needsSession && !connected;
-                  const Icon = item.icon;
+        <SidebarGroup>
+          <SidebarGroupLabel>
+            Sessions
+            {sessions.length > 0 && (
+              <span className="text-muted-foreground ml-1.5">{sessions.length}</span>
+            )}
+          </SidebarGroupLabel>
+          <SidebarGroupAction asChild title="New session">
+            <Link href="/dashboard/connect">
+              <PlusIcon />
+              <span className="sr-only">New session</span>
+            </Link>
+          </SidebarGroupAction>
 
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild={!disabled}
-                        isActive={active && !disabled}
-                        disabled={disabled}
-                        tooltip={
-                          disabled ? `${item.label} — connect to a host first` : item.label
-                        }
-                      >
-                        {disabled ? (
-                          <>
-                            <Icon />
-                            <span>{item.label}</span>
-                          </>
-                        ) : (
-                          <Link href={item.href}>
-                            <Icon />
-                            <span>{item.label}</span>
-                          </Link>
-                        )}
-                      </SidebarMenuButton>
-                      {"badge" in item && item.badge ? (
-                        <SidebarMenuBadge className="group-data-[collapsible=icon]:hidden">
-                          {item.badge}
-                        </SidebarMenuBadge>
-                      ) : null}
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {sessions.map((s) => {
+                const isActive = s.id === activeId;
+                return (
+                  <SidebarMenuItem key={s.id}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => openSession(s.id)}
+                      tooltip={`${s.label}:${s.target.port}`}
+                    >
+                      <TerminalWindowIcon className={isActive ? "text-success" : undefined} />
+                      <span className="truncate">{s.label}</span>
+                    </SidebarMenuButton>
+                    <SidebarMenuAction
+                      showOnHover
+                      onClick={() => disconnect(s.id)}
+                      title={`Close ${s.label}`}
+                    >
+                      <XIcon />
+                      <span className="sr-only">Close session</span>
+                    </SidebarMenuAction>
+                  </SidebarMenuItem>
+                );
+              })}
+
+              {sessions.length === 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Connect to a host">
+                    <Link href="/dashboard/connect">
+                      <PlugsConnectedIcon />
+                      <span className="text-muted-foreground">No sessions</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {/* Files follows whichever session is active. */}
+              {sessions.length > 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/dashboard/files")}
+                    tooltip="Files on the active session"
+                  >
+                    <Link href="/dashboard/files">
+                      <FolderOpenIcon />
+                      <span>Files</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <NavGroup label="Manage" items={manage} pathname={pathname} />
+        <NavGroup label="Account" items={account} pathname={pathname} />
       </SidebarContent>
 
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              tooltip={connected ? `Connected to ${target?.hostname}` : "Not connected"}
-            >
+            <SidebarMenuButton asChild tooltip="Connect to a host">
               <Link href="/dashboard/connect">
-                <PlugsConnectedIcon className={connected ? "text-success" : undefined} />
-                <span className="truncate group-data-[collapsible=icon]:hidden">
-                  {connected && target
-                    ? `${target.username}@${target.hostname}`
-                    : phase === "connecting"
-                      ? "Connecting…"
-                      : "Connect"}
-                </span>
+                <PlugsConnectedIcon className={sessions.length ? "text-success" : undefined} />
+                <span className="truncate">New session</span>
               </Link>
             </SidebarMenuButton>
-            {connected && (
-              <SidebarMenuBadge className="group-data-[collapsible=icon]:hidden">
-                <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
-                  live
-                </Badge>
-              </SidebarMenuBadge>
-            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+function NavGroup({
+  label,
+  items,
+  pathname,
+}: {
+  label: string;
+  items: readonly {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    exact?: boolean;
+    badge?: number;
+  }[];
+  pathname: string;
+}) {
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => {
+            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+            const Icon = item.icon;
+            return (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                  <Link href={item.href}>
+                    <Icon />
+                    <span>{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+                {item.badge ? (
+                  <SidebarMenuBadge className="group-data-[collapsible=icon]:hidden">
+                    {item.badge}
+                  </SidebarMenuBadge>
+                ) : null}
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
