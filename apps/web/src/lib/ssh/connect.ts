@@ -28,6 +28,8 @@ export interface ConnectOptions {
   onClose?: (reason: string) => void;
   /** Called on first contact so the UI can show the fingerprint being pinned. */
   onPinned?: (info: HostKeyInfo) => void;
+  /** Add this host to the saved list. Off by default. */
+  save?: boolean;
 }
 
 export async function openSession(opts: ConnectOptions): Promise<SshSession> {
@@ -96,7 +98,10 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
     await touchPin(hostname, port);
   }
 
-  await rememberHost({ hostname, port, username, keyId: opts.key?.id });
+  await rememberHost(
+    { hostname, port, username, keyId: opts.key?.id },
+    { create: opts.save },
+  );
   return session;
 }
 

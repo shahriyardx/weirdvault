@@ -1,82 +1,119 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PlugsConnectedIcon } from "@phosphor-icons/react/dist/ssr";
+import { PlugsConnectedIcon, TerminalWindowIcon } from "@phosphor-icons/react/dist/ssr";
 
 import { RemoteEditor } from "@/components/editor";
 import { FileExplorer } from "@/components/file-explorer";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSshSession } from "@/lib/ssh/session-provider";
 
 /**
- * Files for the active session.
+ * Files, for a session you choose.
  *
- * SFTP rides that session's existing SSH connection, so switching sessions in
- * the sidebar switches which machine you are browsing with no second login.
+ * Browsing is not always about the shell you happen to be typing in — you
+ * might be running something in one session and pulling a file from another.
+ * So this picks its own session rather than silently following the terminal,
+ * defaulting to whichever is active when you arrive.
  */
 export default function FilesPage() {
-  const { activeId, active, sftpFor, sessionFor, write } = useSshSession();
+  const { sessions, activeId, sftpFor, sessionFor, write } = useSshSession();
+  const [browsingId, setBrowsingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
 
-  const sftp = activeId ? sftpFor(activeId) : null;
-  const session = activeId ? sessionFor(activeId) : null;
+  // Default to the active session, and recover if the chosen one closes.
+  useEffect(() => {
+    if (browsingId && sessions.some((s) => s.id === browsingId)) return;
+    setBrowsingId(activeId ?? sessions[0]?.id ?? null);
+  }, [browsingId, sessions, activeId]);
 
-  if (!activeId || !session) {
-    return (
-      <Empty
-        title="No active session"
-        body="Connect to a host to browse, upload and edit files. SFTP rides the same connection as the terminal."
-      />
-    );
-  }
+  const id = browsingId;
+  const sftp = id ? sftpFor(id) : null;
+  const session = id ? sessionFor(id) : null;
+  const entry = sessions.find((s) => s.id === id) ?? null;
 
-  if (!sftp) {
+  if (sessions.length === 0) {
     return (
-      <div className="text-muted-foreground grid h-full place-items-center p-6 text-sm">
-        Opening SFTP on {active?.label}…
+      <div className="grid h-full place-items-center p-6">
+        <div className="max-w-sm text-center">
+          <h2 className="font-heading text-sm font-medium">No sessions open</h2>
+          <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
+            Connect to a host to browse, upload and edit files. SFTP rides the
+            same connection as the terminal.
+          </p>
+          <Button asChild className="mt-4" size="sm">
+            <Link href="/dashboard/connect">
+              <PlugsConnectedIcon />
+              Connect to a host
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[340px_1fr]">
-      <div className="border-border min-h-0 border-r">
-        <FileExplorer
-          key={activeId}
-          sftp={sftp}
-          session={session}
-          onEdit={setEditing}
-          onOpenTerminalAt={(dir) => write(activeId, `cd ${JSON.stringify(dir)}\n`)}
-        />
-      </div>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Which machine am I looking at? */}
+      <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2">
+        <span className="text-muted-foreground text-xs">Browsing</span>
+        <Select value={id ?? ""} onValueChange={(v) => { setBrowsingId(v); setEditing(null); }}>
+          <SelectTrigger size="sm" className="w-auto min-w-56">
+            <SelectValue placeholder="Choose a session" />
+          </SelectTrigger>
+          <SelectContent>
+            {sessions.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.label}:{s.target.port}
+                {s.id === activeId ? " · active" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      <div className="min-h-0">
-        {editing ? (
-          <RemoteEditor sftp={sftp} path={editing} onClose={() => setEditing(null)} />
-        ) : (
-          <div className="text-muted-foreground grid h-full place-items-center p-6 text-sm">
-            Double-click a file to edit it here.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Empty({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="grid h-full place-items-center p-6">
-      <div className="max-w-sm text-center">
-        <h2 className="font-heading text-sm font-medium">{title}</h2>
-        <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">{body}</p>
-        <Button asChild className="mt-4" size="sm">
-          <Link href="/dashboard/connect">
-            <PlugsConnectedIcon />
-            Connect to a host
+        <Button asChild variant="ghost" size="sm" className="ml-auto">
+          <Link href="/dashboard/terminal">
+            <TerminalWindowIcon />
+            Terminal
           </Link>
         </Button>
       </div>
+
+      {!sftp || !session ? (
+        <div className="text-muted-foreground grid flex-1 place-items-center p-6 text-sm">
+          Opening SFTP on {entry?.label}…
+        </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[340px_1fr]">
+          <div className="border-border min-h-0 border-r">
+            <FileExplorer
+              key={id}
+              sftp={sftp}
+              session={session}
+              onEdit={setEditing}
+              onOpenTerminalAt={(dir) => id && write(id, `cd ${JSON.stringify(dir)}\n`)}
+            />
+          </div>
+
+          <div className="min-h-0">
+            {editing ? (
+              <RemoteEditor sftp={sftp} path={editing} onClose={() => setEditing(null)} />
+            ) : (
+              <div className="text-muted-foreground grid h-full place-items-center p-6 text-sm">
+                Double-click a file to edit it here.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

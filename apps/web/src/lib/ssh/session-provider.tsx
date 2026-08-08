@@ -56,11 +56,14 @@ export interface ConnectRequest extends SessionTarget {
   key: SshKey;
   /** Connect with a password once and let webxterm install the key. */
   password?: string;
+  /** Add this host to the saved list. Off by default. */
+  save?: boolean;
 }
 
 interface LiveSession {
   entry: SessionEntry;
-  session: SshSession;
+  /** Null while the handshake is still in flight. */
+  session: SshSession | null;
   listeners: Set<(b: Uint8Array) => void>;
   buffer: Uint8Array[];
   bufferedBytes: number;
@@ -141,14 +144,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [refreshKeys, refreshHosts]);
 
   const syncEntries = useCallback(() => {
-    setSessions([...live.current.values()].map((l) => l.entry));
+    setSessions(
+      [...live.current.values()].filter((l) => l.session).map((l) => l.entry),
+    );
   }, []);
 
   /** "web", then "web #2" — so two shells on one host stay distinguishable. */
-  const labelFor = useCallback((target: SessionTarget) => {
+  const labelFor = useCallback((target: SessionTarget, selfId: string) => {
     const base = `${target.username}@${target.hostname}`;
     const existing = [...live.current.values()].filter(
-      (l) => `${l.entry.target.username}@${l.entry.target.hostname}` === base,
+      (l) =>
+        l.entry.id !== selfId &&
+        `${l.entry.target.username}@${l.entry.target.hostname}` === base,
     ).length;
     return existing === 0 ? base : `${base} #${existing + 1}`;
   }, []);
@@ -167,6 +174,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         username: req.username,
       };
 
+      // The shell starts printing — banner, motd, first prompt — inside
+      // openSession, before it returns. Registering the buffer only afterwards
+      // silently dropped all of it, so the terminal opened blank until you
+      // pressed a key. Create it up front and attach the session later.
+      const pending: LiveSession = {
+        entry: { id, target, label: "", sftp: null, openedAt: Date.now() },
+        session: null,
+        listeners: new Set(),
+        buffer: [],
+        bufferedBytes: 0,
+      };
+      live.current.set(id, pending);
+
       const push = (bytes: Uint8Array) => {
         const l = live.current.get(id);
         if (!l) return;
@@ -181,6 +201,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
       const common = {
         ...target,
+        save: req.save,
         onData: push,
         onClose: () => {
           live.current.delete(id);
@@ -204,20 +225,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           s = await openSession({ ...common, key: req.key });
         }
 
-        const entry: SessionEntry = {
-          id,
-          target,
-          label: labelFor(target),
-          sftp: null,
-          openedAt: Date.now(),
-        };
-        live.current.set(id, {
-          entry,
-          session: s,
-          listeners: new Set(),
-          buffer: [],
-          bufferedBytes: 0,
-        });
+        // Label last: labelFor counts existing sessions to the same host, and
+        // this one is already in the map.
+        pending.entry = { ...pending.entry, label: labelFor(target, id) };
+        pending.session = s;
         setActiveId(id);
         syncEntries();
         setPhase("idle");
@@ -241,6 +252,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
         return id;
       } catch (e) {
+        live.current.delete(id);
+        syncEntries();
         if (e instanceof HostKeyMismatchError) setMismatch(e);
         else setError(String((e as Error).message ?? e));
         setPhase("idle");
@@ -254,7 +267,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     (id?: string) => {
       const target = id ?? activeId;
       if (!target) return;
-      live.current.get(target)?.session.close();
+      live.current.get(target)?.session?.close();
     },
     [activeId],
   );
@@ -290,8 +303,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       mismatch,
       dismissMismatch: () => setMismatch(null),
       subscribe,
-      write: (id, d) => live.current.get(id)?.session.write(d),
-      resize: (id, c, r) => live.current.get(id)?.session.resize(c, r),
+      write: (id, d) => live.current.get(id)?.session?.write(d),
+      resize: (id, c, r) => live.current.get(id)?.session?.resize(c, r),
       sftpFor: (id) => live.current.get(id)?.entry.sftp ?? null,
       sessionFor: (id) => live.current.get(id)?.session ?? null,
     }),

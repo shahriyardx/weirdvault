@@ -31,6 +31,16 @@ const nav = async (name) => {
   await page.waitForLoadState("networkidle");
 };
 
+/** Closes every open session via the sidebar's per-session x. */
+const closeAllSessions = async () => {
+  for (;;) {
+    const actions = page.locator('[data-sidebar="menu-action"]');
+    if ((await actions.count()) === 0) break;
+    await actions.first().click();
+    await page.waitForTimeout(400);
+  }
+};
+
 const screen = () =>
   page.evaluate(() => {
     const b = window.__webxtermTerm?.buffer.active;
@@ -76,12 +86,13 @@ try {
   // ---- password-first onboarding installs the key for the user ----
   console.log(`\n3. Password-first onboarding`);
   docker("sh", "-c", "cp /dev/null /home/webxterm/.ssh/authorized_keys");
-  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
   await page.getByLabel(/use a password once/i).click();
   await page.getByLabel("Password", { exact: true }).fill("webxterm");
   await page.getByRole("button", { name: /^connect$/i }).click();
-  await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
+  await page.locator('[data-sidebar="menu-button"]', { hasText: "@" })
+    .first().waitFor({ timeout: 45000 });
   check("connected with a password", true);
   const authorized = docker("cat", "/home/webxterm/.ssh/authorized_keys");
   check("public key installed by webxterm itself", authorized.includes(pubkey.split(" ")[1]),
@@ -90,11 +101,12 @@ try {
 
   // ---- reconnect using the installed key, verifying the pin ----
   console.log(`\n4. Reconnect with the key`);
-  await page.getByRole("button", { name: /disconnect/i }).click();
-  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await closeAllSessions();
+  await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /^connect$/i }).last().click();
-  await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
+  await page.getByRole("button", { name: /save and connect/i }).click();
+  await page.locator('[data-sidebar="menu-button"]', { hasText: "@" })
+    .first().waitFor({ timeout: 45000 });
   check("reconnected using the installed key against the pinned host", true);
 
   await page.locator('[data-sidebar="menu-button"]', { hasText: "@" }).first().click();
@@ -233,16 +245,27 @@ try {
         markTwo === "SESSION=one" && markThree === "SESSION=two",
         `#2 → ${markTwo}, #3 → ${markThree}`);
 
+  // ---- navigating out of Files ----
+  console.log(`\n10. Files does not trap you`);
+  await page.getByRole("link", { name: "Files", exact: true }).click();
+  await page.waitForURL(/\/dashboard\/files/, { timeout: 15000 }).catch(() => {});
+  check("Files page opens", page.url().includes("/dashboard/files"), page.url().split("/dashboard")[1]);
+
+  await page.locator('[data-sidebar="menu-button"]', { hasText: "@" }).first().click();
+  await page.waitForURL(/\/dashboard\/terminal/, { timeout: 15000 }).catch(() => {});
+  check("clicking a session from Files opens the terminal",
+        page.url().includes("/dashboard/terminal"), page.url().split("/dashboard")[1]);
+
   // ---- the pin has to actually refuse a changed key ----
-  console.log(`\n10. Host key pinning refuses a changed key`);
-  await page.getByRole("button", { name: /disconnect/i }).click();
+  console.log(`\n11. Host key pinning refuses a changed key`);
+  await closeAllSessions();
 
   // Rotate the server's host key, exactly as rebuilding the machine would.
   docker("sh", "-c", "rm -f /etc/ssh/ssh_host_* && ssh-keygen -A");
   execFileSync("docker", ["restart", CONTAINER]);
   await page.waitForTimeout(4000);
 
-  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: /^connect$/i }).last().click();
 
@@ -250,7 +273,7 @@ try {
   check("a changed host key is refused, not silently trusted", true);
 
   const stillDisconnected =
-    (await page.getByRole("button", { name: /disconnect/i }).count()) === 0;
+    (await page.locator('[data-sidebar="menu-button"]', { hasText: "@" }).count()) === 0;
   check("the connection did not proceed", stillDisconnected);
 
   const clearDisabled = await page

@@ -52,6 +52,7 @@ export function AppSidebar() {
 
   const manage = [
     { href: "/dashboard", label: "Overview", icon: SquaresFourIcon, exact: true },
+    { href: "/dashboard/files", label: "Files", icon: FolderOpenIcon },
     { href: "/dashboard/hosts", label: "Hosts", icon: HardDrivesIcon, badge: hosts.length },
     { href: "/dashboard/keys", label: "Keys", icon: KeyIcon, badge: keys.length },
   ] as const;
@@ -63,13 +64,12 @@ export function AppSidebar() {
     { href: "/dashboard/settings", label: "Settings", icon: GearSixIcon },
   ] as const;
 
-  const onSessionRoute =
-    pathname.startsWith("/dashboard/terminal") || pathname.startsWith("/dashboard/files");
-
   function openSession(id: string) {
     setActive(id);
-    // Stay on Files if that is where you were; otherwise show the shell.
-    if (!onSessionRoute) router.push("/dashboard/terminal");
+    // These entries carry a terminal icon and are labelled with the shell they
+    // belong to, so they open the shell — always. Files is its own destination
+    // with its own session picker.
+    router.push("/dashboard/terminal");
   }
 
   return (
@@ -130,21 +130,6 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               )}
 
-              {/* Files follows whichever session is active. */}
-              {sessions.length > 0 && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith("/dashboard/files")}
-                    tooltip="Files on the active session"
-                  >
-                    <Link href="/dashboard/files">
-                      <FolderOpenIcon />
-                      <span>Files</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -44,16 +44,25 @@ export async function saveHost(
   return record;
 }
 
-/** Upsert by connection identity, so reconnecting doesn't create duplicates. */
+/**
+ * Records a connection.
+ *
+ * By default this only touches a host that is already saved — connecting to
+ * something once should not silently add it to your list. `create` is what the
+ * "Save and connect" path passes.
+ */
 export async function rememberHost(
   fields: Pick<Host, "hostname" | "port" | "username" | "keyId">,
-): Promise<Host> {
+  opts: { create?: boolean } = {},
+): Promise<Host | null> {
   const existing = (await listHosts()).find(
     (h) =>
       h.hostname === fields.hostname &&
       h.port === fields.port &&
       h.username === fields.username,
   );
+  if (!existing && !opts.create) return null;
+
   return saveHost({
     ...(existing ?? {}),
     ...fields,

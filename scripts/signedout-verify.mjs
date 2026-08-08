@@ -79,15 +79,19 @@ try {
   check("public key appended", true, "one line, nothing installed");
 
   console.log(`\n4. Connect through the relay anonymously`);
-  await page.getByRole("link", { name: "Connect", exact: true }).first().click();
+  await page.getByRole("link", { name: "New session", exact: true }).first().click();
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: /^connect$/i }).last().click();
-  await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
+  await page.locator('[data-sidebar="menu-button"]', { hasText: "@" })
+    .first().waitFor({ timeout: 45000 });
   check("connected without an account", true);
   check("the relay issued an anonymous token", tokenResponse?.anonymous === true,
         `expiresIn ${tokenResponse?.expiresIn}s`);
 
   console.log(`\n5. A real shell`);
+  await page.waitForURL(/\/dashboard\/terminal/, { timeout: 15000 }).catch(() => {});
+  // The banner and first prompt are printed during the handshake, before the
+  // terminal mounts — they must be buffered, not dropped.
   await terminalHas("$");
   check("shell prompt rendered", true, (await screen()).trim().split("\n").pop());
 

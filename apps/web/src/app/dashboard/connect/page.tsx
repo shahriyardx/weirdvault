@@ -2,7 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PlugsConnectedIcon, ShieldCheckIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  FloppyDiskIcon,
+  PlugsConnectedIcon,
+  ShieldCheckIcon,
+  WarningIcon,
+} from "@phosphor-icons/react/dist/ssr";
 
 import { HostKeyMismatchWarning } from "@/components/host-key-mismatch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,7 +29,7 @@ import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
 
 export default function ConnectPage() {
   const router = useRouter();
-  const { keys, hosts, activeKey, setActiveKey, connect, phase, error, pinned, mismatch, refreshKeys } =
+  const { keys, activeKey, setActiveKey, connect, phase, error, pinned, mismatch, refreshKeys } =
     useSshSession();
   const vaultUnlocked = useVaultUnlocked();
 
@@ -42,7 +47,7 @@ export default function ConnectPage() {
   });
   const [usePassword, setUsePassword] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent, opts: { save?: boolean } = {}) {
     e.preventDefault();
     if (!activeKey) {
       // Almost always a locked vault hiding the portable keys.
@@ -56,6 +61,7 @@ export default function ConnectPage() {
         username: form.username,
         key: activeKey,
         password: usePassword ? form.password : undefined,
+        save: opts.save,
       });
       setForm((f) => ({ ...f, password: "" }));
       setUsePassword(false);
@@ -113,29 +119,6 @@ export default function ConnectPage() {
               />
             </div>
 
-            {hosts.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {hosts.slice(0, 8).map((h) => (
-                  <Button
-                    key={h.id}
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="h-6 text-[11px] font-normal"
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        hostname: h.hostname,
-                        port: h.port,
-                        username: h.username,
-                      }))
-                    }
-                  >
-                    {h.username}@{h.hostname}
-                  </Button>
-                ))}
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -220,10 +203,19 @@ export default function ConnectPage() {
           </Alert>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" disabled={!activeKey || phase === "connecting"}>
             <PlugsConnectedIcon />
             {phase === "connecting" ? "Connecting…" : "Connect"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!activeKey || phase === "connecting"}
+            onClick={(e) => submit(e, { save: true })}
+          >
+            <FloppyDiskIcon />
+            Save and connect
           </Button>
           {keys.length === 0 &&
             (vaultUnlocked ? (
