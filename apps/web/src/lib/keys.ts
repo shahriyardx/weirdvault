@@ -3,87 +3,180 @@
 /**
  * SSH key custody.
  *
- * Keys are generated inside WebCrypto with extractable=false, so the private
- * half cannot be read by our code, an injected script, or a browser extension.
- * It can only be *used* — and the only use is signing an SSH auth challenge.
+ * Two modes, chosen per key (PLAN.md §3.6, THREAT-MODEL.md §4):
  *
- * Portability is a deliberate per-key choice (PLAN.md §3.6). This module
- * implements the device-bound mode; the portable mode wraps an extractable key
- * with the vault key at creation and is added alongside it in Phase 3.
+ *  - device-bound: generated non-extractable, never leaves this browser.
+ *    Strongest, but a new device needs its own key added to the server.
+ *
+ *  - portable (default): generated extractable, wrapped with the vault key
+ *    within about a millisecond, then re-imported non-extractable. The wrapped
+ *    copy syncs, so signing in on a new device Just Works. The server only ever
+ *    holds ciphertext.
+ *
+ * In both modes the private key is non-extractable *in use* — our code, an
+ * injected script, and a browser extension are all equally unable to read it.
  */
 
-const DB_NAME = "webxterm";
-const DB_VERSION = 1;
-const KEY_STORE = "keys";
-const HOST_STORE = "hosts";
+import { idbDelete, idbGet, idbGetAll, idbPut } from "./idb";
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(KEY_STORE)) db.createObjectStore(KEY_STORE);
-      if (!db.objectStoreNames.contains(HOST_STORE)) db.createObjectStore(HOST_STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
+export type KeyMode = "portable" | "device-bound";
 
-async function tx<T>(
-  store: string,
-  mode: IDBTransactionMode,
-  fn: (s: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(store, mode);
-    const req = fn(t.objectStore(store));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+export interface StoredKey {
+  id: string;
+  label: string;
+  mode: KeyMode;
+  /** Raw 32-byte Ed25519 public key. */
+  publicKeyRaw: ArrayBuffer;
+  /** Present only for portable keys: PKCS#8 encrypted with the vault key. */
+  wrapped?: { iv: ArrayBuffer; ciphertext: ArrayBuffer };
+  /** Present only for device-bound keys: the CryptoKey handle itself. */
+  privateKey?: CryptoKey;
+  createdAt: number;
 }
 
 export interface SshKey {
   id: string;
   label: string;
-  pair: CryptoKeyPair;
+  mode: KeyMode;
+  publicKeyRaw: Uint8Array;
+  privateKey: CryptoKey;
   createdAt: number;
 }
 
-export async function generateKey(label = "webxterm"): Promise<SshKey> {
-  const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, false, [
+const STORE = "keys";
+
+/* ------------------------------------------------------------ generation */
+
+export async function generateKey(
+  label = "webxterm",
+  mode: KeyMode = "portable",
+  vaultKey?: CryptoKey,
+): Promise<SshKey> {
+  if (mode === "portable" && !vaultKey) {
+    throw new Error(
+      "A portable key needs the vault unlocked so it can be wrapped. " +
+        "Sign in first, or create a device-bound key.",
+    );
+  }
+
+  // Portable keys must be exportable for the instant it takes to wrap them.
+  const extractable = mode === "portable";
+  const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, extractable, [
     "sign",
     "verify",
   ])) as CryptoKeyPair;
 
-  const key: SshKey = { id: crypto.randomUUID(), label, pair, createdAt: Date.now() };
-  // A CryptoKey survives structured clone, so this persists the *handle*
-  // without the key bytes ever existing outside WebCrypto.
-  await tx(KEY_STORE, "readwrite", (s) => s.put(key, key.id));
-  return key;
+  const publicKeyRaw = new Uint8Array(
+    await crypto.subtle.exportKey("raw", pair.publicKey),
+  );
+
+  const record: StoredKey = {
+    id: crypto.randomUUID(),
+    label,
+    mode,
+    publicKeyRaw: publicKeyRaw.buffer as ArrayBuffer,
+    createdAt: Date.now(),
+  };
+
+  let privateKey = pair.privateKey;
+
+  if (mode === "portable") {
+    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      vaultKey!,
+      pkcs8 as BufferSource,
+    );
+    record.wrapped = { iv: iv.buffer as ArrayBuffer, ciphertext };
+
+    // Re-import non-extractable and drop the exportable handle, so from here on
+    // this key behaves exactly like a device-bound one.
+    privateKey = await crypto.subtle.importKey("pkcs8", pkcs8 as BufferSource, "Ed25519", false, [
+      "sign",
+    ]);
+    pkcs8.fill(0);
+  } else {
+    record.privateKey = pair.privateKey;
+  }
+
+  await idbPut(STORE, record.id, record);
+  return { ...record, publicKeyRaw, privateKey } as SshKey;
 }
 
-export async function listKeys(): Promise<SshKey[]> {
-  const all = await tx<SshKey[]>(KEY_STORE, "readonly", (s) => s.getAll());
+/* --------------------------------------------------------------- loading */
+
+/**
+ * Hydrate stored keys into usable ones. Portable keys need the vault key to
+ * unwrap; without it they are listed but unusable, which is the honest state
+ * to show rather than pretending they're missing.
+ */
+export async function listKeys(vaultKey?: CryptoKey): Promise<SshKey[]> {
+  const stored = await idbGetAll<StoredKey>(STORE);
+  const out: SshKey[] = [];
+
+  for (const rec of stored.sort((a, b) => a.createdAt - b.createdAt)) {
+    const privateKey = await hydrate(rec, vaultKey);
+    if (privateKey) {
+      out.push({
+        id: rec.id,
+        label: rec.label,
+        mode: rec.mode,
+        publicKeyRaw: new Uint8Array(rec.publicKeyRaw),
+        privateKey,
+        createdAt: rec.createdAt,
+      });
+    }
+  }
+  return out;
+}
+
+async function hydrate(rec: StoredKey, vaultKey?: CryptoKey): Promise<CryptoKey | null> {
+  if (rec.mode === "device-bound") return rec.privateKey ?? null;
+  if (!rec.wrapped || !vaultKey) return null;
+
+  try {
+    const pkcs8 = new Uint8Array(
+      await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: new Uint8Array(rec.wrapped.iv) },
+        vaultKey,
+        rec.wrapped.ciphertext,
+      ),
+    );
+    const key = await crypto.subtle.importKey("pkcs8", pkcs8 as BufferSource, "Ed25519", false, [
+      "sign",
+    ]);
+    pkcs8.fill(0);
+    return key;
+  } catch {
+    // Wrong vault key, or tampered ciphertext. Either way it is not usable.
+    return null;
+  }
+}
+
+/** Stored keys including ones that couldn't be unwrapped, for UI listing. */
+export async function listStoredKeys(): Promise<StoredKey[]> {
+  const all = await idbGetAll<StoredKey>(STORE);
   return all.sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export async function deleteKey(id: string): Promise<void> {
-  await tx(KEY_STORE, "readwrite", (s) => s.delete(id));
+  await idbDelete(STORE, id);
 }
 
-export async function rawPublicKey(key: SshKey): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.exportKey("raw", key.pair.publicKey));
+export async function getStoredKey(id: string): Promise<StoredKey | undefined> {
+  return idbGet<StoredKey>(STORE, id);
 }
+
+/* ---------------------------------------------------------------- format */
 
 /**
- * Format as an authorized_keys line. SSH wire format is length-prefixed
- * strings: string "ssh-ed25519" ‖ string <32-byte key>.
+ * authorized_keys line. SSH wire format is length-prefixed strings:
+ * string "ssh-ed25519" ‖ string <32-byte key>.
  */
-export async function authorizedKeysLine(key: SshKey): Promise<string> {
-  const raw = await rawPublicKey(key);
+export function authorizedKeysLine(key: { publicKeyRaw: Uint8Array; label: string }): string {
   const type = new TextEncoder().encode("ssh-ed25519");
+  const raw = key.publicKeyRaw;
 
   const blob = new Uint8Array(4 + type.length + 4 + raw.length);
   const view = new DataView(blob.buffer);
@@ -98,62 +191,34 @@ export async function authorizedKeysLine(key: SshKey): Promise<string> {
 
   let s = "";
   for (const b of blob) s += String.fromCharCode(b);
-  return `ssh-ed25519 ${btoa(s)} ${key.label}`;
+  // Comments are interpolated into a remote shell command by installKey, and
+  // the Go side rejects anything outside [A-Za-z0-9@._-].
+  const comment = key.label.replace(/[^A-Za-z0-9@._-]/g, "-") || "webxterm";
+  return `ssh-ed25519 ${btoa(s)} ${comment}`;
 }
 
 /** The signing callback handed to WASM: challenge in, signature out. */
 export function makeSigner(key: SshKey) {
   return async (data: Uint8Array): Promise<Uint8Array> =>
-    new Uint8Array(await crypto.subtle.sign("Ed25519", key.pair.privateKey, data as BufferSource));
+    new Uint8Array(
+      await crypto.subtle.sign("Ed25519", key.privateKey, data as BufferSource),
+    );
 }
 
 /** Verifies the security claim rather than asserting it. */
 export async function proveNonExtractable(
   key: SshKey,
 ): Promise<{ ok: boolean; detail: string }> {
-  if (key.pair.privateKey.extractable) {
+  if (key.privateKey.extractable) {
     return { ok: false, detail: "privateKey.extractable is true" };
   }
-  for (const fmt of ["pkcs8", "jwk", "raw"] as const) {
+  for (const fmt of ["pkcs8", "jwk"] as const) {
     try {
-      await crypto.subtle.exportKey(fmt, key.pair.privateKey);
+      await crypto.subtle.exportKey(fmt, key.privateKey);
       return { ok: false, detail: `exportKey("${fmt}") unexpectedly succeeded` };
     } catch {
       /* expected */
     }
   }
-  return { ok: true, detail: "pkcs8/jwk/raw export all refused" };
-}
-
-/* --------------------------------------------------------------- hosts --- */
-
-export interface Host {
-  id: string;
-  label: string;
-  hostname: string;
-  port: number;
-  username: string;
-  keyId?: string;
-  createdAt: number;
-}
-
-// Phase 1 keeps hosts local. Phase 3 encrypts this same shape into the vault
-// blob and syncs it; the server never sees it in either case.
-export async function listHosts(): Promise<Host[]> {
-  const all = await tx<Host[]>(HOST_STORE, "readonly", (s) => s.getAll());
-  return all.sort((a, b) => a.createdAt - b.createdAt);
-}
-
-export async function saveHost(host: Omit<Host, "id" | "createdAt"> & { id?: string }) {
-  const record: Host = {
-    id: host.id ?? crypto.randomUUID(),
-    createdAt: Date.now(),
-    ...host,
-  } as Host;
-  await tx(HOST_STORE, "readwrite", (s) => s.put(record, record.id));
-  return record;
-}
-
-export async function deleteHost(id: string): Promise<void> {
-  await tx(HOST_STORE, "readwrite", (s) => s.delete(id));
+  return { ok: true, detail: "pkcs8/jwk export refused" };
 }

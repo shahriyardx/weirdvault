@@ -38,6 +38,23 @@ export interface SshSession {
   resize(cols: number, rows: number): void;
   close(): void;
   sftp(): Promise<SftpHandle>;
+  /** Appends a public key to the remote authorized_keys. */
+  installKey(authorizedKeysLine: string): Promise<"installed" | "already-present">;
+  run(command: string): Promise<string>;
+  /** Streams a tar archive into `tar -x` remotely — the many-small-files path. */
+  uploadTar(remoteDir: string, next: () => Promise<Uint8Array | null>): Promise<TransferResult>;
+  downloadTar(
+    remotePath: string,
+    onChunk: (chunk: Uint8Array) => void | Promise<void>,
+  ): Promise<TransferResult>;
+}
+
+export interface HostKeyInfo {
+  fingerprint: string;
+  type: string;
+  /** base64 of the marshaled key — what gets pinned. */
+  key: string;
+  status: "unknown" | "match" | "mismatch";
 }
 
 export type SshAuth =
@@ -56,11 +73,13 @@ export interface ConnectConfig {
   port: number;
   user: string;
   auth: SshAuth;
+  /** Pinned host key (base64). Omit only on first contact. */
+  knownHostKey?: string;
   cols?: number;
   rows?: number;
   onData?: (bytes: Uint8Array) => void;
   onStatus?: (s: { phase: string; detail: string; ms: number }) => void;
-  onHostKey?: (k: { fingerprint: string; type: string }) => void;
+  onHostKey?: (k: HostKeyInfo) => void;
   onClose?: (reason: string) => void;
 }
 

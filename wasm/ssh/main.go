@@ -9,6 +9,8 @@
 package main
 
 import (
+	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"sync"
@@ -104,19 +106,47 @@ func doConnect(cfg js.Value) (js.Value, error) {
 	}
 	status("relay-open", "websocket established", tWS)
 
+	// Host key pinning is what keeps the relay honest. The relay controls every
+	// byte between us and the server, so without verifying the host key it
+	// could present its own and MITM the session — the end-to-end encryption
+	// would be end-to-*relay*. See docs/THREAT-MODEL.md §6.
+	knownHostKey := ""
+	if v := cfg.Get("knownHostKey"); v.Type() == js.TypeString {
+		knownHostKey = v.String()
+	}
+
 	clientCfg := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{auth},
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
-			// Phase 0: trust on first use, but surface the fingerprint so the
-			// harness can show it. Production must persist and pin this, and
-			// refuse loudly on change.
-			if onHost.Type() == js.TypeFunction {
-				onHost.Invoke(js.ValueOf(map[string]any{
-					"fingerprint": ssh.FingerprintSHA256(key),
-					"type":        key.Type(),
-				}))
+			presented := base64.StdEncoding.EncodeToString(key.Marshal())
+			report := func(status string) {
+				if onHost.Type() == js.TypeFunction {
+					onHost.Invoke(js.ValueOf(map[string]any{
+						"fingerprint": ssh.FingerprintSHA256(key),
+						"type":        key.Type(),
+						"key":         presented,
+						"status":      status,
+					}))
+				}
 			}
+
+			if knownHostKey == "" {
+				// First contact: report it so the caller can pin it. The caller
+				// decides whether to trust; we cannot verify what we've never seen.
+				report("unknown")
+				return nil
+			}
+			if subtle.ConstantTimeCompare([]byte(presented), []byte(knownHostKey)) != 1 {
+				report("mismatch")
+				return fmt.Errorf(
+					"HOST KEY MISMATCH for %s:%d — the server presented %s %s, "+
+						"which is not the key pinned for this host. Someone may be "+
+						"intercepting the connection, or the server was rebuilt. "+
+						"Refusing to connect",
+					host, port, key.Type(), ssh.FingerprintSHA256(key))
+			}
+			report("match")
 			return nil
 		},
 	}
@@ -239,13 +269,61 @@ func doConnect(cfg js.Value) (js.Value, error) {
 			}()
 		})
 	})
-	handleFuncs = []js.Func{write, resize, closeFn, openSFTP}
+	// Promise-returning helper for the exec-backed features.
+	promised := func(fn func(args []js.Value) (any, error)) js.Func {
+		return js.FuncOf(func(_ js.Value, args []js.Value) any {
+			return newPromise(func(resolve, reject func(any)) {
+				go func() {
+					v, err := fn(args)
+					if err != nil {
+						reject(err.Error())
+						return
+					}
+					resolve(v)
+				}()
+			})
+		})
+	}
+
+	installKeyFn := promised(func(args []js.Value) (any, error) {
+		if len(args) < 1 || args[0].Type() != js.TypeString {
+			return nil, fmt.Errorf("installKey(authorizedKeysLine) requires a string")
+		}
+		return installKey(client, args[0].String())
+	})
+	runFn := promised(func(args []js.Value) (any, error) {
+		if len(args) < 1 || args[0].Type() != js.TypeString {
+			return nil, fmt.Errorf("run(command) requires a string")
+		}
+		return runCommand(client, args[0].String())
+	})
+	uploadTarFn := promised(func(args []js.Value) (any, error) {
+		if len(args) < 2 || args[0].Type() != js.TypeString || args[1].Type() != js.TypeFunction {
+			return nil, fmt.Errorf("uploadTar(remoteDir, next) requires a path and a callback")
+		}
+		return uploadTar(client, args[0].String(), args[1])
+	})
+	downloadTarFn := promised(func(args []js.Value) (any, error) {
+		if len(args) < 2 || args[0].Type() != js.TypeString || args[1].Type() != js.TypeFunction {
+			return nil, fmt.Errorf("downloadTar(remotePath, onChunk) requires a path and a callback")
+		}
+		return downloadTar(client, args[0].String(), args[1])
+	})
+
+	handleFuncs = []js.Func{
+		write, resize, closeFn, openSFTP,
+		installKeyFn, runFn, uploadTarFn, downloadTarFn,
+	}
 
 	return js.ValueOf(map[string]any{
-		"write":  write,
-		"resize": resize,
-		"close":  closeFn,
-		"sftp":   openSFTP,
+		"write":       write,
+		"resize":      resize,
+		"close":       closeFn,
+		"sftp":        openSFTP,
+		"installKey":  installKeyFn,
+		"run":         runFn,
+		"uploadTar":   uploadTarFn,
+		"downloadTar": downloadTarFn,
 	}), nil
 }
 
