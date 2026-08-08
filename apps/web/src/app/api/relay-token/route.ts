@@ -1,5 +1,5 @@
-import { createHmac } from "node:crypto";
-import { headers } from "next/headers";
+import { createHmac, randomUUID } from "node:crypto";
+import { cookies, headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 
@@ -16,17 +16,50 @@ import { auth } from "@/lib/auth";
  */
 
 const TTL_SECONDS = 60;
+/** Anonymous sessions get a shorter window, since nothing binds them to a person. */
+const ANON_TTL_SECONDS = 30;
+const ANON_COOKIE = "webxterm.anon";
 const MAX_PORT = 65535;
 
 function b64url(buf: Buffer): string {
   return buf.toString("base64url");
 }
 
-export async function POST(request: Request) {
+/**
+ * Identifies the caller for quota accounting.
+ *
+ * Signing in is not required to use webxterm — the free tier works with local
+ * storage and no account, and the landing page says so. But the relay still
+ * needs a subject to meter, so anonymous visitors get a random id in a cookie.
+ *
+ * That id is trivially rotatable, so per-subject quotas are weak for anonymous
+ * users; the relay's global connection cap and the port allowlist are what
+ * actually bound abuse there. Signed-in users get a stable subject, a longer
+ * token TTL, and meaningful per-account limits.
+ */
+async function subjectFor(): Promise<{ sub: string; ttl: number; anonymous: boolean }> {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) {
-    return Response.json({ error: "unauthorized" }, { status: 401 });
+  if (session?.user) {
+    return { sub: session.user.id, ttl: TTL_SECONDS, anonymous: false };
   }
+
+  const jar = await cookies();
+  let anon = jar.get(ANON_COOKIE)?.value;
+  if (!anon || !/^[0-9a-f-]{36}$/i.test(anon)) {
+    anon = randomUUID();
+    jar.set(ANON_COOKIE, anon, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24,
+    });
+  }
+  return { sub: `anon:${anon}`, ttl: ANON_TTL_SECONDS, anonymous: true };
+}
+
+export async function POST(request: Request) {
+  const { sub, ttl, anonymous } = await subjectFor();
 
   const secret = process.env.RELAY_SECRET;
   if (!secret) {
@@ -50,14 +83,18 @@ export async function POST(request: Request) {
   }
 
   const claims = {
-    sub: session.user.id,
+    sub,
     host,
     port,
-    exp: Math.floor(Date.now() / 1000) + TTL_SECONDS,
+    exp: Math.floor(Date.now() / 1000) + ttl,
   };
 
   const payload = b64url(Buffer.from(JSON.stringify(claims), "utf8"));
   const signature = b64url(createHmac("sha256", secret).update(payload).digest());
 
-  return Response.json({ token: `${payload}.${signature}`, expiresIn: TTL_SECONDS });
+  return Response.json({
+    token: `${payload}.${signature}`,
+    expiresIn: ttl,
+    anonymous,
+  });
 }

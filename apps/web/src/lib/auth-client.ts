@@ -3,6 +3,7 @@
 import { createAuthClient } from "better-auth/react";
 import { organizationClient } from "better-auth/client/plugins";
 
+import { registerDevice } from "@/lib/device";
 import { deriveSecrets } from "@/lib/vault/kdf";
 
 export const authClient = createAuthClient({
@@ -21,19 +22,23 @@ export async function signUpWithVault(
   password: string,
   name: string,
 ) {
-  const { authToken, vaultKey } = await deriveSecrets(email, password);
+  const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password);
   const res = await authClient.signUp.email({
     email,
     password: authToken,
     name,
   });
   if (res.error) throw new Error(res.error.message ?? "sign up failed");
-  return { vaultKey, user: res.data?.user };
+  // Best-effort: a device that fails to register can still work, it just
+  // won't appear in "where am I signed in".
+  void registerDevice();
+  return { vaultKey, auditKey, user: res.data?.user };
 }
 
 export async function signInWithVault(email: string, password: string) {
-  const { authToken, vaultKey } = await deriveSecrets(email, password);
+  const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password);
   const res = await authClient.signIn.email({ email, password: authToken });
   if (res.error) throw new Error(res.error.message ?? "sign in failed");
-  return { vaultKey, user: res.data?.user };
+  void registerDevice();
+  return { vaultKey, auditKey, user: res.data?.user };
 }

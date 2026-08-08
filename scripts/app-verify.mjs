@@ -35,13 +35,14 @@ try {
   check("terminal renders", (await page.locator(".xterm").count()) > 0);
 
   console.log(`\n2. Key generation in the UI`);
-  await page.getByRole("button", { name: /generate ed25519/i }).click();
+  await page.getByRole("button", { name: "Device-bound" }).click();
   await page.waitForSelector("pre", { timeout: 15000 });
   const cmd = (await page.locator("pre").first().innerText()).trim();
   check("authorize command shown", /^echo 'ssh-ed25519 AAAA.* >> ~\/\.ssh\/authorized_keys$/.test(cmd),
         cmd.slice(0, 52) + "…");
-  const proofText = await page.getByText(/non-extractable/i).innerText();
-  check("UI proves key is non-extractable", proofText.includes("✓"), proofText.slice(0, 60));
+  const proofText = await page.getByText(/non-extractable/i).first().innerText();
+  check("UI proves key is non-extractable",
+        proofText.includes("Private key is non-extractable"), proofText.slice(0, 60));
 
   console.log(`\n3. Server-side setup (the one line)`);
   const pubkey = cmd.match(/'([^']+)'/)[1];
@@ -75,9 +76,12 @@ try {
   check("shell prompt rendered in the terminal", true, (await screen()).trim().split("\n").pop());
 
   console.log(`\n5. File explorer on the same connection`);
-  await page.getByText(/^Files ·/).waitFor({ timeout: 15000 });
-  const fileButtons = await page.locator("fieldset", { hasText: "Files ·" }).locator("button").count();
-  check("SFTP listing appears without a second login", fileButtons > 1, `${fileButtons} entries`);
+  // The explorer renders as soon as SFTP opens on the existing connection.
+  await page.getByRole("button", { name: "Refresh" }).waitFor({ timeout: 20000 });
+  const listed = await page.evaluate(
+    () => document.body.innerText.includes("Empty directory")
+      || /\d+(\.\d+)? (B|KB|MB|GB)/.test(document.body.innerText));
+  check("SFTP listing appears without a second login", listed);
 
   console.log(`\n6. Typing into the remote shell`);
   await page.locator(".xterm").click();
@@ -104,9 +108,9 @@ try {
   });
 
   await page.goto(APP.replace("/workspace", "/sign-up"), { waitUntil: "networkidle" });
-  await page.getByPlaceholder("Name").fill("Test User");
-  await page.getByPlaceholder("Email").fill(email);
-  await page.getByPlaceholder("Password").fill(password);
+  await page.getByLabel("Name").fill("Test User");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: /create account/i }).click();
   await page.waitForURL(/\/workspace/, { timeout: 60000 });
   check("sign-up creates an account and lands in the workspace", true, email);

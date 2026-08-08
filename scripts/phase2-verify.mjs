@@ -44,9 +44,9 @@ try {
   console.log(`\n1. Account and vault`);
   const email = `t${Date.now()}@webxterm.test`;
   await page.goto(`${BASE}/sign-up`, { waitUntil: "networkidle" });
-  await page.getByPlaceholder("Name").fill("Test User");
-  await page.getByPlaceholder("Email").fill(email);
-  await page.getByPlaceholder("Password").fill("correct-horse-battery-staple");
+  await page.getByLabel("Name").fill("Test User");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill("correct-horse-battery-staple");
   await page.getByRole("button", { name: /create account/i }).click();
   await page.waitForURL(/\/workspace/, { timeout: 60000 });
   check("signed up and landed in the workspace", true, email);
@@ -60,13 +60,14 @@ try {
   const cmd = (await page.locator("pre").first().innerText()).trim();
   const pubkey = cmd.match(/'([^']+)'/)[1];
   check("portable key generated and wrapped", /^ssh-ed25519 AAAA/.test(pubkey));
-  check("key reports non-extractable", (await page.getByText(/✓ non-extractable/).count()) > 0);
+  check("key reports non-extractable",
+        (await page.getByText(/Private key is non-extractable/).count()) > 0);
 
   // ---- password-first onboarding installs the key for the user ----
   console.log(`\n3. Password-first onboarding`);
   docker("sh", "-c", "cp /dev/null /home/webxterm/.ssh/authorized_keys");
   await page.getByLabel(/use password once/i).check();
-  await page.getByPlaceholder("password").fill("webxterm");
+  await page.getByPlaceholder("Password").fill("webxterm");
   await page.getByRole("button", { name: /^connect$/i }).click();
   await page.getByRole("button", { name: /disconnect/i }).waitFor({ timeout: 45000 });
   check("connected with a password", true);
@@ -92,8 +93,7 @@ try {
   // ---- file explorer ----
   console.log(`\n5. File explorer`);
   await page.waitForFunction(() => document.body.innerText.includes("Empty directory")
-    || /\d+ (B|KB|MB)/.test(document.body.innerText)
-    || document.body.innerText.includes("📁"), { timeout: 20000 });
+    || /\d+(\.\d+)? (B|KB|MB|GB)/.test(document.body.innerText), { timeout: 20000 });
   check("explorer listed the remote directory on the same connection", true);
 
   // ---- upload a directory via the tar fast path ----
@@ -126,7 +126,7 @@ try {
   // reason but the wrong test.
   docker("sh", "-c",
     "echo 'hello from the server' > /home/webxterm/note.txt && chown webxterm:webxterm /home/webxterm/note.txt");
-  await page.getByRole("button", { name: "⟳" }).click();
+  await page.getByRole("button", { name: "Refresh" }).click();
   await page.getByText("note.txt", { exact: false }).first().dblclick();
   await page.waitForSelector(".monaco-editor", { timeout: 60000 });
   check("Monaco opened the remote file", true);

@@ -1,46 +1,135 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  Theme configuration only.
+
+  Everything below defines design tokens for Tailwind and shadcn — there are no
+  custom style rules here. Components use Tailwind utilities and shadcn
+  primitives; anything that would have been a bespoke class is expressed as
+  utilities at the call site instead.
+
+  webxterm is dark only: no light palette, no toggle, no theme state. A terminal
+  emulator sits inside this UI rendering someone else's colour scheme, and a
+  light chrome around a dark terminal fights it constantly. The `dark` variant
+  is mapped to :root so shadcn's dark: utilities still resolve, and because
+  nothing keys off a class or a media query there is no flash of the wrong
+  theme.
+*/
+@custom-variant dark (&:is(:root, .dark, .dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Semantic accents used by status, audit and transfer states, and the
+     terminal surface — all reachable as ordinary utilities (bg-terminal,
+     text-success, …) so no component needs a bespoke class. */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-terminal: var(--terminal);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Lyra is boxy and sharp, so the radius stays small and the surfaces stay
+   cool-neutral rather than pure grey — it reads as tooling, which is what
+   this is. */
+:root {
+  color-scheme: dark;
+
+  --background: oklch(0.16 0.012 260);
+  --foreground: oklch(0.92 0.008 250);
+
+  --card: oklch(0.19 0.013 260);
+  --card-foreground: oklch(0.92 0.008 250);
+  --popover: oklch(0.2 0.013 260);
+  --popover-foreground: oklch(0.92 0.008 250);
+
+  --primary: oklch(0.72 0.14 250);
+  --primary-foreground: oklch(0.16 0.02 260);
+
+  --secondary: oklch(0.25 0.014 260);
+  --secondary-foreground: oklch(0.92 0.008 250);
+
+  --muted: oklch(0.24 0.012 260);
+  --muted-foreground: oklch(0.65 0.015 255);
+
+  --accent: oklch(0.27 0.018 260);
+  --accent-foreground: oklch(0.95 0.008 250);
+
+  --destructive: oklch(0.65 0.2 22);
+  --success: oklch(0.75 0.16 155);
+  --warning: oklch(0.79 0.14 78);
+  --info: oklch(0.72 0.14 250);
+  /* A step darker than cards so the emulator reads as content, not chrome. */
+  --terminal: oklch(0.14 0.014 260);
+
+  --border: oklch(0.29 0.015 260);
+  --input: oklch(0.27 0.015 260);
+  --ring: oklch(0.62 0.13 250);
+
+  --chart-1: oklch(0.72 0.14 250);
+  --chart-2: oklch(0.75 0.16 155);
+  --chart-3: oklch(0.79 0.14 78);
+  --chart-4: oklch(0.7 0.15 320);
+  --chart-5: oklch(0.65 0.2 22);
+
+  --radius: 0.375rem;
+
+  --sidebar: oklch(0.18 0.013 260);
+  --sidebar-foreground: oklch(0.9 0.008 250);
+  --sidebar-primary: oklch(0.72 0.14 250);
+  --sidebar-primary-foreground: oklch(0.16 0.02 260);
+  --sidebar-accent: oklch(0.25 0.015 260);
+  --sidebar-accent-foreground: oklch(0.95 0.008 250);
+  --sidebar-border: oklch(0.28 0.015 260);
+  --sidebar-ring: oklch(0.62 0.13 250);
 }
 
-/* Terminal chrome. The workspace commits to a single dark look on purpose —
-   a terminal that follows the OS theme fights the palette of whatever is
-   running inside it. */
-@layer components {
-  .btn {
-    @apply w-full cursor-pointer rounded-md border border-[#232a38] bg-[#1b2230]
-           px-3 py-2 text-[13px] font-medium text-[#c9d1d9] transition-colors
-           hover:bg-[#222b3b] disabled:cursor-not-allowed disabled:opacity-50;
+/* shadcn's own base reset — border colour and focus ring defaults. */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-  .btn-primary {
-    @apply border-[#6aa9ff] bg-[#6aa9ff] font-semibold text-[#07101f]
-           hover:bg-[#7fb5ff];
-  }
-  .input {
-    @apply w-full rounded-md border border-[#232a38] bg-[#0d1119] px-2.5 py-1.5
-           font-mono text-[13px] text-[#c9d1d9] outline-none
-           focus:border-[#6aa9ff];
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }

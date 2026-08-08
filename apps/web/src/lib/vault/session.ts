@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * In-memory custody of the vault key.
+ * In-memory custody of the derived key material.
  *
  * Deliberately not persisted. localStorage, sessionStorage, and IndexedDB are
  * all readable by any script running on the origin, and a vault key sitting in
@@ -9,24 +9,34 @@
  * reload requires re-entering the password — which is the correct trade, and
  * the same one every serious password manager makes.
  *
- * The key itself is a non-extractable CryptoKey, so even this module cannot
- * read its bytes; it can only hand it to encrypt/decrypt.
+ * Both keys are non-extractable CryptoKeys, so even this module cannot read
+ * their bytes; it can only hand them to encrypt/decrypt/sign.
  */
 
-let vaultKey: CryptoKey | null = null;
+interface VaultSession {
+  vaultKey: CryptoKey;
+  /** Blinds hostnames before they reach the audit log. */
+  auditKey: CryptoKey | null;
+}
 
-export function setVaultKey(key: CryptoKey) {
-  vaultKey = key;
+let current: VaultSession | null = null;
+
+export function setVaultKey(vaultKey: CryptoKey, auditKey: CryptoKey | null = null) {
+  current = { vaultKey, auditKey };
 }
 
 export function getVaultKey(): CryptoKey | null {
-  return vaultKey;
+  return current?.vaultKey ?? null;
+}
+
+export function getAuditKey(): CryptoKey | null {
+  return current?.auditKey ?? null;
 }
 
 export function isUnlocked(): boolean {
-  return vaultKey !== null;
+  return current !== null;
 }
 
 export function lock() {
-  vaultKey = null;
+  current = null;
 }

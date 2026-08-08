@@ -6,6 +6,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 
+import { terminalTheme } from "@/lib/terminal-theme";
+
 export interface TerminalHandle {
   write(data: string | Uint8Array): void;
   clear(): void;
@@ -39,16 +41,13 @@ export function TerminalView({ ref, onInput, onResize }: Props) {
     if (!containerRef.current) return;
 
     const term = new Terminal({
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontFamily: "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
       fontSize: 13,
+      lineHeight: 1.2,
       cursorBlink: true,
       allowProposedApi: true,
-      theme: {
-        background: "#0b0e14",
-        foreground: "#c9d1d9",
-        cursor: "#6aa9ff",
-        selectionBackground: "#2a3550",
-      },
+      scrollback: 10_000,
+      theme: terminalTheme,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);

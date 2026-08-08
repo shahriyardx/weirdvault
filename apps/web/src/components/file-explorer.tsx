@@ -2,6 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  ArrowClockwiseIcon,
+  ArrowUpIcon,
+  DotsThreeIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  FileIcon,
+  FolderIcon,
+  FolderPlusIcon,
+  UploadSimpleIcon,
+  XIcon,
+} from "@phosphor-icons/react/dist/ssr";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { downloadFile, supportsFileSystemAccess } from "@/lib/transfers/download";
 import {
   chooseStrategy,
@@ -38,7 +62,6 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
   const [error, setError] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [menu, setMenu] = useState<{ x: number; y: number; entry: SftpEntry } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,12 +89,6 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
     // Only on mount / when the connection changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sftp]);
-
-  useEffect(() => {
-    const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, []);
 
   function track(kind: Transfer["kind"], label: string, total: number): Transfer {
     const t: Transfer = {
@@ -151,45 +168,42 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
       }}
     >
       {/* path bar */}
-      <div className="flex items-center gap-1.5 border-b border-[#232a38] px-2 py-1.5">
-        <button onClick={() => void refresh(join(cwd, ".."))} className="icon-btn" title="Up">
-          ↑
-        </button>
-        <button onClick={() => void refresh()} className="icon-btn" title="Refresh">
-          ⟳
-        </button>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#7d8798]">
-          {busy ? "…" : cwd}
+      <div className="border-border flex items-center gap-0.5 border-b px-1.5 py-1.5">
+        <IconAction label="Up a directory" onClick={() => void refresh(join(cwd, ".."))}>
+          <ArrowUpIcon />
+        </IconAction>
+        <IconAction label="Refresh" onClick={() => void refresh()}>
+          <ArrowClockwiseIcon />
+        </IconAction>
+
+        <span className="text-muted-foreground min-w-0 flex-1 truncate px-1 text-[11px]">
+          {busy ? "Loading…" : cwd}
         </span>
-        <button
+
+        <IconAction
+          label={showHidden ? "Hide dotfiles" : "Show dotfiles"}
+          active={showHidden}
           onClick={() => setShowHidden((v) => !v)}
-          className={`icon-btn ${showHidden ? "text-[#6aa9ff]" : ""}`}
-          title="Toggle hidden files"
         >
-          ⌘
-        </button>
-        <button onClick={() => inputRef.current?.click()} className="icon-btn" title="Upload files">
-          ⬆
-        </button>
-        <button
-          onClick={() => dirInputRef.current?.click()}
-          className="icon-btn"
-          title="Upload folder"
-        >
-          📁
-        </button>
-        <button
+          {showHidden ? <EyeIcon /> : <EyeSlashIcon />}
+        </IconAction>
+        <IconAction label="Upload files" onClick={() => inputRef.current?.click()}>
+          <UploadSimpleIcon />
+        </IconAction>
+        <IconAction label="Upload folder" onClick={() => dirInputRef.current?.click()}>
+          <FolderIcon />
+        </IconAction>
+        <IconAction
+          label="New folder"
           onClick={() =>
             void mutate(async () => {
               const name = prompt("New folder name");
               if (name) await sftp.mkdir(join(cwd, name));
             })
           }
-          className="icon-btn"
-          title="New folder"
         >
-          +
-        </button>
+          <FolderPlusIcon />
+        </IconAction>
       </div>
 
       <input
@@ -203,74 +217,138 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
         ref={dirInputRef}
         type="file"
         hidden
-        // @ts-expect-error non-standard but universally supported
+        // @ts-expect-error non-standard but supported everywhere that matters
         webkitdirectory=""
         onChange={(e) => e.target.files && void doUpload(itemsFromInput(e.target.files))}
       />
 
       {error && (
-        <div className="border-b border-[#232a38] bg-[#2a1519] px-2 py-1.5 text-[11px] text-[#ff6b6b]">
+        <div className="border-border bg-destructive/10 text-destructive border-b px-2 py-1.5 text-[11px]">
           {error}
         </div>
       )}
 
       {/* listing */}
-      <div className={`min-h-0 flex-1 overflow-y-auto ${dragging ? "bg-[#16233a]" : ""}`}>
-        {dragging && (
-          <div className="px-2 py-3 text-center text-[11px] text-[#6aa9ff]">
-            Drop files or folders to upload to {cwd}
-          </div>
-        )}
-        {visible.map((entry) => (
-          <div
-            key={entry.name}
-            onDoubleClick={() =>
-              entry.isDir ? void refresh(join(cwd, entry.name)) : onEdit(join(cwd, entry.name))
-            }
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenu({ x: e.clientX, y: e.clientY, entry });
-            }}
-            className="flex cursor-default items-center gap-2 px-2 py-[3px] text-[12px] hover:bg-[#1b2230]"
-          >
-            <span className="w-4 shrink-0 text-center">{entry.isDir ? "📁" : "📄"}</span>
-            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-            {!entry.isDir && (
-              <span className="shrink-0 text-[10px] text-[#7d8798]">{fmtSize(entry.size)}</span>
-            )}
-          </div>
-        ))}
-        {visible.length === 0 && !busy && (
-          <p className="px-2 py-3 text-[11px] text-[#7d8798]">Empty directory.</p>
-        )}
-      </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className={dragging ? "bg-primary/10" : undefined}>
+          {dragging && (
+            <p className="text-primary px-2 py-3 text-center text-[11px]">
+              Drop files or folders to upload to {cwd}
+            </p>
+          )}
+          {visible.map((entry) => (
+            <div
+              key={entry.name}
+              onDoubleClick={() =>
+                entry.isDir ? void refresh(join(cwd, entry.name)) : onEdit(join(cwd, entry.name))
+              }
+              className="hover:bg-accent/60 group flex items-center gap-2 px-2 py-[3px] text-[12px]"
+            >
+              {entry.isDir ? (
+                <FolderIcon weight="fill" className="text-primary size-3.5 shrink-0" />
+              ) : (
+                <FileIcon className="text-muted-foreground size-3.5 shrink-0" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+              {!entry.isDir && (
+                <span className="text-muted-foreground shrink-0 text-[10px]">
+                  {fmtSize(entry.size)}
+                </span>
+              )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-5 shrink-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                    aria-label={`Actions for ${entry.name}`}
+                  >
+                    <DotsThreeIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {!entry.isDir && (
+                    <>
+                      <DropdownMenuItem onSelect={() => onEdit(join(cwd, entry.name))}>
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void doDownload(entry)}>
+                        Download
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {entry.isDir && (
+                    <DropdownMenuItem onSelect={() => onOpenTerminalAt?.(join(cwd, entry.name))}>
+                      Open terminal here
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      const to = prompt("Rename to", entry.name);
+                      if (to) void mutate(() => sftp.rename(join(cwd, entry.name), join(cwd, to)));
+                    }}
+                  >
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      const mode = prompt("New mode (octal)", "644");
+                      if (mode) void mutate(() => sftp.chmod(join(cwd, entry.name), parseInt(mode, 8)));
+                    }}
+                  >
+                    Change permissions
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => {
+                      if (confirm(`Delete ${entry.name}? This cannot be undone.`)) {
+                        void mutate(() => sftp.remove(join(cwd, entry.name)));
+                      }
+                    }}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ))}
+          {visible.length === 0 && !busy && (
+            <p className="text-muted-foreground px-2 py-3 text-[11px]">Empty directory.</p>
+          )}
+        </div>
+      </ScrollArea>
 
       {/* transfer queue */}
       {transfers.length > 0 && (
-        <div className="max-h-40 overflow-y-auto border-t border-[#232a38]">
+        <div className="border-border max-h-40 overflow-y-auto border-t">
           {transfers.map((t) => (
             <div key={t.id} className="px-2 py-1.5 text-[11px]">
               <div className="flex items-center gap-2">
-                <span>{t.kind === "upload" ? "⬆" : "⬇"}</span>
+                <span className="text-muted-foreground">{t.kind === "upload" ? "↑" : "↓"}</span>
                 <span className="min-w-0 flex-1 truncate">{t.label}</span>
                 {t.state === "running" ? (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hover:text-destructive size-5"
+                    aria-label="Cancel transfer"
                     onClick={() => {
                       t.controller.abort();
                       patch(t.id, { state: "cancelled" });
                     }}
-                    className="text-[#7d8798] hover:text-[#ff6b6b]"
                   >
-                    ✕
-                  </button>
+                    <XIcon />
+                  </Button>
                 ) : (
                   <span
                     className={
                       t.state === "complete"
-                        ? "text-[#46d47f]"
+                        ? "text-success"
                         : t.state === "failed"
-                          ? "text-[#ff6b6b]"
-                          : "text-[#7d8798]"
+                          ? "text-destructive"
+                          : "text-muted-foreground"
                     }
                   >
                     {t.state}
@@ -278,82 +356,21 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
                 )}
               </div>
               {t.state === "running" && (
-                <div className="mt-1 h-[3px] overflow-hidden rounded bg-[#232a38]">
-                  <div
-                    className="h-full bg-[#6aa9ff] transition-[width]"
-                    style={{ width: `${t.total ? Math.min(100, (t.done / t.total) * 100) : 0}%` }}
-                  />
-                </div>
+                <Progress
+                  value={t.total ? Math.min(100, (t.done / t.total) * 100) : 0}
+                  className="mt-1 h-[3px]"
+                />
               )}
               {t.detail && (
-                <p className="mt-0.5 truncate text-[10px] text-[#7d8798]">{t.detail}</p>
+                <p className="text-muted-foreground mt-0.5 truncate text-[10px]">{t.detail}</p>
               )}
             </div>
           ))}
         </div>
       )}
 
-      {/* context menu */}
-      {menu && (
-        <div
-          className="fixed z-50 min-w-40 rounded-md border border-[#232a38] bg-[#131822] py-1 text-[12px] shadow-xl"
-          style={{ left: menu.x, top: menu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!menu.entry.isDir && (
-            <>
-              <MenuItem onClick={() => { onEdit(join(cwd, menu.entry.name)); setMenu(null); }}>
-                Edit
-              </MenuItem>
-              <MenuItem onClick={() => { void doDownload(menu.entry); setMenu(null); }}>
-                Download
-              </MenuItem>
-            </>
-          )}
-          {menu.entry.isDir && (
-            <MenuItem
-              onClick={() => {
-                onOpenTerminalAt?.(join(cwd, menu.entry.name));
-                setMenu(null);
-              }}
-            >
-              Open terminal here
-            </MenuItem>
-          )}
-          <MenuItem
-            onClick={() => {
-              const to = prompt("Rename to", menu.entry.name);
-              if (to) void mutate(() => sftp.rename(join(cwd, menu.entry.name), join(cwd, to)));
-              setMenu(null);
-            }}
-          >
-            Rename
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              const mode = prompt("New mode (octal)", "644");
-              if (mode) void mutate(() => sftp.chmod(join(cwd, menu.entry.name), parseInt(mode, 8)));
-              setMenu(null);
-            }}
-          >
-            Change permissions
-          </MenuItem>
-          <MenuItem
-            danger
-            onClick={() => {
-              if (confirm(`Delete ${menu.entry.name}? This cannot be undone.`)) {
-                void mutate(() => sftp.remove(join(cwd, menu.entry.name)));
-              }
-              setMenu(null);
-            }}
-          >
-            Delete
-          </MenuItem>
-        </div>
-      )}
-
       {!supportsFileSystemAccess() && (
-        <p className="border-t border-[#232a38] px-2 py-1 text-[10px] text-[#7d8798]">
+        <p className="border-border text-muted-foreground border-t px-2 py-1 text-[10px]">
           Downloads stream via service worker in this browser.
         </p>
       )}
@@ -361,24 +378,33 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
   );
 }
 
-function MenuItem({
+/** A compact toolbar button with a tooltip, so the icons stay legible. */
+function IconAction({
   children,
+  label,
   onClick,
-  danger,
+  active,
 }: {
   children: React.ReactNode;
+  label: string;
   onClick: () => void;
-  danger?: boolean;
+  active?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`block w-full px-3 py-1.5 text-left hover:bg-[#1b2230] ${
-        danger ? "text-[#ff6b6b]" : ""
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClick}
+          aria-label={label}
+          className={active ? "text-primary size-7" : "size-7"}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

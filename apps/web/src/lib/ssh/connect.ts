@@ -7,9 +7,11 @@
  * the decisions — most importantly, that a host key mismatch is a hard failure.
  */
 
+import { reportAudit } from "@/lib/audit/client";
 import { getPin, HostKeyMismatchError, pin, touchPin } from "@/lib/hostkeys";
 import { authorizedKeysLine, makeSigner, type SshKey } from "@/lib/keys";
 import { rememberHost } from "@/lib/hosts";
+import { getAuditKey } from "@/lib/vault/session";
 
 import { connect as rawConnect, relayUrl } from "./wasm";
 import type { HostKeyInfo, SshSession } from "./types";
@@ -64,7 +66,13 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
     // typed error so the UI can render the warning it deserves rather than a
     // generic connection failure.
     if (seen && (seen as HostKeyInfo).status === "mismatch" && known) {
-      throw new HostKeyMismatchError(hostname, port, known, seen);
+      const info = seen as HostKeyInfo;
+      void reportAudit("hostkey.mismatch", {
+        target: { host: hostname, port },
+        auditKey: getAuditKey(),
+        metadata: { expected: known.fingerprint, presented: info.fingerprint },
+      });
+      throw new HostKeyMismatchError(hostname, port, known, info);
     }
     throw err;
   });
@@ -77,6 +85,11 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
       key: info.key,
       fingerprint: info.fingerprint,
       type: info.type,
+    });
+    void reportAudit("hostkey.pinned", {
+      target: { host: hostname, port },
+      auditKey: getAuditKey(),
+      metadata: { fingerprint: info.fingerprint, keyType: info.type },
     });
     opts.onPinned?.(info);
   } else {
@@ -99,5 +112,14 @@ export async function connectAndInstallKey(
 ): Promise<{ session: SshSession; result: "installed" | "already-present" }> {
   const session = await openSession({ ...opts, key: undefined, password: opts.password });
   const result = await session.installKey(authorizedKeysLine(opts.key));
+
+  void reportAudit("key.installed", {
+    target: { host: opts.hostname, port: opts.port },
+    auditKey: getAuditKey(),
+    // The key id and result, never the authorized_keys line itself — its
+    // comment is user-chosen free text.
+    metadata: { keyId: opts.key.id, result },
+  });
+
   return { session, result };
 }

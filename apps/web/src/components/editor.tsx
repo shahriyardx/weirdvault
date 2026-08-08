@@ -145,32 +145,32 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
   });
 
   return (
-    <div className="flex h-full flex-col bg-[#0b0e14]">
-      <div className="flex items-center gap-3 border-b border-[#232a38] px-3 py-2">
-        <span className="truncate font-mono text-xs text-[#c9d1d9]">
+    <div className="bg-terminal flex h-full flex-col">
+      <div className="border-border flex items-center gap-3 border-b px-3 py-2">
+        <span className="truncate text-xs">
           {path}
-          {dirty && <span className="ml-1.5 text-[#e0a458]">●</span>}
+          {dirty && <span className="text-warning ml-1.5">●</span>}
         </span>
         <div className="ml-auto flex gap-2">
           <button
             onClick={save}
             disabled={!dirty || state !== "ready"}
-            className="rounded border border-[#232a38] bg-[#1b2230] px-2.5 py-1 text-xs disabled:opacity-40"
+            className="border-border bg-secondary hover:bg-accent rounded-sm border px-2.5 py-1 text-xs disabled:opacity-40"
           >
             {state === "saving" ? "Saving…" : "Save"}
           </button>
           <button
             onClick={onClose}
-            className="rounded border border-[#232a38] px-2.5 py-1 text-xs hover:bg-[#1b2230]"
+            className="border-border hover:bg-accent rounded-sm border px-2.5 py-1 text-xs"
           >
             Close
           </button>
         </div>
       </div>
 
-      {error && <div className="bg-[#2a1519] px-3 py-2 text-xs text-[#ff6b6b]">{error}</div>}
+      {error && <div className="bg-destructive/10 text-destructive px-3 py-2 text-xs">{error}</div>}
       {state === "loading" && (
-        <div className="p-3 text-xs text-[#7d8798]">Loading {path}…</div>
+        <div className="text-muted-foreground p-3 text-xs">Loading {path}…</div>
       )}
       <div ref={hostRef} className="min-h-0 flex-1" />
     </div>

@@ -180,9 +180,23 @@ Implemented controls (`spike/relay/main.go`, to be ported to Rust):
 - `-allow-private` exists for local development and must never be set in
   production
 
-Still to add: authentication on the relay itself, per-account connection and
-bandwidth quotas, global rate limits, and running with no cloud IAM role
-attached.
+**Access control.** The relay verifies an HMAC token minted by the control
+plane and **bound to the exact host and port**. That binding is the point: a
+token proving only "a real user" would let any account use the relay as a
+general-purpose TCP proxy to anywhere the rules above permit.
+
+**Anonymous use, stated plainly.** Signing in is not required — the free tier
+works with local storage and no account, and the product says so. Anonymous
+visitors therefore get a token under a random cookie id. That id is trivially
+rotatable, so per-subject quotas are weak for them; what actually bounds abuse
+is the port allowlist, the destination binding, and the relay's global
+connection cap. Signed-in users get a stable subject, a longer token TTL, and
+per-account limits that mean something. This is a deliberate trade of some
+abuse resistance for not putting a signup wall in front of a tool people need
+before they trust us.
+
+Still to add: bandwidth quotas, IP-level rate limits, and running with no cloud
+IAM role attached.
 
 ---
 
