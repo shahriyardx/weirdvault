@@ -169,7 +169,7 @@ use all over again.
 ## 7. Relay abuse
 
 An authenticated WebSocket-to-TCP bridge is an SSRF engine if built carelessly.
-Implemented controls (`spike/relay/main.go`, to be ported to Rust):
+Implemented controls (`crates/relay/src/ssrf.rs`, unit-tested by `make test-relay`):
 
 - Destination port allowlist (22 by default)
 - Reject loopback, RFC1918, link-local, CGNAT, multicast, unspecified

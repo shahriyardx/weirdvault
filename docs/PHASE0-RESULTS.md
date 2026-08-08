@@ -27,7 +27,12 @@ thing the whole product thesis exists to avoid.
 | Bulk throughput | > 20 MB/s | **33.6 MB/s** | PASS |
 | WASM cold boot | — | 46 ms | — |
 
-Reproduce with `make verify` (needs `make sshd`, `make wasm`, `make relay`).
+These numbers were measured on the standalone Phase 0 harness, which has
+since been deleted — it is recoverable from git history if the measurement
+ever needs repeating. The *properties* it established are now checked
+against the real app by `scripts/phase2-verify.mjs` and
+`scripts/signedout-verify.mjs`; the timings are not, since they were taken
+on a bare page with no framework in the way.
 Browser: Chromium 151 headless. Target: `alpine:3` + stock `openssh-server`, no
 patches, no agent, no webxterm-specific configuration.
 
@@ -78,11 +83,15 @@ Stated plainly so nobody quotes them as production figures:
 
 ## Files
 
+As they stood when this was measured. The `wasm/ssh/` files are still there and
+still carry the argument; the rest lived in the Phase 0 harness and were deleted
+once the app superseded them — `git log -- spike/` if you need them back.
+
 ```
 wasm/ssh/signer.go     webCryptoSigner — the load-bearing 100 lines
 wasm/ssh/wsconn.go     net.Conn over a browser WebSocket
 wasm/ssh/main.go       connect(), PTY session, JS handle
-spike/relay/main.go    WebSocket ↔ TCP with SSRF guards
-spike/web/keys.js      non-extractable key custody + authorized_keys formatting
-scripts/phase0-verify.mjs  this test
+spike/relay/main.go    WebSocket ↔ TCP with SSRF guards        (deleted)
+spike/web/keys.js      non-extractable key custody             (deleted)
+scripts/phase0-verify.mjs  this test                           (deleted)
 ```

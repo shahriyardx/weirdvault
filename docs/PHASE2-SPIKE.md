@@ -26,7 +26,9 @@ The second is the one that could have forced a redesign.
 | Uploaded file intact on server | exact | 134217728 bytes | PASS |
 | Bundle size delta from SFTP | — | +0.07 MB Brotli (1.25 → 1.32) | — |
 
-Reproduce: `node scripts/sftp-verify.mjs --size 128`.
+Measured with the standalone SFTP spike, since deleted; see git history.
+That streaming holds in the shipped app is checked by the upload and
+download steps of `scripts/phase2-verify.mjs`.
 
 ## How streaming was actually proven
 

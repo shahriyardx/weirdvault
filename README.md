@@ -48,14 +48,13 @@ Or tick "use password once" and webxterm installs the key itself.
 ## Layout
 
 ```
-apps/web/            Next.js app — marketing, auth, workspace, control plane
+apps/web/            Next.js app — marketing, auth, dashboard, control plane
   src/lib/keys.ts    non-extractable key custody
   src/lib/vault/     split KDF, vault crypto, sync
   src/lib/transfers/ streaming upload/download, USTAR writer
 wasm/ssh/            Go → WASM SSH + SFTP core, WebCrypto signer
 crates/relay/        Rust relay: SSRF guards, tokens, quotas
-spike/               standalone harness used for the de-risking spikes
-docs/                threat model and spike results
+docs/                threat model, deployment, spike results
 ```
 
 ## Running it
@@ -72,23 +71,21 @@ make relay           # Rust relay on :8080   (leave running)
 bun run dev          # app on :3000
 ```
 
-Open http://localhost:3000/workspace.
+Open http://localhost:3000/dashboard.
 
 ## Verifying
 
 ```bash
-make test-relay                 # SSRF guards, token binding, quotas
-node scripts/app-verify.mjs     # Phase 1 workspace, end to end
-node scripts/phase2-verify.mjs  # pinning, explorer, tar upload, Monaco, vault
+make test-relay                    # SSRF guards, token binding, quotas
+node scripts/phase2-verify.mjs     # signed in: pinning, SFTP, tar, Monaco, vault
+node scripts/signedout-verify.mjs  # no account at all: key, connect, shell, files
 ```
 
-Each drives headless Chromium against the dockerized sshd and checks real
-behaviour — that the raw password never appears in any request body, that the
-stored vault ciphertext contains no plaintext hostnames, that the relay refuses
-a token minted for a different destination.
-
-The two spike scripts (`verify:phase0`, `verify:sftp`) target the standalone
-harness and need `make spike-relay` instead, since they predate the Next.js app.
+Both browser suites drive headless Chromium against the dockerized sshd and
+check real behaviour — that the raw password never appears in any request body,
+that the stored vault ciphertext contains no plaintext hostnames, that a changed
+host key is refused rather than re-pinned, that the relay rejects a token minted
+for a different destination.
 
 ## Notes
 

@@ -23,3 +23,6 @@ out/
 
 # rust
 target/
+
+# the phase 0 harness, removed — kept out of the tree if it reappears locally
+spike/
