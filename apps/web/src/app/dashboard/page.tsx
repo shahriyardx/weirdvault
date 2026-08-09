@@ -26,7 +26,6 @@ import {
   LockKeyIcon,
   PlugsConnectedIcon,
   PulseIcon,
-  PushPinIcon,
   ShieldCheckIcon,
   ShieldWarningIcon,
   TerminalWindowIcon,
@@ -35,7 +34,6 @@ import {
 
 import { PageHeader } from "@/components/shell/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -303,25 +301,18 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
   });
 
   const derived = useMemo(() => {
-    const pinnedIds = new Set(pins.map((p) => p.id));
-    const hostPinned = (h: Host) => pinnedIds.has(`${h.hostname}:${h.port}`);
-
     const portable = keys.filter((k) => k.mode === "portable").length;
     const deviceBound = keys.length - portable;
-    const unpinnedHosts = hosts.filter((h) => !hostPinned(h)).length;
     const activeThisWeek = hosts.filter(
       (h) => h.lastUsedAt !== undefined && readAt - h.lastUsedAt < WEEK,
     ).length;
     const lastUsed = hosts.reduce<number>((max, h) => Math.max(max, h.lastUsedAt ?? 0), 0);
 
-    return { hostPinned, portable, deviceBound, unpinnedHosts, activeThisWeek, lastUsed };
-  }, [hosts, keys, pins, readAt]);
+    return { portable, deviceBound, activeThisWeek, lastUsed };
+  }, [hosts, keys, readAt]);
 
   const activity = useMemo(() => buildActivity(hosts, keys, pins), [hosts, keys, pins]);
-  const posture = useMemo(
-    () => buildPosture({ hosts, keys, pins, ...derived }),
-    [hosts, keys, pins, derived],
-  );
+  const posture = useMemo(() => buildPosture({ keys, ...derived }), [keys, derived]);
 
   return (
     <div className="mt-6 space-y-6">
@@ -337,9 +328,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
           label="Hosts"
           value={hosts.length}
           caption={
-            hosts.length === 0
-              ? "None saved on this device"
-              : `${derived.unpinnedHosts === 0 ? "all" : hosts.length - derived.unpinnedHosts} with a pinned host key`
+            hosts.length === 0 ? "None saved on this device" : "Saved on this device"
           }
         />
         <Stat
@@ -405,21 +394,15 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
                       className="flex flex-wrap items-center gap-x-3 gap-y-2 px-(--card-spacing) py-2.5"
                     >
                       <div className="min-w-0 flex-1">
+                        {/* No host-key badge here. It read as a "pin to top"
+                            marker rather than as key trust, and the state it
+                            reported is not one anybody acts on: pinning happens
+                            by itself on first connection, and a mismatch
+                            refuses the connection outright rather than asking. */}
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="truncate font-medium text-foreground">
                             {h.label}
                           </span>
-                          {derived.hostPinned(h) ? (
-                            <Badge variant="outline" className="gap-1 text-muted-foreground">
-                              <PushPinIcon weight="fill" className="text-success" />
-                              pinned
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1 text-muted-foreground">
-                              <WarningIcon className="text-warning" />
-                              unpinned
-                            </Badge>
-                          )}
                         </div>
                         <p className="truncate text-muted-foreground">
                           {h.username}@{h.hostname}:{h.port}
@@ -706,19 +689,13 @@ interface PostureLine {
 }
 
 function buildPosture({
-  hosts,
   keys,
-  pins,
   portable,
   deviceBound,
-  unpinnedHosts,
 }: {
-  hosts: Host[];
   keys: StoredKey[];
-  pins: PinnedHostKey[];
   portable: number;
   deviceBound: number;
-  unpinnedHosts: number;
 }): PostureLine[] {
   const lines: PostureLine[] = [];
 
@@ -742,27 +719,10 @@ function buildPosture({
     });
   }
 
-  if (pins.length > 0) {
-    lines.push({
-      tone: "ok",
-      text: `${pins.length} host ${plural(pins.length, "key")} pinned`,
-      hint: "Checked on every reconnect; a mismatch refuses the connection.",
-    });
-  } else if (hosts.length > 0) {
-    lines.push({
-      tone: "warn",
-      text: "No host keys pinned yet",
-      hint: "The first connection to each host pins its key.",
-    });
-  }
-
-  if (unpinnedHosts > 0) {
-    lines.push({
-      tone: "warn",
-      text: `${unpinnedHosts} ${plural(unpinnedHosts, "host")} not yet verified`,
-      hint: "Trust is established on the first connection to each one.",
-    });
-  }
+  /* Host-key pinning used to contribute two lines here, one of them a warning
+     about hosts nobody had connected to yet. Both were removed with the badge:
+     they described bookkeeping the user does not drive and cannot act on. A
+     mismatch still refuses the connection, which is where it matters. */
 
   if (deviceBound > 0) {
     lines.push({
