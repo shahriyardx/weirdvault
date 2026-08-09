@@ -30,6 +30,7 @@ import {
   PlusIcon,
   ProhibitIcon,
   TerminalWindowIcon,
+  TrashIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -292,6 +293,16 @@ function AgentRow({
     await onChanged();
   }
 
+  async function forget() {
+    const res = await fetch(`/api/agents/${agent.id}?forget=1`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Could not remove that machine");
+      return;
+    }
+    toast.success("Removed. That key can enrol again.");
+    await onChanged();
+  }
+
   return (
     <div className="border-border flex flex-wrap items-center gap-3 rounded-lg border p-4">
       <DesktopTowerIcon
@@ -380,6 +391,33 @@ function AgentRow({
             </AlertDialogContent>
           </AlertDialog>
         </div>
+      )}
+
+      {revoked && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <TrashIcon />
+              Forget
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove {agent.label} from the list?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Revoking retired this machine&rsquo;s key permanently. Removing the
+                record frees that key, so a machine still holding its agent.json
+                could enrol it again — with a fresh token, which only you can
+                create. If you revoked it because it was lost or stolen, leave it
+                here.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep the record</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void forget()}>Remove</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       <Dialog open={renaming} onOpenChange={setRenaming}>

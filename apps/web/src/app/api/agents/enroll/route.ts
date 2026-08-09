@@ -159,11 +159,16 @@ export async function POST(request: Request) {
     // disk image carrying somebody else's key into a second VM. The token is
     // untouched — the rollback saw to that — so the same command can be retried.
     console.warn("agent enrollment failed", e);
+    // Deliberately does NOT say "revoke the old agent first". Revoking keeps the
+    // row, and the row is what holds the unique index on public_key — so that
+    // advice sent people round in a circle. A retired key stays retired; the
+    // machine needs a new one.
     return Response.json(
       {
         error:
-          "That key is already enrolled. If you are re-enrolling this machine, revoke the " +
-          "old agent in the dashboard first, or delete /etc/webxterm-agent/agent.json.",
+          "That key is already enrolled here. Delete /etc/webxterm-agent/agent.json on " +
+          "that machine and run the install command again — enrolment generates a fresh " +
+          "key. If the old machine is listed as revoked, use Forget to remove it entirely.",
       },
       { status: 409 },
     );

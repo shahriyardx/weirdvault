@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
@@ -56,9 +56,12 @@ export async function PATCH(
 /**
  * Revoke: a tombstone, not a delete.
  *
- * The row stays so the id can never be re-issued and so a host record in
- * somebody's vault still resolves to *something* — a machine that says "revoked"
- * rather than a dangling reference that says nothing.
+ * The row is what holds the unique index over `public_key`, so keeping it
+ * retires that keypair for good. Delete instead and a machine still holding its
+ * agent.json could enrol the same key and rejoin under a new id — which needs a
+ * token only the owner can mint, so it is not an attack, but "I revoked that
+ * laptop" ought to mean the key is dead rather than dormant. Pass ?forget=1
+ * afterwards to delete it for real and free the key.
  *
  * Revoking takes effect immediately in both directions that matter.
  * /api/agents/verify reads `revoked_at`, so the agent's next reconnect fails;
@@ -73,13 +76,48 @@ export async function PATCH(
  * control connection carrying no new sessions.
  */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  /**
+   * Forget: a real delete, and only for a row that is already revoked.
+   *
+   * Revoking retires the keypair, because the row is what holds the unique
+   * index over public_key. That is usually what you want and occasionally not:
+   * a machine you are rebuilding, a test enrolment, a list you would like to
+   * stop reading. Forgetting frees the key so that exact machine can enrol
+   * again with the config it still has.
+   *
+   * Gated on already-revoked rather than offered outright, so that "stop this
+   * machine connecting" and "and also let it back in later" stay two decisions.
+   * Deleting a live agent in one click would quietly make revocation weaker
+   * than the word implies.
+   */
+  if (new URL(request.url).searchParams.get("forget") === "1") {
+    const forgotten = await db
+      .delete(schema.agent)
+      .where(
+        and(
+          eq(schema.agent.id, id),
+          eq(schema.agent.userId, user.id),
+          isNotNull(schema.agent.revokedAt),
+        ),
+      )
+      .returning({ id: schema.agent.id });
+
+    if (forgotten.length === 0) {
+      return Response.json(
+        { error: "not found, or not revoked yet" },
+        { status: 404 },
+      );
+    }
+    return Response.json({ ok: true, forgotten: true });
+  }
 
   const revoked = await db
     .update(schema.agent)
