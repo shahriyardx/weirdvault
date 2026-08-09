@@ -1,0 +1,310 @@
+package main
+
+import (
+	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"math/rand"
+	"net"
+	"net/url"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+
+	"github.com/coder/websocket"
+)
+
+const (
+	// Frames carry SSH ciphertext, and the relay reads its TCP side in 64 KiB
+	// chunks. The library's 32 KiB default would tear down the connection the
+	// first time somebody moved a file.
+	readLimit = 1 << 20
+
+	dialTimeout    = 15 * time.Second
+	localTimeout   = 10 * time.Second
+	handshakeLimit = 20 * time.Second
+
+	backoffMin = 1 * time.Second
+	backoffMax = 60 * time.Second
+)
+
+type controlMessage struct {
+	Type      string `json:"type"`
+	Nonce     string `json:"nonce"`
+	Ticket    string `json:"ticket"`
+	Port      int    `json:"port"`
+	Reason    string `json:"reason"`
+	AgentID   string `json:"agentId,omitempty"`
+	Signature string `json:"signature,omitempty"`
+}
+
+func runAgent(args []string) error {
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := loadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	priv, err := cfg.privateKey()
+	if err != nil {
+		return err
+	}
+
+	// SIGTERM is what systemd sends; without it the service is killed outright
+	// and every session it is carrying dies mid-byte instead of closing.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	log.SetFlags(0) // journald stamps its own timestamps
+	log.Printf("webxterm-agent %s starting: agent=%s relay=%s", version, cfg.AgentID, cfg.RelayURL)
+
+	backoff := backoffMin
+	for ctx.Err() == nil {
+		start := time.Now()
+		err := serve(ctx, cfg, priv)
+
+		if ctx.Err() != nil {
+			break
+		}
+		if err != nil {
+			log.Printf("connection ended: %v", err)
+		}
+
+		// A connection that lasted a while was working, so the next failure
+		// should retry promptly rather than inheriting the backoff from
+		// whatever went wrong hours ago.
+		if time.Since(start) > 2*time.Minute {
+			backoff = backoffMin
+		}
+
+		wait := jitter(backoff)
+		log.Printf("reconnecting in %s", wait.Round(time.Millisecond))
+		select {
+		case <-ctx.Done():
+		case <-time.After(wait):
+		}
+
+		backoff *= 2
+		if backoff > backoffMax {
+			backoff = backoffMax
+		}
+	}
+
+	log.Printf("shutting down")
+	return nil
+}
+
+// serve holds one control connection until it dies.
+func serve(ctx context.Context, cfg *Config, priv ed25519.PrivateKey) error {
+	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(dialCtx, cfg.controlURL(), nil)
+	if err != nil {
+		return fmt.Errorf("could not reach the relay: %w", err)
+	}
+	conn.SetReadLimit(readLimit)
+	defer conn.CloseNow()
+
+	handshakeCtx, cancelHandshake := context.WithTimeout(ctx, handshakeLimit)
+	defer cancelHandshake()
+	if err := authenticate(handshakeCtx, conn, cfg, priv); err != nil {
+		return err
+	}
+	log.Printf("online")
+
+	for {
+		var msg controlMessage
+		if err := readJSON(ctx, conn, &msg); err != nil {
+			return err
+		}
+
+		switch msg.Type {
+		case "open":
+			// Deliberately not awaited. A machine can carry several sessions at
+			// once, and a dial to a wedged local port must not stop the control
+			// connection from answering the next request.
+			go func(ticket string, port int) {
+				if err := openStream(ctx, cfg, ticket, port); err != nil {
+					log.Printf("stream for 127.0.0.1:%d failed: %v", port, err)
+				}
+			}(msg.Ticket, msg.Port)
+		default:
+			log.Printf("ignoring unknown control message %q", msg.Type)
+		}
+	}
+}
+
+// authenticate proves this process holds the key the account enrolled.
+func authenticate(ctx context.Context, conn *websocket.Conn, cfg *Config, priv ed25519.PrivateKey) error {
+	hello, err := json.Marshal(controlMessage{Type: "hello", AgentID: cfg.AgentID})
+	if err != nil {
+		return err
+	}
+	if err := conn.Write(ctx, websocket.MessageText, hello); err != nil {
+		return fmt.Errorf("could not send hello: %w", err)
+	}
+
+	var challenge controlMessage
+	if err := readJSON(ctx, conn, &challenge); err != nil {
+		return fmt.Errorf("no challenge from the relay: %w", err)
+	}
+	if challenge.Type != "challenge" || challenge.Nonce == "" {
+		return fmt.Errorf("expected a challenge, got %q", challenge.Type)
+	}
+
+	sig := ed25519.Sign(priv, signingMessage(cfg.AgentID, challenge.Nonce))
+	proof, err := json.Marshal(controlMessage{
+		Type:      "proof",
+		Signature: base64.StdEncoding.EncodeToString(sig),
+	})
+	if err != nil {
+		return err
+	}
+	if err := conn.Write(ctx, websocket.MessageText, proof); err != nil {
+		return fmt.Errorf("could not send proof: %w", err)
+	}
+
+	var ready controlMessage
+	if err := readJSON(ctx, conn, &ready); err != nil {
+		// The relay closes with a reason when it refuses, and that reason is the
+		// only thing that distinguishes "revoked in the dashboard" from "the
+		// control plane is down" — both of which otherwise look like a socket
+		// that closed.
+		return fmt.Errorf("the relay refused this agent: %w", err)
+	}
+	if ready.Type != "ready" {
+		return fmt.Errorf("expected ready, got %q %s", ready.Type, ready.Reason)
+	}
+	return nil
+}
+
+// openStream answers one open request: dial sshd, dial back, splice.
+func openStream(ctx context.Context, cfg *Config, ticket string, port int) error {
+	if ticket == "" {
+		return fmt.Errorf("open request carried no ticket")
+	}
+	// The relay asks for a port and the relay got that port from the browser.
+	// This is the boundary that keeps an agent from being a way into everything
+	// else listening on loopback; see Config.allows.
+	if !cfg.allows(port) {
+		return fmt.Errorf("refused: port %d is not in allowedPorts %v", port, cfg.AllowedPorts)
+	}
+
+	local, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), localTimeout)
+	if err != nil {
+		return fmt.Errorf("could not reach sshd: %w", err)
+	}
+	defer local.Close()
+
+	if tcp, ok := local.(*net.TCPConn); ok {
+		tcp.SetNoDelay(true) // interactive typing must not wait on Nagle
+	}
+
+	streamURL, err := url.Parse(cfg.streamURL())
+	if err != nil {
+		return err
+	}
+	q := streamURL.Query()
+	q.Set("ticket", ticket)
+	streamURL.RawQuery = q.Encode()
+
+	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+	conn, _, err := websocket.Dial(dialCtx, streamURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("could not dial back: %w", err)
+	}
+	conn.SetReadLimit(readLimit)
+	defer conn.CloseNow()
+
+	splice(ctx, conn, local)
+	return nil
+}
+
+// splice copies between the relay socket and sshd until either end stops.
+func splice(ctx context.Context, conn *websocket.Conn, local net.Conn) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	done := make(chan struct{}, 2)
+
+	// Relay to sshd.
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			typ, data, err := conn.Read(ctx)
+			if err != nil {
+				return
+			}
+			// Text on a stream socket is not something this protocol produces.
+			// Writing it to sshd would corrupt the session in a way that
+			// surfaces as a decryption failure much later.
+			if typ != websocket.MessageBinary {
+				continue
+			}
+			if _, err := local.Write(data); err != nil {
+				return
+			}
+		}
+	}()
+
+	// sshd to relay.
+	go func() {
+		defer func() { done <- struct{}{} }()
+		buf := make([]byte, 32<<10)
+		for {
+			n, err := local.Read(buf)
+			if n > 0 {
+				if err := conn.Write(ctx, websocket.MessageBinary, buf[:n]); err != nil {
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// One half ending means the session is over; cancelling unblocks the other,
+	// which would otherwise sit in a read that nothing will ever satisfy.
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+	cancel()
+	local.Close()
+	conn.Close(websocket.StatusNormalClosure, "")
+}
+
+func readJSON(ctx context.Context, conn *websocket.Conn, out *controlMessage) error {
+	for {
+		typ, data, err := conn.Read(ctx)
+		if err != nil {
+			return err
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+		return json.Unmarshal(data, out)
+	}
+}
+
+// jitter spreads reconnects out.
+//
+// Without it, a relay restart brings every agent back simultaneously and each
+// wave lands on the same second as the last — the fleet synchronises itself into
+// a thundering herd that the backoff was supposed to prevent.
+func jitter(d time.Duration) time.Duration {
+	return d/2 + time.Duration(rand.Int63n(int64(d/2)+1))
+}
