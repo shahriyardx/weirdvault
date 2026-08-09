@@ -28,9 +28,10 @@ type enrollRequest struct {
 }
 
 type enrollResponse struct {
-	AgentID  string `json:"agentId"`
-	RelayURL string `json:"relayUrl"`
-	Error    string `json:"error"`
+	AgentID    string `json:"agentId"`
+	RelayURL   string `json:"relayUrl"`
+	ReleaseURL string `json:"releaseUrl"`
+	Error      string `json:"error"`
 }
 
 // runEnroll trades a one-time token for a lasting identity.
@@ -133,6 +134,7 @@ func runEnroll(args []string) error {
 		// the same secret twice.
 		PrivateKey:   base64.StdEncoding.EncodeToString(priv.Seed()),
 		RelayURL:     out.RelayURL,
+		ReleaseURL:   out.ReleaseURL,
 		AllowedPorts: []int{*port},
 	}
 	if err := saveConfig(*configPath, cfg); err != nil {
@@ -169,9 +171,15 @@ func runStatus(args []string) error {
 	}
 
 	fmt.Printf("Agent:       %s\n", cfg.AgentID)
+	fmt.Printf("Version:     %s\n", version)
 	fmt.Printf("Fingerprint: %s\n", fingerprint(priv.Public().(ed25519.PublicKey)))
 	fmt.Printf("Relay:       %s\n", cfg.RelayURL)
 	fmt.Printf("Forwards to: 127.0.0.1:%v\n", cfg.AllowedPorts)
+	if cfg.ReleaseURL == "" {
+		fmt.Printf("Updates:     off (enrolled before self-update; re-enrol to enable)\n")
+	} else {
+		fmt.Printf("Updates:     %s\n", cfg.ReleaseURL)
+	}
 	return nil
 }
 

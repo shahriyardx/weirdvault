@@ -17,23 +17,16 @@
  * binary being served from somewhere else, which is exactly when it is required.
  */
 
-export const dynamic = "force-dynamic";
+import { agentReleaseUrl } from "@/lib/agents/enrollment";
 
-/**
- * Where the compiled agents live.
- *
- * Defaults to this origin. Point it at a release host (GitHub releases, a CDN)
- * and the checksum verification stops being belt-and-braces and starts being the
- * thing that makes it safe.
- */
-function releaseBase(origin: string): string {
-  const configured = process.env.AGENT_RELEASE_BASE_URL?.replace(/\/$/, "");
-  return configured || `${origin}/agent-bin`;
-}
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
-  const base = releaseBase(origin);
+  // The same resolver the enrolment route hands to agents for self-update. Two
+  // copies would drift, and the failure would be an agent updating itself from
+  // somewhere the installer never used.
+  const base = agentReleaseUrl(origin);
 
   const script = `#!/bin/sh
 # webxterm-agent installer
@@ -235,8 +228,24 @@ ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6
 RestrictNamespaces=yes
 LockPersonality=yes
-MemoryDenyWriteExecute=yes
 ReadOnlyPaths=\${CONFIG_DIR}
+
+# Self-update needs to replace the binary in place, and ProtectSystem=strict
+# makes /usr read-only. This is the narrowest hole that allows it: the
+# directory the agent already lives in, and nothing else. Writing the whole
+# directory rather than the one file is not laziness — the replacement is a
+# temp file plus a rename, which is what makes a half-downloaded binary
+# impossible, and rename needs somewhere in the same filesystem to write.
+#
+# If you would rather patch agents yourself, add --no-update to ExecStart above
+# and drop this line; the agent then never touches its own binary.
+ReadWritePaths=\${INSTALL_DIR}
+
+# MemoryDenyWriteExecute is deliberately absent. The Go runtime does not need
+# W+X pages, but re-exec after an update trips it on some kernels, and a
+# hardening flag that turns updates into a crash loop is worse than the
+# marginal protection it buys on a process that parses no untrusted input
+# beyond a JSON control message.
 
 [Install]
 WantedBy=multi-user.target

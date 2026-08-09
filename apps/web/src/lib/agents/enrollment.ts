@@ -82,6 +82,26 @@ export function tokensMatch(a: string, b: string): boolean {
  * Returns null when the relay is not configured, which the enrollment route
  * turns into a refusal rather than handing the agent a URL to nowhere.
  */
+/**
+ * Where an agent looks for a newer build of itself.
+ *
+ * Handed out at enrolment and written into the agent's config, rather than
+ * compiled in, so a self-hosted deployment updates its own machines from its own
+ * origin and never phones anywhere else.
+ *
+ * Same value `/install.sh` downloads from, deliberately: the binary an agent
+ * replaces itself with must be the one a fresh install would get, or a machine's
+ * behaviour would depend on how it was set up.
+ *
+ * The agent refuses plaintext http from anything but loopback — it is fetching
+ * something it will execute as root, unattended, forever — so a deployment
+ * served over http:// simply will not self-update, which is the correct outcome
+ * rather than an error to work around.
+ */
+export function agentReleaseUrl(origin: string): string {
+  return process.env.AGENT_RELEASE_BASE_URL?.replace(/\/$/, "") || `${origin}/agent-bin`;
+}
+
 export function agentRelayUrl(): string | null {
   const relay = process.env.NEXT_PUBLIC_RELAY_URL;
   if (!relay) return null;

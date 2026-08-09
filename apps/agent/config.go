@@ -32,6 +32,11 @@ type Config struct {
 	// Ports on loopback this agent will forward to. Anything not in here is
 	// refused however the request arrives.
 	AllowedPorts []int `json:"allowedPorts"`
+	// Where newer builds are published, from the deployment that enrolled this
+	// machine. Empty on an agent enrolled before self-update existed, which
+	// disables the check rather than guessing a URL to download root-executed
+	// binaries from.
+	ReleaseURL string `json:"releaseUrl,omitempty"`
 }
 
 func (c *Config) controlURL() string { return c.RelayURL + "/control" }

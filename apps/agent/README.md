@@ -77,6 +77,38 @@ to `127.0.0.1` precisely because it was assumed unreachable.
 
 Enrollment writes a single entry. Widen it only deliberately.
 
+## Self-update
+
+The agent checks for a newer build when it starts, replaces its own binary, and
+re-execs. An agent lives on a machine in somebody's house; without this, every
+fix reaches it only when a person walks over and copies a file, which is not a
+workaround but a missing feature.
+
+It reads `manifest.json` from the release URL it was given at enrolment — the
+same place `/install.sh` downloads from, so a machine's behaviour does not
+depend on how it was set up. Different version means update; the versions are
+`git describe` strings and inventing an ordering for them would be inventing a
+wrong one.
+
+**What this trusts.** It downloads a binary and runs it as root. The manifest
+and the binary come from the same origin, so the SHA-256 proves the download was
+not corrupted — it does not prove the origin is honest. TLS to the deployment's
+own domain is the real trust anchor, the same one the install command already
+relies on. What that does not extend to is plaintext: `install.sh` is fetched
+once by a person who can read the URL they typed, while this runs unattended
+forever, so **http:// is refused unless it is loopback**.
+
+Bounded to one attempt per start: the re-exec'd process finds an environment
+marker and skips the check, so a manifest whose version never matches cannot
+produce a restart loop.
+
+`--no-update` disables it. Under systemd it also needs `ReadWritePaths` on the
+install directory, since `ProtectSystem=strict` makes `/usr` read-only — the
+unit written by `install.sh` includes it, and says how to drop it.
+
+Agents enrolled before this existed have no release URL and never check;
+`webxterm-agent status` says so rather than implying they are up to date.
+
 ## Build
 
 ```bash
@@ -93,6 +125,9 @@ for target in linux/amd64 linux/arm64 linux/arm darwin/arm64; do
 done
 sha256sum webxterm-agent_* > checksums.txt
 ```
+
+Or just `bun run agent`, which does all of that and writes `manifest.json`
+beside it.
 
 `checksums.txt` is **required**, not optional. `/install.sh` refuses to install
 without it — a verification that is skipped when the file is missing verifies

@@ -70,6 +70,7 @@ type controlMessage struct {
 func runAgent(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	noUpdate := fs.Bool("no-update", false, "do not replace this binary at startup")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -90,6 +91,18 @@ func runAgent(args []string) error {
 
 	log.SetFlags(0) // journald stamps its own timestamps
 	log.Printf("webxterm-agent %s starting: agent=%s relay=%s", version, cfg.AgentID, cfg.RelayURL)
+
+	// Before anything connects. An update that landed while this machine was
+	// asleep should take effect now rather than after the next reboot, and
+	// re-execing mid-session would drop connections that are carrying somebody's
+	// shell.
+	if !*noUpdate && selfUpdate(ctx, cfg) {
+		if err := reexec(); err != nil {
+			// The new binary is already on disk, so the next restart picks it up
+			// regardless. Carrying on with the old one beats refusing to run.
+			log.Printf("could not restart into the new build, staying on %s: %v", version, err)
+		}
+	}
 
 	backoff := backoffMin
 	for ctx.Err() == nil {
@@ -365,6 +378,24 @@ func readJSON(ctx context.Context, conn *websocket.Conn, out *controlMessage) er
 		}
 		return json.Unmarshal(data, out)
 	}
+}
+
+// reexec replaces this process with the binary now on disk.
+//
+// exec rather than exit-and-let-systemd-restart: it keeps the PID, the unit and
+// the open file descriptors, so a supervisor sees a process that never stopped
+// rather than a restart it might count against a rate limit. It also means this
+// works when nothing is supervising at all — a plain `webxterm-agent run` in a
+// terminal comes back as the new version.
+func reexec() error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	// The marker is what stops an update loop: the process this becomes will see
+	// it and skip the check entirely.
+	env := append(os.Environ(), updatedMarker+"=1")
+	return syscall.Exec(self, os.Args, env)
 }
 
 // closeText pulls the relay's own words out of a close error.

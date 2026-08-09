@@ -84,4 +84,23 @@ const lines = readdirSync(OUT_DIR)
   .map((f) => `${createHash("sha256").update(readFileSync(join(OUT_DIR, f))).digest("hex")}  ${f}`);
 
 writeFileSync(join(OUT_DIR, "checksums.txt"), lines.join("\n") + "\n");
-console.log(`\nchecksums.txt:\n${lines.join("\n")}`);
+
+// The same facts again, shaped for a machine rather than a shell script.
+//
+// checksums.txt is what /install.sh greps because that is what sha256sum
+// produces and what an operator regenerates by hand. manifest.json is what a
+// running agent reads to decide whether to replace itself, and it carries the
+// version — which checksums.txt has no place to put.
+const manifest = {
+  version,
+  binaries: Object.fromEntries(
+    lines.map((line) => {
+      const [sha256, file] = line.split(/\s+/);
+      return [file.replace("webxterm-agent_", ""), { file, sha256 }];
+    }),
+  ),
+};
+writeFileSync(join(OUT_DIR, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+
+console.log(`\nmanifest.json: version ${version}, ${Object.keys(manifest.binaries).length} targets`);
+console.log(lines.join("\n"));

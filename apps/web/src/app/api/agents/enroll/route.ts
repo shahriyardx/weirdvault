@@ -4,6 +4,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import {
   agentRelayUrl,
+  agentReleaseUrl,
   hashEnrollmentToken,
   looksLikeEnrollmentToken,
 } from "@/lib/agents/enrollment";
@@ -58,6 +59,7 @@ function isBase64Key(value: unknown): value is string {
 }
 
 export async function POST(request: Request) {
+  const releaseUrl = agentReleaseUrl(new URL(request.url).origin);
   const relayUrl = agentRelayUrl();
   if (!relayUrl) {
     return Response.json(
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
     return Response.json({ error: outcome.error }, { status: outcome.status });
   }
 
-  return Response.json({ agentId, relayUrl });
+  return Response.json({ agentId, relayUrl, releaseUrl });
 }
 
 /** Not a browser endpoint; a GET here is a misconfiguration worth naming. */
