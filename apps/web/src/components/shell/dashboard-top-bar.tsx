@@ -7,7 +7,6 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { signOut } from "@/lib/auth-client";
@@ -19,8 +18,6 @@ export function DashboardTopBar() {
   return (
     <header className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger className="size-7" />
-      <Separator orientation="vertical" className="!h-5 self-center" />
-
       <div className="ml-auto flex items-center gap-2">
         {/* State and its action in one control, because they are the same
             decision. This used to be an inert badge reading "Local only" when
