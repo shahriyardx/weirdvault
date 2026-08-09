@@ -13,7 +13,6 @@ import {
   PlusIcon,
   SquaresFourIcon,
   TerminalWindowIcon,
-  UsersThreeIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
@@ -60,7 +59,6 @@ export function AppSidebar() {
   const account = [
     { href: "/dashboard/devices", label: "Devices", icon: DevicesIcon },
     { href: "/dashboard/activity", label: "Activity", icon: ClockCounterClockwiseIcon },
-    { href: "/dashboard/team", label: "Team", icon: UsersThreeIcon },
     { href: "/dashboard/settings", label: "Settings", icon: GearSixIcon },
   ] as const;
 

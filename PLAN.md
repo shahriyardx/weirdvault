@@ -119,6 +119,7 @@ These are structural, not bugs. Design around them and say so out loud.
 | **Relay must reach the host** | Servers behind NAT/firewall are unreachable | Publish static relay IPs for allowlisting; Tailscale/WireGuard support later; optional tiny agent as an explicit, opt-in exception to zero-install |
 | **Relay sees metadata** | It routes packets: target IP/port, timing, byte volume | State it in the threat model. Self-hosting removes it entirely |
 | **No mosh** | Mosh needs UDP; browsers don't do raw UDP | Fast reconnect + tmux. Revisit if WebTransport matures |
+| **No port forwarding** | Decided against, not blocked. `-L` needs the client to *listen* on a local TCP port and a tab cannot, so serving a native client would need a local daemon — the one thing we promise you don't install. The remote-facing half (`direct-tcpip` to reach a service bound to the host's localhost) is buildable and was still cut | None. Don't re-add it from an old roadmap |
 | **Mobile keyboards are hostile** | No Ctrl/Esc/arrows on touch keyboards | Custom accessory key bar — treat as a first-class feature, not a patch |
 | **First load is multi-MB** | Go WASM | Service Worker precache; subsequent loads are instant and offline-capable |
 
@@ -161,7 +162,7 @@ Stock `sshd`. No agent, no daemon, no extra port, no root. Uninstalling is delet
 **Optional, user's choice:**
 - `tmux`/`screen` — enables one-click reattach after a tab close. Usually already installed
 - `tar` — enables the fast path for uploading folders of many small files. Universally present
-- **SSH CA** (Phase 5) — one `TrustedUserCAKeys` line in `sshd_config` + reload. After that, new devices never touch `authorized_keys` again and revocation actually works. Push teams toward this
+- **SSH CA** (Phase 5) — one `TrustedUserCAKeys` line in `sshd_config` + reload. After that, new devices never touch `authorized_keys` again and revocation actually works. Worth pushing anyone with more than a handful of servers toward
 
 ---
 
@@ -211,10 +212,9 @@ Auto-attached to every session, one keystroke away, sharing the same SSH connect
 
 - Folders, tags, search, favorites, recent
 - **Credential inheritance**: set a key on a folder, every host below inherits it
-- Jump hosts / ProxyJump chains, per-host port forwards
+- Jump hosts / ProxyJump chains
 - `~/.ssh/config` import **and export** — never trap users
 - Snippets with `{{variables}}`, run-on-many-hosts
-- Port forwarding manager: local/remote/dynamic SOCKS, visual on/off toggles
 
 ### 3.5 Sync — free, zero-knowledge
 
@@ -232,7 +232,7 @@ A non-extractable WebCrypto key **cannot leave the browser that made it.** That'
 | **Device-bound** | Non-extractable from birth, never syncs. Each device makes its own key; all pubkeys go in `authorized_keys` | Max security. New device = touch the server once |
 | **SSH CA** *(Phase 5)* | Servers trust a CA once. Each device gets a short-lived cert | Best of both. Instant new devices, real revocation, no `authorized_keys` edits ever again |
 
-**Portable is the default** because "open a browser anywhere and connect" is the entire product. Device-bound is one toggle away for people who want it. SSH CA is the endgame for teams — it's the only mode where revoking a lost laptop doesn't mean SSHing into every server.
+**Portable is the default** because "open a browser anywhere and connect" is the entire product. Device-bound is one toggle away for people who want it. SSH CA is the endgame for anyone with more than a handful of servers — it's the only mode where revoking a lost laptop doesn't mean SSHing into every server.
 
 Whichever mode, the server holds ciphertext only.
 
@@ -250,20 +250,20 @@ Whichever mode, the server holds ciphertext only.
 | Key custody | **WebCrypto non-extractable** + IndexedDB handles | the core differentiator |
 | Vault crypto | WebCrypto AES-GCM + `argon2` WASM | |
 | Sync | **Automerge** over ciphertext | |
-| Auth & orgs | **Better Auth** — organization, SSO, passkeys, 2FA plugins | teams/RBAC/invites out of the box |
+| Auth | **Better Auth** — email/password, passkeys, 2FA plugins | one account per person; the organization plugin was enabled and has been removed |
 | ORM | **Drizzle** + `drizzle-kit` migrations | Better Auth ships a Drizzle adapter |
-| Database | **Postgres** (Neon / Supabase / RDS) | ciphertext blobs, orgs, audit, billing |
+| Database | **Postgres** (Neon / Supabase / RDS) | ciphertext blobs, audit, billing |
 | Relay | **Rust** + tokio + axum | stateless; **cannot run on Vercel** — see below |
 | Offline/caching | **Service Worker** via **Serwist** | precaches WASM; powers streaming downloads |
 | Deploy | Next.js on Vercel; relay on Fly.io / Railway / bare metal | relay needs long-lived raw TCP |
 
 ### 4.1 Three notes that matter
 
-**The control plane is now Next.js, not Rust.** Better Auth + Drizzle covers accounts, sessions, organizations, roles, invitations, and SSO — which was most of Phase 5. Route handlers serve the vault-blob sync API. One less service to run.
+**The control plane is now Next.js, not Rust.** Better Auth + Drizzle covers accounts and sessions. Route handlers serve the vault-blob sync API. One less service to run.
 
 **The relay stays Rust and deploys separately.** It holds long-lived WebSocket connections bridged to raw TCP :22 — serverless functions cannot do this at all. Fly.io or Railway, multi-region for keystroke latency. This split is not negotiable; don't try to fold it into Next.js.
 
-**The workspace is a client island.** `/app/(workspace)` is `"use client"` end to end — xterm.js, WASM, WebCrypto, and IndexedDB are all browser-only, and RSC buys nothing there. Next.js earns its place on the *other* routes: landing, docs, pricing, auth, billing, team admin. Load the WASM blob from `/public` with an explicit `fetch` + `WebAssembly.instantiateStreaming` rather than fighting the bundler.
+**The workspace is a client island.** `/app/(workspace)` is `"use client"` end to end — xterm.js, WASM, WebCrypto, and IndexedDB are all browser-only, and RSC buys nothing there. Next.js earns its place on the *other* routes: landing, docs, pricing, auth, billing, account settings. Load the WASM blob from `/public` with an explicit `fetch` + `WebAssembly.instantiateStreaming` rather than fighting the bundler.
 
 ### 4.2 The trap: Better Auth's password is NOT the vault passphrase
 
@@ -282,11 +282,11 @@ webxterm/
 ├─ apps/web/                    # Next.js — marketing, auth, billing, API, workspace
 │  ├─ app/(marketing)/          # landing, pricing, docs         [RSC]
 │  ├─ app/(auth)/               # Better Auth flows              [RSC]
-│  ├─ app/(dashboard)/          # team admin, billing, audit     [RSC]
+│  ├─ app/(dashboard)/          # account, billing, audit        [RSC]
 │  ├─ app/(workspace)/          # the terminal app           ["use client"]
 │  ├─ app/api/auth/[...all]/    # Better Auth handler
 │  ├─ app/api/vault/            # encrypted blob sync
-│  ├─ lib/auth.ts               # Better Auth + organization/SSO plugins
+│  ├─ lib/auth.ts               # Better Auth, no plugins
 │  ├─ lib/db/                   # Drizzle schema + migrations
 │  ├─ lib/vault/                # WebCrypto custody, KDF split, Automerge
 │  ├─ components/terminal/      # xterm, panes, mobile keybar
@@ -320,13 +320,13 @@ Key gen/import, host form, single terminal, relay with SSRF guards, password + k
 SFTP explorer, streaming up/download, drag-drop folders, transfer queue, tar-pipe fast path, previews, Monaco remote editing. *This is the demo that gets shared.*
 
 ### Phase 3 — Workspace (4–6 weeks)
-Accounts, zero-knowledge vault, Automerge sync, tabs/splits, folders + credential inheritance, `ssh_config` import/export, snippets, port forwarding, themes.
+Accounts, zero-knowledge vault, Automerge sync, tabs/splits, folders + credential inheritance, `ssh_config` import/export, snippets, themes.
 
 ### Phase 4 — Collaborate (6 weeks)
 Share-a-session links (read-only / read-write), session recording + replay, approval-gated AI (explain output, draft command, triage errors) with destructive-command guard.
 
-### Phase 5 — Teams (8 weeks)
-Team vaults via X25519 key wrapping, RBAC, audit log + export, SSO/SCIM, self-host Docker + Helm, static relay IPs for allowlisting.
+### Phase 5 — Teams (8 weeks) · **withdrawn**
+Team key distribution shipped and was then removed: X25519 device keys, ECDH-wrapped team keys, one sealed copy per member device, rotation on member removal. It worked; it was withdrawn because the shared vault it protects was never built, so the paid surface would have been a roster. Read the deleted code out of git history rather than rewriting it, and do not restart here — build the shared vault first, then re-derive the distribution around it. What remains of the phase and was never built: RBAC, audit export, SSO/SCIM, self-host Helm, static relay IPs for allowlisting.
 
 ---
 
@@ -334,12 +334,11 @@ Team vaults via X25519 key wrapping, RBAC, audit log + export, SSO/SCIM, self-ho
 
 | Tier | Price | Contents |
 |---|---|---|
-| **Free** | $0 | Unlimited hosts & devices, **sync included**, terminal, SFTP, editor, port forwarding |
-| **Pro** | **$5/user/mo** | AI assist, session recording/replay, share links, larger transfer quotas, priority relays |
-| **Team** | **$12/user/mo** | Team vault, RBAC, audit log, SSO, credential inheritance policy |
+| **Free** | $0 | Unlimited hosts & devices, **sync included**, terminal, SFTP, editor. 1 GB/month of relay transfer |
+| **Pro** | **$5/mo** | Session recording/replay, share links, twelve months of audit history, 5 GB/month of relay transfer |
 | **Self-host** | Custom | Own relay + control plane; no metadata leaves your network |
 
-Undercuts Termius ($10/$20/$30) while giving away the thing they charge for. Open-core: client + relay Apache-2.0; team/audit/SSO commercial. The open, self-hostable relay isn't a giveaway — it's what makes a security team approve the tool.
+Two tiers, one price, no quantity: an account is a person, so there is nothing to multiply by. The Team tier is gone with the surface behind it. Undercuts Termius ($10/$20/$30) while giving away the thing they charge for. Open-core: client + relay Apache-2.0. The open, self-hostable relay isn't a giveaway — it's what makes a security team approve the tool.
 
 ---
 
@@ -349,7 +348,7 @@ Undercuts Termius ($10/$20/$30) while giving away the thing they charge for. Ope
 |---|---|
 | **WebCrypto signer doesn't work with stock sshd** | Phase 0 gate #1. Fallback: key bytes in WASM memory — weaker, still better than server-side custody |
 | **Bundle too large for mobile networks** | Brotli + SW precache + lazy SFTP module; measure in Phase 0 |
-| **"SSH keys in a browser" scares people** | Non-extractable keys are a *stronger* story than a desktop app's on-disk `id_ed25519`. Lead with that, publish the threat model, get a third-party audit before charging for Team |
+| **"SSH keys in a browser" scares people** | Non-extractable keys are a *stronger* story than a desktop app's on-disk `id_ed25519`. Lead with that, publish the threat model, get a third-party audit — which was written as a precondition for charging, and billing shipped without one; `docs/THREAT-MODEL.md` residual risk 5 records that |
 | **Tab-close kills sessions** | Documented, plus tmux auto-attach. Don't oversell "persistent" |
 | **Relay abused as open proxy** | SSRF guards + auth + quotas from day one, not retrofitted |
 | **Users lose non-extractable keys** | Loud onboarding, mandatory backup prompt, recovery codes |

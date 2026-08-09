@@ -46,16 +46,29 @@ const VISIBILITY: Array<{
   relay: Verdict;
   control: Verdict;
 }> = [
-  { what: "Keystrokes, commands, output", relay: "never", control: "never" },
+  // "ciphertext" rather than "never" because of recordings. A session you do
+  // not record is never stored anywhere; one you do is stored here, encrypted,
+  // and a share link stores a second copy under a second key. The verdict has
+  // to describe the case where the bytes exist.
+  { what: "Keystrokes, commands, output", relay: "never", control: "ciphertext" },
   { what: "Files transferred over SFTP", relay: "never", control: "never" },
   { what: "Your SSH private keys", relay: "never", control: "ciphertext" },
   { what: "Host names, usernames, ports, tags", relay: "sees", control: "ciphertext" },
   { what: "Snippets and saved settings", relay: "never", control: "ciphertext" },
   { what: "Session start, end and duration", relay: "sees", control: "sees" },
-  { what: "Bytes moved, and frame timing", relay: "sees", control: "never" },
+  { what: "Which host an activity row refers to", relay: "never", control: "blinded" },
+  { what: "Frame timing and packet sizes", relay: "sees", control: "never" },
+  { what: "Bytes moved, totalled per account per month", relay: "sees", control: "sees" },
   { what: "Your browser's source address", relay: "sees", control: "sees" },
   { what: "Email address and sign-in times", relay: "never", control: "sees" },
   { what: "Login password and vault key", relay: "never", control: "never" },
+  // "Sees it" and not "Ciphertext", which would be the flattering answer and
+  // the wrong one. A passkey's public key is public by construction, and an
+  // authenticator secret is encrypted under our own server secret rather than
+  // under your vault key — we have to be able to read it back to check a code.
+  // So these are account credentials we hold, in a way we do not hold anything
+  // that opens a vault, and the row says so.
+  { what: "Passkey public keys, authenticator secrets", relay: "never", control: "sees" },
 ];
 
 /** What a non-extractable key does and does not stop. */
@@ -275,18 +288,59 @@ export default function SecurityPage() {
         <H3 className="mt-12">Your login password never reaches the server</H3>
         <P className="mt-2">
           The password you type to sign in is stretched with Argon2id in the
-          browser, and the result is split by HKDF into two independent keys. One
-          is an authentication token, which is sent and only ever lets the server
-          recognise you. The other is your vault key, which encrypts hosts, keys
-          and snippets before anything is uploaded and is never transmitted in
-          any form.
+          browser, and the result is split by HKDF into three independent keys.
+          The first is an authentication token, which is sent and only ever lets
+          the server recognise you. The second is your vault key, which encrypts
+          hosts, keys and snippets before anything is uploaded and is never
+          transmitted in any form. The third is an audit key, which blinds
+          hostnames into HMACs before an activity row is written, so the log we
+          store records that you connected somewhere without recording where.
+          Only the first of the three is ever transmitted.
+        </P>
+        <P className="mt-3">
+          Signing in and opening the vault are separate events, and that is the
+          one part of this design that surprises people. There are three ways to
+          authenticate an account — your password, a passkey, or GitHub — and
+          exactly one way to derive a vault key, which is typing the password.
+          A passkey ceremony and a GitHub callback both hand us proof of who you
+          are and nothing that could decrypt anything, so a session started
+          either way arrives authenticated with the vault still shut, and the app
+          asks for your password before it will show you a host. That is a
+          choice, not an omission: WebAuthn can return a stable per-credential
+          secret that would unwrap a vault key, and we do not use it, because a
+          second route to the key would mean a second answer to every question
+          about what a password change does. One derivation, one explanation.
         </P>
         <P className="mt-3">
           A full dump of our database therefore yields a verifier and a blob.
           That cuts both ways, and we would rather say so: we cannot reset your
-          password, we cannot recover a vault whose password is lost, and we
-          cannot search your hosts server-side. The search box in the app is fast
-          because the vault is already decrypted in your tab.
+          password, we cannot open a vault whose password is lost, and we cannot
+          search your hosts server-side. The search box in the app is fast
+          because the vault is already decrypted in your tab. Recovery, where it
+          exists at all, is something you set up in advance and hold yourself —
+          which is the next paragraph, not an exception to this one.
+        </P>
+        <P className="mt-3">
+          There is exactly one way back into a vault whose password is gone, and
+          it has to be set up in advance: recovery codes. Each one is a sealed
+          copy of your keys, encrypted under 120 random bits that are shown once
+          in your browser and never sent to us. Presenting a code unlocks the
+          vault and, on an account with no authenticator app, signs you in too —
+          which is both the point and the risk. A code is password-equivalent,
+          and unlike a password it exists as text somewhere. We hold the sealed
+          copies and no way to open them, so enrolling codes changes nothing
+          about what a database dump is worth.
+        </P>
+        <P className="mt-3">
+          One limit, said here rather than discovered at the worst moment: a
+          recovery code does not answer a second factor. If you have enrolled an
+          authenticator app, the sign-in a redeemed code attempts stops at the
+          code prompt, and the recovery page has no field for it — and because a
+          sealed copy is consumed the moment we hand it over, the attempt spends
+          the code either way. On such an account a code decrypts and does not
+          admit. The two-factor card in Settings says so before you enrol; the
+          way back is your password plus your authenticator, on the normal
+          sign-in page.
         </P>
       </Section>
 
@@ -328,6 +382,27 @@ export default function SecurityPage() {
           with a key derived from your password, which we never receive. Activity
           records name their target by an HMAC of the host, so even our own audit
           log does not spell out where you connected.
+        </P>
+
+        <P className="mt-3 text-xs">
+          The first row says ciphertext rather than never because of recordings.
+          A session you do not record leaves nothing with us at all; one you do
+          is a verbatim transcript — everything the terminal printed, including
+          the echo of what you typed — encrypted in the tab under your vault key
+          and stored here as a blob we cannot open. Sharing one by link stores a
+          second copy, encrypted under a key made for that link and carried in
+          the fragment of the address, which browsers never send to a server.
+          Both copies go when you delete the recording.
+        </P>
+
+        <P className="mt-3 text-xs">
+          The byte total is the one row that recently moved. The relay reports
+          how much it carried for each account, and the control plane keeps a
+          running monthly figure — that is what the transfer allowance on the
+          pricing page is measured against, and you can read your own on the
+          Settings page. It is a single number per account per month: no host,
+          no destination, no per-session breakdown. On a relay you run yourself
+          nothing reports it and no total exists.
         </P>
       </Section>
 
@@ -381,11 +456,14 @@ export default function SecurityPage() {
       {/* ------------------------------------------------------ self-host */}
       <Section id="self-host" index="05" title="Self-hosting removes us from the model">
         <P>
-          The relay is a stateless Go service and the client is static files.
-          Running both yourself deletes the two assumptions on this page that
-          cryptography cannot: that our build is honest, and that the metadata in
-          the table above goes somewhere you are comfortable with. What stays
-          identical is everything else — the same WASM client, the same
+          The relay is a small Rust service that holds no session state, and the
+          client is static files. Running both yourself deletes the two
+          assumptions on this page that cryptography cannot: that our build is
+          honest, and that the metadata in the table above goes somewhere you
+          are comfortable with. It also deletes the monthly transfer allowance
+          outright — that limit exists because relay bandwidth costs us money,
+          and bandwidth you are already paying for is not ours to ration. What
+          stays identical is everything else: the same WASM client, the same
           non-extractable keys, the same pinning, the same split KDF. Add
           Postgres only if you want account sync, and it still stores nothing but
           ciphertext.
@@ -410,11 +488,19 @@ export default function SecurityPage() {
 
 /* -------------------------------------------------------------- primitives */
 
-type Verdict = "sees" | "ciphertext" | "never";
+/**
+ * "blinded" is its own verdict rather than being folded into "ciphertext",
+ * because the two are not the same promise and the difference matters. A
+ * ciphertext is opaque and unlinkable. A blinded value is an HMAC under a key we
+ * do not hold: still unreadable, but deterministic, so we can see that two
+ * activity rows point at the *same* host without being able to say which.
+ */
+type Verdict = "sees" | "ciphertext" | "blinded" | "never";
 
 const VERDICT: Record<Verdict, { label: string; className: string }> = {
   sees: { label: "Sees it", className: "text-warning" },
   ciphertext: { label: "Ciphertext", className: "text-muted-foreground" },
+  blinded: { label: "Blinded", className: "text-muted-foreground" },
   never: { label: "Never has it", className: "text-success" },
 };
 

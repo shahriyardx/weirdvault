@@ -19,7 +19,12 @@ this way isn't a claim, it's marketing.
 | Vault key | Derived in-browser, memory only | Decrypts everything above |
 | Session contents (keystrokes, output, files) | In the tab and on the wire, encrypted | Credentials typed at the prompt, file contents |
 | Account credentials | `account.password` = hash of a derived auth token | Session impersonation — **not** vault decryption |
+| Passkey credentials | `passkey.public_key`, `credential_id`, `aaguid` | Nothing on their own: the public half is public by construction and the private half never leaves the authenticator. They are an additional *route* to a session, so the account's exposure is now the weakest of password, passkey and GitHub — not the strongest |
+| Authenticator secret and backup codes | `two_factor.secret` and `two_factor.backup_codes`, both encrypted under `BETTER_AUTH_SECRET` (`storeBackupCodes: "encrypted"`, set in `lib/auth.ts`) | Session impersonation, at a higher bar than the row above: it needs a database dump **and** the application secret, because verifying a code means the server can read it back. Ten working sign-in credentials per enrolled account if both are held. Still **not** vault decryption — nothing here derives a key |
 | Connection metadata | Relay logs, `audit_event` | Reveals which hosts exist and when they're used |
+| Transfer volume | `relay_usage` | Per-account bytes moved through the relay, totalled by month. Names no host and no destination — it is one row per account per month — but it is the one piece of connection metadata we now retain in a database rather than only in a log, and it says when an account was busy |
+| Session recordings | `recording.ciphertext`, encrypted under the vault key | Terminal output verbatim, including anything a shell echoed back. Undecryptable without the user's password, and deleted only when the user deletes it — nothing expires them |
+| Shared recordings | `recording_share.ciphertext` — the same transcript again, encrypted under a key that exists only for that link | The same contents, with a different exposure: the key is in the link's fragment and never reaches us, but possession of the link *is* access. `GET /api/shares/[token]` serves this copy with no session, so anyone the link is forwarded to can read it. Bounded by a required expiry and an optional view limit; revoking destroys this copy, expiry only stops it being served |
 
 ---
 
@@ -39,7 +44,7 @@ this way isn't a claim, it's marketing.
 └──────────────────────────────────────────────────────────┘
 
 ┌─ CONTROL PLANE (separate) ──── semi-trusted ─────────────┐
-│  accounts · ciphertext blobs · org membership · audit     │
+│  accounts · ciphertext blobs · subscriptions · audit      │
 │  Cannot decrypt anything it stores.                       │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -68,14 +73,44 @@ bytes already encrypted by the tab. This is structural, not policy — there is 
 code path where the relay holds a session key.
 
 ### The control plane CAN see
-- Email, account and session records, org membership and roles
+- Email, account and session records
+- Which authentication routes an account has: a password credential row, any
+  registered passkeys (public keys, so seeing them is not a compromise), and
+  whether an authenticator is enrolled. The authenticator's secret and backup
+  codes are readable to it too, given `BETTER_AUTH_SECRET` — verifying a code
+  requires it. None of this derives a vault key
+- Subscription state mirrored from Stripe: a customer id, a subscription id, a
+  status and a renewal date. No card number, no billing address, no invoice
+  contents — Stripe holds those and this app never sees one, not even in transit
 - Vault blob **size** and update frequency
-- Audit events we choose to record: who connected to which host, when
+- Audit events we choose to record, with hostnames blinded under a key derived
+  from the password — so the row is a stable opaque handle, resolvable only in
+  the user's own browser. What is written today: device registrations and
+  revocations, recovery-code enrolment, use and removal, host keys pinned or
+  found mismatched, and keys installed on a host. Connection events are in the
+  catalogue and nothing emits them; the relay has no database and no audit code,
+  so "who connected to which host, when" is not currently recorded anywhere
 
 ### The control plane CANNOT see
 - Vault plaintext: host lists, usernames, snippets, wrapped keys
 - The vault key or the user's password
 - Session contents
+
+### The one endpoint that authorizes nobody
+
+Every other route in the control plane resolves a session and scopes its queries
+by that session's user. `GET /api/shares/[token]` does not, by design: a share
+link has to work for a colleague with no account. The token in the path is the
+whole access decision, and the confidentiality that remains is the per-share key
+in the fragment, which we never receive. Expired, revoked, over its view limit
+and never existed all answer an identical 404, so the endpoint cannot be used to
+learn which tokens are real.
+
+**Not rate-limited.** The view counter bounds a link being passed around, not
+somebody enumerating tokens — that is 256 bits of path segment doing the work
+alone. This joins the IP-level limits listed as outstanding in §7. Nothing prunes
+expired shares either: an expired link stops being served at once, but its
+ciphertext stays on disk until the owner revokes it or deletes the recording.
 
 ### What we do NOT protect against
 Stated plainly rather than buried:
@@ -138,7 +173,40 @@ as an account-existence oracle.
 
 **Vault key lifetime.** Memory only, never persisted — `localStorage`,
 `sessionStorage`, and IndexedDB are all readable by any script on the origin.
-Cost: a reload requires re-entering the password. That is the correct trade.
+Cost: a reload requires re-entering the password, *and* any sign-in that typed
+no password lands with no key at all (below). That is the correct trade.
+
+### Three ways to authenticate, one way to the key
+
+An account can be authenticated by a password, by a passkey, or by GitHub. Only
+the password produces the Argon2id run above, so only the password produces a
+vault key. A passkey ceremony returns an assertion and a GitHub callback returns
+an access token; neither carries key material, and neither can be made to,
+because nothing on those paths ever sees the password.
+
+The consequence is a state that has to be handled rather than hidden: a user who
+signs in with a passkey or with GitHub is fully authenticated and cannot read a
+single host until they type their password. `components/vault-unlock.tsx` names
+the reason from one place so the two explanations cannot drift, and
+`accountGate` in `lib/auth.ts` sends a GitHub account with no credential row to
+`/set-vault-password` before the dashboard renders at all.
+
+**PRF is deliberately not used.** The WebAuthn PRF extension can return a stable
+per-credential secret, which is how a password manager offers passkey unlock. It
+is not implemented here and is not being designed toward. Two derivations would
+mean two answers to what a password change does, two things to get right in a
+rekey, and two places for the zero-knowledge claim to leak. The cost is paid by
+the user in typing, once per tab, and it is the cost we chose.
+
+**Second factors do not protect the vault either.** TOTP and backup codes gate a
+session, and the server can read the codes back by design (see §1). A recovery
+code, conversely, decrypts the vault but does not answer a second factor: the
+sign-in it attempts is challenged like any other and `/recover` has no field for
+the answer, while the sealed copy is consumed on hand-out. So on a TOTP-enrolled
+account a redeemed code opens the vault, fails the sign-in, and is spent —
+refused in words at `signInWithRecoveredToken` in `lib/auth-client.ts` and warned
+about on the two-factor card before enrolment. A second-factor step on `/recover`
+is the fix and is not built.
 
 ---
 
@@ -195,18 +263,28 @@ per-account limits that mean something. This is a deliberate trade of some
 abuse resistance for not putting a signup wall in front of a tool people need
 before they trust us.
 
-Still to add: bandwidth quotas, IP-level rate limits, and running with no cloud
-IAM role attached.
+A monthly transfer allowance now exists — the relay counts the bytes it
+forwards, the control plane refuses to mint a new token once an account is over,
+and the figure differs by tier. It bounds cost rather than abuse: it is per
+account and per month, so it does nothing about a burst, and it is off entirely
+unless `RELAY_USAGE_SECRET` is set.
+
+Still to add: per-second bandwidth limits, IP-level rate limits, and running
+with no cloud IAM role attached.
 
 ---
 
-## 8. Multi-tenancy and teams
+## 8. Multi-tenancy
 
+- An account is a person. There are no organizations, no members and no shared
+  vaults, so there is no sharing boundary inside an account to get wrong.
 - Vault blobs are per-user rows keyed by `user_id`; every query must be scoped
   by the session's user. Postgres row-level security as defence in depth.
-- Team vaults (Phase 5) wrap a per-team key to each member's X25519 public key,
-  so the server distributes ciphertext it cannot open. Removing a member must
-  rotate the team key — otherwise they retain what they already fetched.
+- Team key distribution — X25519 device keys, ECDH-wrapped per-team keys,
+  rotation on member removal — was built and has been withdrawn (PLAN.md
+  Phase 5). If it returns, the property that must come back with it is the one
+  that was easiest to lose: rotation on removal does not reach what a removed
+  member already fetched, so rotation limits the future and nothing else.
 - Audit events record *that* a connection happened, never content.
 
 ---
@@ -224,7 +302,12 @@ IAM role attached.
 2. **Relay metadata.** Removed only by self-hosting.
 3. **Deterministic KDF salt.** Acceptable, with a known upgrade path.
 4. **Signing oracle while the tab is open.** Inherent to the design.
-5. **No third-party audit yet.** Must happen before charging for Team.
+5. **No third-party audit yet.** This document used to say one had to happen
+   before charging for anything. Billing shipped first, so that commitment was
+   broken rather than met, and recording it here is more useful than quietly
+   rewording it. No outside firm has reviewed this code and there is no SOC 2 or
+   ISO 27001 — `/security` says the same in the product. It is still the thing to
+   do next on this list.
 
 ---
 
@@ -237,4 +320,5 @@ IAM role attached.
 4. Never ship a "trust this host anyway" button that is easier than reading the
    warning.
 5. Publish what the relay can see, in the product, not just here.
-6. Third-party audit before Team billing.
+6. Get a third-party audit. This was written as "before billing anyone" and
+   billing shipped without one; see residual risk 5.

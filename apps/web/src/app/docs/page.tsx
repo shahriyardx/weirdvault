@@ -20,7 +20,20 @@ import {
 import { PageHeader, PageShell } from "@/components/shell/page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers";
+import { formatBytes } from "@/lib/usage";
 import { cn } from "@/lib/utils";
+
+/**
+ * Imported so the troubleshooting entry cannot name a cap the code does not use.
+ *
+ * Both tiers, because the allowance genuinely differs and this page is where
+ * somebody lands after being refused. A Pro subscriber reading the Free figure
+ * as their own would conclude the server had cut them off at a fifth of what
+ * they pay for.
+ */
+const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free);
+const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro);
 
 export const metadata: Metadata = {
   title: "Docs",
@@ -65,9 +78,10 @@ export default function Docs() {
           <Section id="quickstart" icon={<RocketLaunchIcon />} title="Quickstart">
             <P>
               Six steps, and the only one that touches the server is step three.
-              If you already have an SSH key authorised somewhere, you still need
-              a new one here — webxterm cannot import a private key it is not
-              allowed to read.
+              If you already have an Ed25519 key authorised somewhere you can
+              import it instead of generating a new one, with a caveat worth
+              reading before you do: <A href="#keys">what import can and cannot
+              promise</A>.
             </P>
 
             <ol className="mt-6 space-y-5">
@@ -241,11 +255,37 @@ export default function Docs() {
             </P>
             <P className="mt-3">
               This is a real boundary, not a policy we promise to honour, and it
-              is why webxterm has no &ldquo;export private key&rdquo; button and
-              cannot import an existing <Code>id_ed25519</Code> file into the same
-              protection. It also means the largest residual risk is not key theft
-              but the JavaScript we serve you — the{" "}
+              is why webxterm has no &ldquo;export private key&rdquo; button. It
+              also means the largest residual risk is not key theft but the
+              JavaScript we serve you — the{" "}
               <A href="/security">threat model</A> says so plainly.
+            </P>
+
+            <H3 className="mt-10">Importing a key you already have</H3>
+            <P className="mt-3">
+              Paste an OpenSSH or PKCS#8 private key, or choose the file, and it
+              is parsed by the same WebAssembly core that runs the SSH session.
+              Encrypted keys are supported: you are asked for the passphrase, and
+              it is used once and not stored. From the moment the key is parsed
+              it is held exactly like a generated one — non-extractable, and
+              wrapped with your vault key if you chose portable.
+            </P>
+            <P className="mt-3">
+              What import cannot promise is the part before that. A generated key
+              has never existed as bytes any code could read. An imported key was
+              a file on some machine, possibly for years and possibly in a
+              backup, and it passes through the page in plaintext for the length
+              of one function call — that is what importing means, and no amount
+              of care on our side makes it retroactive. If the key protects
+              something you care about, generating a new one here and adding a
+              second line to <Code>authorized_keys</Code> is the stronger move.
+            </P>
+            <P className="mt-3">
+              One practical limit: only Ed25519 keys are accepted. The core can
+              parse RSA and ECDSA, but the connect path signs as Ed25519 only, so
+              importing the others would give you a key that stores cleanly and
+              then fails at authentication. Refusing them up front is the honest
+              version.
             </P>
 
             <Callout tone="destructive" icon={<WarningIcon />} title="A device-bound key dies with the browser profile">
@@ -326,19 +366,50 @@ export default function Docs() {
               really terminated at your server rather than somewhere in the middle.
             </P>
 
+            <H3 className="mt-8">Bulk import from ~/.ssh/config</H3>
+            <P className="mt-3">
+              Adding hosts one at a time is fine for three and tedious for thirty,
+              so an existing <Code>~/.ssh/config</Code> can be pasted or uploaded
+              whole. It is parsed by the same WebAssembly core the terminal uses,
+              and what comes back is a review list rather than an import: every
+              entry is shown with what was understood, what was ignored, and which
+              ones are already saved, and you tick the ones you want.
+            </P>
+            <P className="mt-3">
+              Directives with no equivalent here are reported instead of being
+              silently dropped — the import screen names them per host. The one
+              worth knowing about in advance is <Code>ProxyJump</Code>, which is
+              not implemented at all: a host that depends on it will import and
+              then fail to connect, so it is flagged rather than accepted quietly.
+            </P>
+
             <H3 className="mt-8">Zero-knowledge sync</H3>
             <P className="mt-3">
               Your login password never reaches us. Argon2id runs in the browser
-              and HKDF splits the result into two: an auth token, which is sent,
-              and a vault key, which is not. The vault syncs as a single encrypted
-              blob, so the server holds your hosts, keys and snippets without being
-              able to read any of them.
+              and HKDF splits the result into three: an auth token, which is sent;
+              a vault key, which is not; and an audit key, which blinds hostnames
+              in the activity log and is also never sent. The vault syncs as a
+              single encrypted blob, so the server holds your hosts, keys and
+              snippets without being able to read any of them.
             </P>
             <P className="mt-3">
               The honest consequence: because the server cannot read the blob, it
               cannot search it either. Search, filtering and sorting all happen in
               the tab, over data decrypted locally. Everything works, it just works
               in a different place than you might assume.
+            </P>
+            <P className="mt-3">
+              The other consequence is that a forgotten password is not something
+              we can help with — there is no reset that could open the blob. Two
+              things in <A href="/dashboard/settings">Settings</A> exist because of
+              that. Recovery codes are sealed copies of your keys, each encrypted
+              under 120 random bits shown once in your browser; one of them signs
+              you in and unlocks the vault, which makes a code as valuable as the
+              password itself. And an export writes the encrypted blob to a file
+              you keep, which restores by merging into whatever is on the device
+              rather than overwriting it — an export is by definition older than
+              the vault it came from, and a restore that discarded newer work
+              would be a delete button with the wrong label.
             </P>
             <Button asChild variant="outline" size="sm" className="mt-5">
               <Link href="/security">Read the threat model</Link>
@@ -425,6 +496,41 @@ export default function Docs() {
                 </p>
               </Problem>
 
+              <Problem
+                code="You have used this month's relay transfer allowance"
+                summary="Not a fault. We stopped starting new connections through our relay."
+              >
+                <p>
+                  Our relay carries {FREE_TRANSFER} a month per account on Free
+                  and {PRO_TRANSFER} on Pro, counting both directions in each
+                  case. Past that we refuse to mint the token a new
+                  connection needs. Sessions you already have open are untouched
+                  and run until you close them — nothing is cut at a byte
+                  boundary — and the counter resets at midnight UTC on the first
+                  of the month.
+                </p>
+                <p className="mt-2">
+                  The exact figure is on your{" "}
+                  <A href="/dashboard/settings">Settings page</A> from the first
+                  day rather than only once it bites, and it warns before it
+                  refuses. The relay reports its counts about once a minute, so
+                  a session you are in right now may not be in the total yet;
+                  when a report cannot be delivered it is dropped rather than
+                  queued, which means the figure normally reads low rather than
+                  high. The one exception is the month boundary: a batch flushed
+                  just after midnight UTC on the first is counted in the month it
+                  arrived in, so on the first of the month the total can carry up
+                  to a minute of the previous month&rsquo;s traffic.
+                </p>
+                <p className="mt-2">
+                  The limit is on <em>our</em> relay, not on webxterm. It exists
+                  because that bandwidth costs us money. Point{" "}
+                  <Code>NEXT_PUBLIC_RELAY_URL</Code> at a relay you run and
+                  nothing counts anything — see{" "}
+                  <A href="/security#self-host">self-hosting</A>.
+                </p>
+              </Problem>
+
               <Problem code="Closing the tab ends the session" summary="A limitation of running the client in the page, not a bug.">
                 <p>
                   The SSH client is in your tab. When the tab closes the client
@@ -445,8 +551,11 @@ export default function Docs() {
                 </CodeBlock>
                 <p className="mt-2">
                   For a single unattended job, <Code>systemd-run --user</Code> or{" "}
-                  <Code>nohup … &amp;</Code> is enough. Pro adds mosh if you want
-                  the roaming session to survive network changes as well.
+                  <Code>nohup … &amp;</Code> is enough. There is no roaming
+                  session on any tier and there is not going to be one: mosh
+                  needs UDP, and a browser tab has no UDP socket. That is a
+                  permanent limitation of running the client in the page rather
+                  than an item on a roadmap.
                 </p>
               </Problem>
             </div>

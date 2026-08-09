@@ -53,7 +53,21 @@ services:
       # Must match the relay exactly: it is how the relay verifies that a
       # connection request came from this control plane.
       RELAY_SECRET: ${RELAY_SECRET:?set RELAY_SECRET in .env}
+      # Authenticates the relay's usage reports to /api/relay/usage. Optional,
+      # and unset means nothing is counted and the monthly transfer allowance is
+      # never enforced — the correct default for a relay you host yourself, and
+      # the Settings meter says so on screen rather than showing a bare zero.
+      # Must match the relay's copy below.
+      RELAY_USAGE_SECRET: ${RELAY_USAGE_SECRET:-}
       NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL}
+      # How many proxies you have put in front of this container. Unset by
+      # default, and unset means the audit log records no client address at all
+      # — X-Forwarded-For is written by the caller, and the only entry that is
+      # not is the one your own proxy appended. Set it to 1 behind a single
+      # reverse proxy (Caddy, nginx), 2 behind a CDN in front of that, and so
+      # on. Guessing high is worse than leaving it unset: it reads an entry the
+      # client still controls.
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
 
@@ -72,6 +86,21 @@ services:
       # SSRF guard and turns the relay into an open proxy into whatever network
       # it sits on. Only set it if the relay is meant to reach an internal
       # network AND is not reachable by untrusted users.
+      #
+      # Transfer accounting. The relay counts bytes in memory and posts batched
+      # per-account totals to the control plane; it never touches the database
+      # itself, which is the point of routing this through an HTTP endpoint
+      # rather than handing Postgres credentials to the internet-facing service.
+      # Plain http:// on the compose network — the relay has no TLS stack and
+      # refuses an https:// URL rather than appearing to encrypt. If you split
+      # these two across the public internet, put a terminator beside the relay
+      # and point this at it.
+      #
+      # Both of these unset is a supported configuration: nothing is counted, no
+      # allowance is enforced, and the relay says so at startup.
+      RELAY_USAGE_URL: ${RELAY_USAGE_URL:-http://web:3000/api/relay/usage}
+      RELAY_USAGE_SECRET: ${RELAY_USAGE_SECRET:-}
+      RELAY_USAGE_INTERVAL_SECS: ${RELAY_USAGE_INTERVAL_SECS:-60}
       RUST_LOG: ${RUST_LOG:-webxterm_relay=info}
     ports:
       - "${RELAY_PORT:-8080}:8080"

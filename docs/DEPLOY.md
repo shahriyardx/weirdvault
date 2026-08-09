@@ -63,6 +63,21 @@ location / {
 That `proxy_read_timeout` matters. The default 60s will silently drop idle SSH
 sessions, and it will look like a webxterm bug.
 
+Once a proxy is in front, set `TRUSTED_PROXY_HOPS` to the number of proxies
+between the internet and the web container — `1` for the Caddy or nginx block
+above, `2` if a CDN sits in front of that. Until it is set, the app records no
+client address on any audit row and the recovery-code rate limiter shares one
+bucket for everybody.
+
+That is deliberate. `X-Forwarded-For` is written by whoever sends the request,
+and every proxy in normal use *appends* to it, so the left-most entry is a value
+the caller chose. Reading it would put an attacker-supplied network into the
+audit log — including on `recovery.redeemed`, the one row that says somebody got
+in without the password — and would hand every caller a private rate-limit
+budget. The hop count is what says which entry your own proxy wrote. Set it too
+high and you are back to reading a forgeable entry, so if you are unsure, leave
+it unset: an empty address field is honest, a wrong one is not.
+
 ---
 
 ## Option B — web on Vercel, relay on Fly.io
@@ -86,6 +101,7 @@ Set on Vercel:
 | `BETTER_AUTH_URL` | `https://your-app` |
 | `RELAY_SECRET` | **must match the relay exactly** |
 | `NEXT_PUBLIC_RELAY_URL` | `wss://your-relay/ws` |
+| `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address; unset means no address is recorded |
 
 `NEXT_PUBLIC_*` is inlined at build time, so changing the relay URL means a
 rebuild, not a restart.
