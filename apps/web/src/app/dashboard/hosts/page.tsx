@@ -11,12 +11,15 @@ import {
   DotsThreeIcon,
   FingerprintIcon,
   HardDrivesIcon,
+  InfoIcon,
   MagnifyingGlassIcon,
   PencilSimpleIcon,
   PlusIcon,
   ShieldWarningIcon,
   TerminalWindowIcon,
   TrashIcon,
+  UploadSimpleIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -31,6 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,6 +56,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -75,6 +80,11 @@ import { listStoredKeys, type StoredKey } from "@/lib/keys";
 import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
 import { useSshSession } from "@/lib/ssh/session-provider";
 import { useConnectHost } from "@/lib/ssh/use-connect-host";
+import type { ParsedConfigHost } from "@/lib/ssh/types";
+import { loadSSH, parseSSHConfig, type SshLoadProgress } from "@/lib/ssh/wasm";
+import { getVaultKey } from "@/lib/vault/session";
+import { syncVault } from "@/lib/vault/sync";
+import { noAutofillText } from "@/lib/no-autofill";
 
 /* -------------------------------------------------------------------- form */
 
@@ -143,6 +153,7 @@ export default function HostsPage() {
   const [form, setForm] = React.useState<HostForm | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<Host | null>(null);
+  const [importOpen, setImportOpen] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
     const [h, p, k] = await Promise.all([listHosts(), listPins(), listStoredKeys()]);
@@ -251,6 +262,41 @@ export default function HostsPage() {
     }
   }
 
+  /**
+   * Imported hosts are worth pushing straight away: someone who has just added
+   * fifteen servers from their ssh_config expects them on their phone, not
+   * after the next successful connection. A failed push is not a failed import
+   * — the records are already in this browser — so it is reported as such.
+   */
+  async function handleImported(count: number) {
+    await refresh();
+
+    const vaultKey = getVaultKey();
+    if (!vaultKey) {
+      toast.success(
+        `Imported ${count} ${count === 1 ? "host" : "hosts"}. The vault is locked in this tab, so they stay here until you sign in.`,
+      );
+      return;
+    }
+    try {
+      // Read the result: an unreachable server is reported as a returned
+      // status rather than a throw, so the catch below does not cover it and
+      // "and synced" would be a claim about devices that got nothing.
+      const result = await syncVault(vaultKey);
+      if (result.status === "offline") {
+        toast.message(
+          `Imported ${count} ${count === 1 ? "host" : "hosts"} on this device. The server could not be reached, so they will sync on the next attempt.`,
+        );
+        return;
+      }
+      toast.success(`Imported ${count} ${count === 1 ? "host" : "hosts"} and synced.`);
+    } catch {
+      toast.message(
+        `Imported ${count} ${count === 1 ? "host" : "hosts"} on this device. The vault will sync on the next attempt.`,
+      );
+    }
+  }
+
   async function handleDelete() {
     if (!pendingDelete) return;
     const { id, label } = pendingDelete;
@@ -271,9 +317,14 @@ export default function HostsPage() {
         title="Hosts"
         description="Saved connections, stored encrypted on this device and synced to your other devices as ciphertext. Editing one here changes it everywhere you are signed in."
         actions={
-          <Button onClick={() => setForm(blankForm())}>
-            <PlusIcon /> Add host
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <UploadSimpleIcon /> Import from ssh_config
+            </Button>
+            <Button onClick={() => setForm(blankForm())}>
+              <PlusIcon /> Add host
+            </Button>
+          </div>
         }
       />
 
@@ -304,7 +355,10 @@ export default function HostsPage() {
           {loading ? (
             <LoadingRows />
           ) : hosts.length === 0 ? (
-            <EmptyState onAdd={() => setForm(blankForm())} />
+            <EmptyState
+              onAdd={() => setForm(blankForm())}
+              onImport={() => setImportOpen(true)}
+            />
           ) : filtered.length === 0 ? (
             <NoMatches query={query} onClear={() => setQuery("")} />
           ) : (
@@ -375,12 +429,11 @@ export default function HostsPage() {
                 <Field id="host-hostname" label="Hostname" required>
                   <Input
                     id="host-hostname"
+                    name="remote-hostname"
                     value={form.hostname}
                     onChange={(e) => setForm({ ...form, hostname: e.target.value })}
                     placeholder="10.0.4.21"
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
+                    {...noAutofillText}
                     required
                   />
                 </Field>
@@ -397,14 +450,16 @@ export default function HostsPage() {
               </div>
 
               <Field id="host-username" label="Username" required>
+                {/* The remote account's name. A field called "username" gets
+                    filled by heuristic whatever the attributes say, so the name
+                    goes too — see lib/no-autofill.ts. */}
                 <Input
                   id="host-username"
+                  name="remote-login"
                   value={form.username}
                   onChange={(e) => setForm({ ...form, username: e.target.value })}
                   placeholder="deploy"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
+                  {...noAutofillText}
                   required
                 />
               </Field>
@@ -519,12 +574,551 @@ export default function HostsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* ------------------------------------------------- ssh_config import */}
+      <ImportConfigDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        existing={hosts}
+        onImported={handleImported}
+      />
+
       <CredentialPrompt
         pending={prompt.pending}
         keys={usableKeys}
         onSettle={prompt.settle}
       />
     </>
+  );
+}
+
+/* -------------------------------------------------------- ssh_config import */
+
+interface ConfigSkip {
+  pattern: string;
+  reason: string;
+}
+
+interface ConfigAudit {
+  skipped: ConfigSkip[];
+  includes: number;
+  matches: number;
+}
+
+/**
+ * A second pass over the same text, purely to report what the parser dropped.
+ *
+ * sshconfig.go returns the blocks it understood and nothing about the ones it
+ * walked past, so importing 12 entries from a 15-entry file would otherwise
+ * look like a complete job. This mirrors the parser's own rules — patterns and
+ * negations are skipped, "Host *" contributes defaults only — so that the
+ * dialog can name each omission instead of quietly rounding down.
+ */
+function auditConfig(text: string): ConfigAudit {
+  const skipped: ConfigSkip[] = [];
+  let includes = 0;
+  let matches = 0;
+
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const split = line.search(/[ \t=]/);
+    if (split <= 0) continue;
+    const directive = line.slice(0, split).toLowerCase();
+    const value = line
+      .slice(split)
+      .replace(/^[ \t=]+/, "")
+      .trim()
+      .replace(/^"|"$/g, "");
+
+    if (directive === "include") includes++;
+    if (directive === "match") matches++;
+    if (directive !== "host" || !/[*?!]/.test(value)) continue;
+
+    // "Host prod prod-*" is the case worth naming separately: one of those two
+    // is a real machine, but the parser takes a Host block whole and drops all
+    // of it. Saying "a pattern rather than an address" there would be untrue,
+    // and the concrete name is exactly what someone needs to add by hand.
+    const concrete = value.split(/\s+/).filter((name) => !/[*?!]/.test(name));
+
+    skipped.push({
+      pattern: value,
+      reason:
+        value === "*"
+          ? "Supplies defaults — user, port, identity file — to the blocks below it. Those defaults are already folded into the entries above; the pattern itself is not a machine."
+          : concrete.length > 0
+            ? `Names ${concrete.join(", ")} alongside a pattern. A Host block is read whole or not at all, so this one is skipped rather than half-understood — add ${concrete.length === 1 ? "it" : "them"} by hand if you need ${concrete.length === 1 ? "it" : "them"}.`
+            : "A pattern rather than an address. Which machines it stands for depends on what you type at the ssh prompt, so there is nothing concrete to save.",
+    });
+  }
+
+  return { skipped, includes, matches };
+}
+
+interface Candidate {
+  key: string;
+  entry: ParsedConfigHost;
+}
+
+const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
+
+/**
+ * Bulk import from ~/.ssh/config.
+ *
+ * The parser is deliberately partial, so the review step is not decoration:
+ * it is where the difference between what the file says and what webxterm can
+ * honour gets stated, entry by entry, before anything is written.
+ */
+function ImportConfigDialog({
+  open,
+  onOpenChange,
+  existing,
+  onImported,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  existing: Host[];
+  onImported: (count: number) => Promise<void>;
+}) {
+  const [text, setText] = React.useState("");
+  const [fileName, setFileName] = React.useState("");
+  const [candidates, setCandidates] = React.useState<Candidate[] | null>(null);
+  const [audit, setAudit] = React.useState<ConfigAudit | null>(null);
+  const [chosen, setChosen] = React.useState<Record<string, boolean>>({});
+  const [fallbackUser, setFallbackUser] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [core, setCore] = React.useState<SshLoadProgress | null>(null);
+  const [coreError, setCoreError] = React.useState<string | null>(null);
+  // Bumped by the retry button. loadSSH() forgets a failed attempt, so calling
+  // it again is a genuine second try rather than a replay of the same rejection.
+  const [coreAttempt, setCoreAttempt] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!open) return;
+    // Same 6 MB core the terminal uses; start it now so the parse is instant.
+    // The previous attempt's error is cleared by whatever starts a new attempt
+    // — closing the dialog, or the retry button — not from here. Clearing it in
+    // the effect body would be a state write on every open that renders a
+    // second time for no new information.
+    let cancelled = false;
+    void loadSSH((p) => {
+      if (!cancelled) setCore(p);
+    }).catch((failure: unknown) => {
+      if (cancelled) return;
+      // The progress line has to go with it. Nothing is downloading any more,
+      // and a byte count left on screen claims otherwise.
+      setCore(null);
+      setCoreError(String((failure as Error).message ?? failure));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, coreAttempt]);
+
+  /** Closing discards the review, so reopening never shows a stale file. */
+  function handleOpenChange(next: boolean) {
+    if (!next) {
+      setText("");
+      setFileName("");
+      setCandidates(null);
+      setAudit(null);
+      setChosen({});
+      setFallbackUser("");
+      setError(null);
+      setCoreError(null);
+    }
+    onOpenChange(next);
+  }
+
+  const userFor = React.useCallback(
+    (entry: ParsedConfigHost) => entry.user || fallbackUser.trim(),
+    [fallbackUser],
+  );
+
+  const isDuplicate = React.useCallback(
+    (entry: ParsedConfigHost) => {
+      const user = userFor(entry);
+      return (
+        user !== "" &&
+        existing.some(
+          (h) => h.hostname === entry.hostname && h.port === entry.port && h.username === user,
+        )
+      );
+    },
+    [existing, userFor],
+  );
+
+  const selected = React.useMemo(
+    () =>
+      (candidates ?? []).filter(
+        (c) => chosen[c.key] && userFor(c.entry) !== "" && !isDuplicate(c.entry),
+      ),
+    [candidates, chosen, isDuplicate, userFor],
+  );
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 512_000) {
+      setError(`${file.name} is ${megabytes(file.size)}, which is not an ssh_config.`);
+      return;
+    }
+    setError(null);
+    setFileName(file.name);
+    setText(await file.text());
+  }
+
+  async function handleParse(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const parsed = await parseSSHConfig(text);
+      const found = parsed.map((entry, i) => ({ key: `${entry.alias}-${i}`, entry }));
+      setCandidates(found);
+      setAudit(auditConfig(text));
+      // Everything on by default; the rows that cannot be saved as they stand
+      // untick themselves below, where the reason can be shown next to them.
+      setChosen(Object.fromEntries(found.map((c) => [c.key, true])));
+    } catch (failure) {
+      setError(String((failure as Error).message ?? failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleImport() {
+    const targets = selected;
+    setBusy(true);
+    setError(null);
+
+    // Counted rather than assumed: if the store gives up halfway, the number
+    // reported has to be the number actually written.
+    let written = 0;
+    try {
+      for (const { entry } of targets) {
+        await saveHost({
+          label: entry.alias,
+          hostname: entry.hostname,
+          port: entry.port,
+          username: userFor(entry),
+          // The config's IdentityFile is a path this browser cannot open, so
+          // the key is left unset and asked for at connect time rather than
+          // pointing at a key that does not exist here.
+          auth: "key",
+        });
+        written++;
+      }
+    } catch {
+      setBusy(false);
+      setError(
+        written === 0
+          ? "Could not write to the local host store. Nothing was imported."
+          : `The local host store failed after ${written} of ${targets.length}. Those ${written} are saved; the rest are not.`,
+      );
+      return;
+    }
+
+    try {
+      handleOpenChange(false);
+      await onImported(written);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const loadingCore = core !== null && !core.done;
+  const percent =
+    core && core.total > 0 ? Math.min(100, Math.round((core.loaded / core.total) * 100)) : null;
+  const needsFallback = (candidates ?? []).some((c) => c.entry.user === "");
+  const duplicates = (candidates ?? []).filter((c) => isDuplicate(c.entry)).length;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Import from ssh_config</DialogTitle>
+          <DialogDescription>
+            Reads the Host blocks out of an OpenSSH config and turns the ones
+            that describe a specific machine into saved hosts. Nothing is
+            written until you have looked at the list.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!candidates ? (
+          <form onSubmit={handleParse} className="grid gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="config-text">Config</Label>
+              <textarea
+                id="config-text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={8}
+                spellCheck={false}
+                autoCapitalize="none"
+                autoComplete="off"
+                placeholder={"Host build-01\n  HostName 10.0.4.21\n  User deploy"}
+                className="w-full resize-y rounded-none border border-input bg-transparent px-2.5 py-2 font-mono text-[11px] leading-relaxed transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
+              />
+              <p className="text-xs text-muted-foreground">
+                Usually ~/.ssh/config. It is parsed in this tab and never sent
+                anywhere.
+              </p>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="config-file">Or choose the file</Label>
+              <Input id="config-file" type="file" onChange={handleFile} />
+              {fileName && (
+                <p className="text-xs text-muted-foreground">Read from {fileName}.</p>
+              )}
+            </div>
+
+            {loadingCore && (
+              <div className="grid gap-1.5">
+                {/* Without a Content-Length there is no percentage to show, and
+                    a bar stuck at zero reads as broken. The byte count is the
+                    honest fallback. */}
+                {percent !== null && <Progress value={percent} />}
+                <p className="text-xs text-muted-foreground">
+                  {percent === null
+                    ? `Loading the SSH core — ${megabytes(core.loaded)} so far`
+                    : `Loading the SSH core — ${megabytes(core.loaded)} of about ${megabytes(core.total)}`}
+                  . The config parser lives in the same WebAssembly module as SSH
+                  itself.
+                </p>
+              </div>
+            )}
+
+            {coreError && (
+              <Alert className="border-destructive/40">
+                <WarningIcon className="text-destructive" />
+                <AlertTitle>The SSH core did not load</AlertTitle>
+                <AlertDescription>
+                  <p>{coreError}</p>
+                  <p>
+                    The config parser lives in that module, so there is nothing
+                    here to read the file with until it arrives. It is a static
+                    file and a retry is usually all it takes.
+                  </p>
+                  <p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      onClick={() => {
+                        setCoreError(null);
+                        setCoreAttempt((n) => n + 1);
+                      }}
+                    >
+                      Try again
+                    </Button>
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {error && (
+              <Alert className="border-destructive/40">
+                <WarningIcon className="text-destructive" />
+                <AlertTitle>Could not read that file</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={busy || text.trim() === ""}>
+                {busy ? "Reading" : "Read config"}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div className="grid gap-4">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {candidates.length === 0
+                ? "No Host block in that file names a specific machine."
+                : `${candidates.length} ${candidates.length === 1 ? "entry" : "entries"} found${
+                    duplicates > 0 ? `, ${duplicates} already saved` : ""
+                  }.`}
+              {audit && audit.skipped.length > 0 &&
+                ` ${audit.skipped.length} skipped — listed below.`}
+            </p>
+
+            {needsFallback && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="config-fallback">Username for entries without one</Label>
+                <Input
+                  id="config-fallback"
+                  value={fallbackUser}
+                  onChange={(e) => setFallbackUser(e.target.value)}
+                  placeholder="deploy"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  A Host block with no User leaves ssh to fall back on your local
+                  login name. A browser cannot see that name, so those entries
+                  need one typed here before they can be saved.
+                </p>
+              </div>
+            )}
+
+            {candidates.length > 0 && (
+              <div className="max-h-72 overflow-y-auto rounded-sm border border-border">
+                <ul className="divide-y divide-border">
+                  {candidates.map(({ key, entry }) => {
+                    const duplicate = isDuplicate(entry);
+                    const user = userFor(entry);
+                    const blocked = duplicate || user === "";
+                    return (
+                      <li key={key} className="p-2.5">
+                        <label className="flex cursor-pointer items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 size-3.5 shrink-0 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+                            checked={!blocked && (chosen[key] ?? false)}
+                            disabled={blocked}
+                            onChange={(e) =>
+                              setChosen((prev) => ({ ...prev, [key]: e.target.checked }))
+                            }
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-foreground">{entry.alias}</span>
+                              {duplicate && (
+                                <Badge variant="outline" className="font-normal">
+                                  Already saved
+                                </Badge>
+                              )}
+                              {user === "" && (
+                                <Badge variant="outline" className="font-normal text-warning">
+                                  Needs a username
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="mt-0.5 block truncate text-muted-foreground">
+                              {user || "?"}@{entry.hostname}:{entry.port}
+                            </span>
+                            {entry.identityFile && (
+                              <span className="mt-1 block text-muted-foreground">
+                                IdentityFile {entry.identityFile} — a path this browser cannot
+                                open. <Link href="/dashboard/keys">Import that key</Link> and
+                                pick it on the host afterwards.
+                              </span>
+                            )}
+                            {entry.proxyJump && (
+                              <span className="mt-1 block text-muted-foreground">
+                                ProxyJump {entry.proxyJump} — not supported yet. This host is
+                                saved as a direct connection, which will only work if the
+                                relay can reach it.
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {audit && audit.skipped.length > 0 && (
+              <div className="rounded-sm border border-border">
+                <p className="border-b border-border px-2.5 py-1.5 text-muted-foreground">
+                  Skipped
+                </p>
+                <ul className="divide-y divide-border">
+                  {audit.skipped.map((skip, i) => (
+                    <li key={`${skip.pattern}-${i}`} className="px-2.5 py-2">
+                      <code className="text-foreground">Host {skip.pattern}</code>
+                      <p className="mt-0.5 leading-relaxed text-muted-foreground">
+                        {skip.reason}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {audit && (audit.includes > 0 || audit.matches > 0) && (
+              <Alert className="border-warning/40">
+                <WarningIcon className="text-warning" />
+                <AlertTitle>This file uses directives the parser does not model</AlertTitle>
+                <AlertDescription>
+                  {audit.includes > 0 && (
+                    <p>
+                      {audit.includes} Include{" "}
+                      {audit.includes === 1 ? "line is" : "lines are"} ignored. Whatever those
+                      files declare is not in the list above; paste them in separately.
+                    </p>
+                  )}
+                  {audit.matches > 0 && (
+                    <p>
+                      {audit.matches} Match{" "}
+                      {audit.matches === 1 ? "block is" : "blocks are"} not understood, and the
+                      options inside are read as though they applied unconditionally. Check the
+                      addresses above against the file before importing.
+                    </p>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Alert>
+              <InfoIcon />
+              <AlertTitle>What is not carried over</AlertTitle>
+              <AlertDescription>
+                <p>
+                  Every entry is saved as a key-authenticated host with no key
+                  chosen, so you are asked which one to use on the first
+                  connection. IdentityFile cannot be followed — the file is on
+                  your disk, and this page has no access to it — so import the
+                  key itself on the <Link href="/dashboard/keys">Keys page</Link>.
+                  ProxyJump is not implemented at all.
+                </p>
+              </AlertDescription>
+            </Alert>
+
+            {error && (
+              <Alert className="border-destructive/40">
+                <WarningIcon className="text-destructive" />
+                <AlertTitle>Import failed</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCandidates(null);
+                  setAudit(null);
+                  setError(null);
+                }}
+              >
+                Back
+              </Button>
+              <Button type="button" onClick={handleImport} disabled={busy || selected.length === 0}>
+                {busy
+                  ? "Importing"
+                  : selected.length === 0
+                    ? "Nothing selected"
+                    : `Import ${selected.length} ${selected.length === 1 ? "host" : "hosts"}`}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -663,7 +1257,7 @@ function Fingerprint({ pin }: { pin?: PinnedHostKey }) {
 
 /* ------------------------------------------------------------ empty states */
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({ onAdd, onImport }: { onAdd: () => void; onImport: () => void }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-4 py-10 sm:px-8">
@@ -687,6 +1281,9 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <div className="flex flex-wrap gap-2">
           <Button onClick={onAdd}>
             <PlusIcon /> Add host
+          </Button>
+          <Button variant="outline" onClick={onImport}>
+            <UploadSimpleIcon /> Import from ssh_config
           </Button>
           <Button asChild variant="outline">
             <Link href="/dashboard/terminal">Connect without saving</Link>

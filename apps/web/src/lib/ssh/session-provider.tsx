@@ -35,6 +35,23 @@ import { syncVault } from "@/lib/vault/sync";
 
 const OUTPUT_BUFFER_BYTES = 512 * 1024;
 
+/**
+ * SyncResult.status is a value for code to branch on, not a phrase to hand a
+ * person. Rendering it raw put "Vault conflict-resolved" in front of users whose
+ * one device had just synced with nothing to resolve.
+ */
+const SYNC_WORDING: Record<
+  Awaited<ReturnType<typeof syncVault>>["status"],
+  string
+> = {
+  synced: "synced",
+  "up-to-date": "already up to date",
+  "conflict-resolved": "merged with a change from another device",
+  offline: "not reachable",
+};
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
 export type Phase = "loading" | "idle" | "connecting" | "connected";
 
 export interface SessionTarget {
@@ -63,13 +80,32 @@ export interface ConnectRequest extends SessionTarget {
   save?: boolean;
 }
 
+/**
+ * What a tap sees. Deliberately more than the byte stream a terminal pane
+ * subscribes to: a recorder that only saw output would replay a 132-column
+ * session into an 80-column emulator, and would keep claiming to record a
+ * session that had already hung up.
+ */
+export type SessionTapEvent =
+  | { kind: "output"; bytes: Uint8Array }
+  | { kind: "resize"; cols: number; rows: number }
+  | { kind: "closed" };
+
 interface LiveSession {
   entry: SessionEntry;
   /** Null while the handshake is still in flight. */
   session: SshSession | null;
   listeners: Set<(b: Uint8Array) => void>;
+  /** Like `listeners`, but never replayed the buffer. See `tapSession`. */
+  taps: Set<(e: SessionTapEvent) => void>;
   buffer: Uint8Array[];
   bufferedBytes: number;
+  /**
+   * The last size the terminal reported, or null until it reports one. xterm
+   * starts at 80x24 and only fires onResize when the fit changes that, so a
+   * pane that happened to be exactly 80x24 legitimately never reports.
+   */
+  size: { cols: number; rows: number } | null;
 }
 
 export type SplitDirection = "horizontal" | "vertical";
@@ -117,6 +153,17 @@ interface SessionContextValue {
 
   /** Terminal I/O, per session. Subscribing replays that session's buffer. */
   subscribe: (id: string, fn: (bytes: Uint8Array) => void) => () => void;
+  /**
+   * Live stream only — output, resizes and the close — with no buffer replay.
+   *
+   * Separate from `subscribe` because the replay is exactly wrong for a
+   * recorder: up to half a megabyte of output that arrived before you pressed
+   * record would land in the transcript stamped as having happened at zero
+   * seconds. A pane wants the history; a recording must not invent one.
+   */
+  tapSession: (id: string, fn: (e: SessionTapEvent) => void) => () => void;
+  /** The last size the terminal reported for this session, if it has. */
+  sizeFor: (id: string) => { cols: number; rows: number } | null;
   write: (id: string, data: string) => void;
   resize: (id: string, cols: number, rows: number) => void;
   sftpFor: (id: string) => SftpHandle | null;
@@ -151,8 +198,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // `connect` is memoised without focusedPane in its deps — reading the state
   // directly there would land a new session in whichever pane was focused when
   // the callback was built, not the one focused now.
+  // Written in an effect, not during render, so a discarded render cannot leave
+  // the ref pointing at a pane the committed tree never focused. `connect` only
+  // reads it in response to a user action, which is always after a commit.
   const focusedPaneRef = useRef(0);
-  focusedPaneRef.current = focusedPane;
+  useEffect(() => {
+    focusedPaneRef.current = focusedPane;
+  }, [focusedPane]);
 
   const refreshKeys = useCallback(async () => {
     const k = await listKeys(getVaultKey() ?? undefined);
@@ -212,8 +264,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         entry: { id, target, label: "", sftp: null, openedAt: Date.now() },
         session: null,
         listeners: new Set(),
+        taps: new Set(),
         buffer: [],
         bufferedBytes: 0,
+        size: null,
       };
       live.current.set(id, pending);
 
@@ -227,6 +281,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           l.bufferedBytes -= l.buffer.shift()!.length;
         }
         for (const fn of l.listeners) fn(copy);
+        // Taps get the same buffer the panes get. It is already a private copy
+        // of what the transport handed us, and nothing downstream writes to it.
+        for (const fn of l.taps) fn({ kind: "output", bytes: copy });
       };
 
       const common = {
@@ -234,6 +291,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         save: req.save,
         onData: push,
         onClose: () => {
+          // Taps hear about the close before the session is forgotten, because
+          // a recorder has to be able to finalise on its own rather than keep a
+          // "recording" badge on a shell that is gone.
+          const closing = live.current.get(id);
+          if (closing) {
+            for (const fn of closing.taps) fn({ kind: "closed" });
+            closing.taps.clear();
+          }
           live.current.delete(id);
           syncEntries();
           setActiveId((prev) => (prev === id ? ([...live.current.keys()][0] ?? null) : prev));
@@ -294,7 +359,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const vaultKey = getVaultKey();
         if (vaultKey) {
           void syncVault(vaultKey)
-            .then((r) => setNote(`Vault ${r.status} — ${r.hosts} hosts, ${r.keys} keys`))
+            .then((r) =>
+              setNote(
+                `Vault ${SYNC_WORDING[r.status]} — ${plural(r.hosts, "host")}, ${plural(r.keys, "key")}`,
+              ),
+            )
             .catch((e) => setNote(`Sync failed: ${e.message}`));
         }
         return id;
@@ -328,6 +397,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       l.listeners.delete(fn);
     };
   }, []);
+
+  const tapSession = useCallback((id: string, fn: (e: SessionTapEvent) => void) => {
+    const l = live.current.get(id);
+    if (!l) return () => {};
+    l.taps.add(fn);
+    return () => {
+      l.taps.delete(fn);
+    };
+  }, []);
+
+  /**
+   * Resize is where the size is known, so it is where the size is remembered.
+   * The terminal component owns the fit; nothing else in this provider can
+   * observe the geometry a session is actually running at.
+   */
+  const resize = useCallback((id: string, cols: number, rows: number) => {
+    const l = live.current.get(id);
+    if (!l) return;
+    l.size = { cols, rows };
+    l.session?.resize(cols, rows);
+    for (const fn of l.taps) fn({ kind: "resize", cols, rows });
+  }, []);
+
+  const sizeFor = useCallback((id: string) => live.current.get(id)?.size ?? null, []);
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -383,15 +476,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       mismatch,
       dismissMismatch: () => setMismatch(null),
       subscribe,
+      tapSession,
+      sizeFor,
       write: (id, d) => live.current.get(id)?.session?.write(d),
-      resize: (id, c, r) => live.current.get(id)?.session?.resize(c, r),
+      resize,
       sftpFor: (id) => live.current.get(id)?.entry.sftp ?? null,
       sessionFor: (id) => live.current.get(id)?.session ?? null,
     }),
     [
       phase, sessions, activeId, keys, hosts, activeKey, refreshKeys,
       refreshHosts, connect, disconnect, error, note, pinned, mismatch, subscribe,
-      panes, splitDirection, focusedPane,
+      tapSession, sizeFor, resize, panes, splitDirection, focusedPane,
     ],
   );
 

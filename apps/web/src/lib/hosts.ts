@@ -35,6 +35,25 @@ export interface Host {
   tags?: string[];
   createdAt: number;
   lastUsedAt?: number;
+  /**
+   * Bumped by every write that goes through saveHost. This is the stamp the
+   * vault merge resolves on, and it exists because nothing else here moves when
+   * a host is edited.
+   *
+   * A host is not a create-once record: renaming one, changing its port, moving
+   * it to a folder or pointing it at a different key are all edits in place.
+   * Before this field the merge stamped hosts with `lastUsedAt ?? createdAt`,
+   * neither of which an edit touches, so an edited host and the server's stale
+   * copy of it carried an identical stamp — and mergeById keeps the remote copy
+   * on a tie. The edit was silently reverted by the next sync. Snippets already
+   * had this field for exactly this reason; hosts were missed because they look
+   * like records that are only ever created.
+   *
+   * Optional because every host written before this existed has no value for
+   * it. The merge falls back through lastUsedAt to createdAt for those, which is
+   * the old behaviour, and the first edit gives the record a real stamp.
+   */
+  updatedAt?: number;
 }
 
 const STORE = "hosts";
@@ -44,6 +63,14 @@ export async function listHosts(): Promise<Host[]> {
   return all.sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt));
 }
 
+/**
+ * A host write made by this device, which is what makes it the newest copy.
+ *
+ * Always moves updatedAt. Vault sync must therefore *not* use this to land a
+ * record pulled from the server — that would restamp a remote record as if this
+ * device had just edited it and make every sync a fight. putHost is the verbatim
+ * write for that path, exactly as putSnippet is for snippets.
+ */
 export async function saveHost(
   host: Omit<Host, "id" | "createdAt"> & { id?: string; createdAt?: number },
 ): Promise<Host> {
@@ -51,9 +78,15 @@ export async function saveHost(
     ...host,
     id: host.id ?? crypto.randomUUID(),
     createdAt: host.createdAt ?? Date.now(),
+    updatedAt: Date.now(),
   };
   await idbPut(STORE, record.id, record);
   return record;
+}
+
+/** Lands a host from the vault exactly as it arrived, stamp included. */
+export async function putHost(host: Host): Promise<void> {
+  await idbPut(STORE, host.id, host);
 }
 
 /**

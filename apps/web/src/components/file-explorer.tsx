@@ -54,26 +54,49 @@ interface Props {
   onOpenTerminalAt?: (dir: string) => void;
 }
 
+/**
+ * One directory listing, with no React in it.
+ *
+ * This lives outside the component because both callers — the mount effect
+ * and the navigation handler — want the same two round trips but own the
+ * spinner differently, and because a fetch that touches no state is the only
+ * kind an effect can start without forcing a second render before the first
+ * has painted.
+ */
+async function readDir(
+  sftp: SftpHandle,
+  dir: string,
+): Promise<{ cwd: string; entries: SftpEntry[] }> {
+  const listing = await sftp.list(dir);
+  // Resolve to an absolute path so ".." navigation stays sane.
+  const cwd = await sftp.realpath(listing.path);
+  return { cwd, entries: listing.entries };
+}
+
 export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props) {
   const [cwd, setCwd] = useState<string>(".");
   const [entries, setEntries] = useState<SftpEntry[]>([]);
   const [showHidden, setShowHidden] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Navigating, from a click. The spinner is raised here rather than inside
+   * `readDir` because a user who asked for a directory should see something
+   * happen on the same tick as the click, and an event handler is the one
+   * place where a synchronous state write is unambiguously right.
+   */
   const refresh = useCallback(
     async (dir = cwd) => {
       setBusy(true);
       setError(null);
       try {
-        const listing = await sftp.list(dir);
-        // Resolve to an absolute path so ".." navigation stays sane.
-        const real = await sftp.realpath(listing.path);
-        setCwd(real);
+        const listing = await readDir(sftp, dir);
+        setCwd(listing.cwd);
         setEntries(listing.entries);
       } catch (e) {
         setError(String((e as Error).message ?? e));
@@ -85,9 +108,29 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
   );
 
   useEffect(() => {
-    void refresh(".");
-    // Only on mount / when the connection changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // A new connection always opens at the remote home directory, so `busy`
+    // starts true: the component genuinely mounts into a listing that is
+    // already in flight, and saying so costs no extra render.
+    let cancelled = false;
+    readDir(sftp, ".").then(
+      (listing) => {
+        if (cancelled) return;
+        setCwd(listing.cwd);
+        setEntries(listing.entries);
+        setBusy(false);
+      },
+      (e: unknown) => {
+        if (cancelled) return;
+        setError(String((e as Error).message ?? e));
+        setBusy(false);
+      },
+    );
+    // The connection can be torn down mid-listing — closing the last session
+    // while the home directory is still being read is the ordinary case — and
+    // the answer that arrives afterwards belongs to nobody.
+    return () => {
+      cancelled = true;
+    };
   }, [sftp]);
 
   function track(kind: Transfer["kind"], label: string, total: number): Transfer {

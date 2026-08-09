@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ColumnsIcon,
+  KeyboardIcon,
   PlugsConnectedIcon,
   RowsIcon,
   SquareSplitHorizontalIcon,
@@ -11,7 +12,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
-import { TerminalView, type TerminalHandle } from "@/components/terminal";
+import { TerminalView, useCoarsePointer, type TerminalHandle } from "@/components/terminal";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -53,6 +54,14 @@ export default function TerminalPage() {
     splitPane,
     closePane,
   } = useSshSession();
+
+  // The key bar follows the input device by default, but the override has to
+  // exist in both directions: a laptop needs to be able to summon it to test
+  // the thing, and a phone needs to be able to put it away when it is reading
+  // output rather than typing.
+  const coarsePointer = useCoarsePointer();
+  const [keyBarOverride, setKeyBarOverride] = useState<boolean | null>(null);
+  const keyBar = keyBarOverride ?? coarsePointer;
 
   if (sessions.length === 0 || panes.length === 0) {
     return (
@@ -123,6 +132,26 @@ export default function TerminalPage() {
         <span className="text-muted-foreground ml-auto text-[11px]">
           {panes.length} {panes.length === 1 ? "pane" : "panes"}
         </span>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("ml-1 size-7", keyBar && "bg-muted text-foreground")}
+              aria-label={keyBar ? "Hide the key bar" : "Show the key bar"}
+              aria-pressed={keyBar}
+              onClick={() => setKeyBarOverride(!keyBar)}
+            >
+              <KeyboardIcon />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {keyBar
+              ? "Hide Ctrl, Esc and the arrow keys"
+              : "Show Ctrl, Esc and the arrow keys"}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <div
@@ -147,6 +176,10 @@ export default function TerminalPage() {
               index={index}
               focused={index === focusedPane && split}
               showChrome={split}
+              // One bar, on the pane the keys would go to. Four panes each with
+              // their own row would eat the screen and leave you guessing which
+              // shell was about to receive the Ctrl-C.
+              keyBar={keyBar && index === Math.min(focusedPane, panes.length - 1)}
               onFocus={() => setFocusedPane(index)}
               onClose={() => closePane(index)}
             />
@@ -275,6 +308,7 @@ function Pane({
   index,
   focused,
   showChrome,
+  keyBar,
   onFocus,
   onClose,
 }: {
@@ -282,6 +316,7 @@ function Pane({
   index: number;
   focused: boolean;
   showChrome: boolean;
+  keyBar: boolean;
   onFocus: () => void;
   onClose: () => void;
 }) {
@@ -342,9 +377,13 @@ function Pane({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 p-1.5">
+      {/* The key bar wants to sit flush with the bottom edge — inset by the
+          pane's padding it would leave a strip of terminal below it, and the
+          safe-area inset it carries would land in the wrong place. */}
+      <div className={cn("min-h-0 flex-1 p-1.5", keyBar && "pb-0")}>
         <TerminalView
           ref={term}
+          showKeyboardBar={keyBar}
           onInput={(d) => write(sessionId, d)}
           onResize={(c, r) => resize(sessionId, c, r)}
         />

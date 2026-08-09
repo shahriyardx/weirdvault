@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { PlugsConnectedIcon, TerminalWindowIcon } from "@phosphor-icons/react/dist/ssr";
 
@@ -26,16 +26,20 @@ import { useSshSession } from "@/lib/ssh/session-provider";
  */
 export default function FilesPage() {
   const { sessions, activeId, sftpFor, sessionFor, write } = useSshSession();
-  const [browsingId, setBrowsingId] = useState<string | null>(null);
+  const [chosenId, setChosenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
 
-  // Default to the active session, and recover if the chosen one closes.
-  useEffect(() => {
-    if (browsingId && sessions.some((s) => s.id === browsingId)) return;
-    setBrowsingId(activeId ?? sessions[0]?.id ?? null);
-  }, [browsingId, sessions, activeId]);
-
-  const id = browsingId;
+  /**
+   * The picked session is a preference, not the source of truth, so it is
+   * resolved during render instead of being copied into state by an effect.
+   * Storing it meant a frame where the picker pointed at a session that had
+   * just closed, and a second render to correct it. Falling back here means
+   * a closed session degrades to the active one on the very same paint.
+   */
+  const id =
+    chosenId && sessions.some((s) => s.id === chosenId)
+      ? chosenId
+      : (activeId ?? sessions[0]?.id ?? null);
   const sftp = id ? sftpFor(id) : null;
   const session = id ? sessionFor(id) : null;
   const entry = sessions.find((s) => s.id === id) ?? null;
@@ -65,7 +69,7 @@ export default function FilesPage() {
       {/* Which machine am I looking at? */}
       <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <span className="text-muted-foreground text-xs">Browsing</span>
-        <Select value={id ?? ""} onValueChange={(v) => { setBrowsingId(v); setEditing(null); }}>
+        <Select value={id ?? ""} onValueChange={(v) => { setChosenId(v); setEditing(null); }}>
           <SelectTrigger size="sm" className="w-auto min-w-56">
             <SelectValue placeholder="Choose a session" />
           </SelectTrigger>

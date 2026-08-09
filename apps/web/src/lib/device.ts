@@ -4,12 +4,37 @@
  * Device identity.
  *
  * Each browser gets a non-extractable Ed25519 keypair and a server-side record,
- * so "where am I signed in" and "revoke that laptop" are answerable. The
- * signing key is what makes the identity meaningful: without it a device id is
- * just a cookie value that any client could claim.
+ * so "where am I signed in" and "revoke that laptop" are answerable. The public
+ * half is the record's stable name: it is what makes a re-registration
+ * recognisable as the same browser rather than a new one, and revoking it
+ * refuses that key permanently.
+ *
+ * What the private half does *not* do yet, stated because the UI must not imply
+ * otherwise: nothing signs with it. Registration is authenticated by the session
+ * cookie, and the server never asks the browser to prove it holds the key it is
+ * registering. That makes the identity client-cooperative rather than
+ * cryptographic — good enough to answer "which of my browsers is this", not good
+ * enough to stop a stolen session from enrolling a device of its choosing.
+ * Closing it means a nonce from the server, a signature from crypto.subtle.sign,
+ * and a verification before the row is written.
  *
  * Revocation tombstones the record rather than deleting it, so audit rows keep
- * a resolvable reference and a revoked id can never be re-registered.
+ * a resolvable reference and a revoked id can never be re-registered. Registering
+ * also stamps the current session with this device id, which is what makes
+ * revocation able to end that browser's sessions rather than only its future
+ * registrations.
+ *
+ * A second keypair used to live here — an X25519 ECDH pair whose public half was
+ * published so a team key could be wrapped to this browser. It is gone with the
+ * rest of the team surface. Only the Ed25519 identity remains, and the two were
+ * always separate on purpose: reusing a signing key for encryption is the
+ * classic mistake, so removing the encryption half leaves the signing half
+ * untouched rather than half-disentangled.
+ *
+ * Records written by an older build still carry the X25519 pair in IndexedDB.
+ * Nothing here reads it and nothing deletes it: an idb write to strip a field
+ * this module already ignores would risk the device id for no gain, and the
+ * stale handles are non-extractable keys nothing can address.
  */
 
 import { idbGet, idbPut } from "./idb";
@@ -53,7 +78,15 @@ function defaultLabel(platform: string): string {
   return `${browser} on ${os}`;
 }
 
-/** Creates the identity if this browser doesn't have one yet. */
+/**
+ * Creates the identity if this browser doesn't have one yet, and returns the
+ * existing one otherwise.
+ *
+ * An existing record is returned as it stands, never regenerated: a new Ed25519
+ * pair would orphan the server-side device row, its audit history and its
+ * sessions, and the user would see a browser they are sitting in appear as a
+ * stranger in the device list.
+ */
 export async function ensureDeviceIdentity(): Promise<DeviceIdentity> {
   const existing = await idbGet<DeviceIdentity>(STORE, KEY);
   if (existing) return existing;

@@ -100,8 +100,13 @@ describe("ipPrefix", () => {
     expect(ipPrefix("2001:db8:1234:5678::1")).toBe("2001:db8:1234::/48");
   });
 
-  test("takes the first hop from a forwarded chain", () => {
-    expect(ipPrefix("203.0.113.42, 10.0.0.1")).toBe("203.0.113.0/24");
+  // It used to take the left-most entry of a forwarded chain, which is the part
+  // of X-Forwarded-For the caller writes and no proxy overwrites — a forged
+  // prefix in every audit row and a chosen key for the recovery rate limiter.
+  // Resolving that header needs a trusted hop count and lives in audit/address.
+  // A comma arriving here means the raw header was passed by mistake.
+  test("refuses a whole forwarded chain rather than trusting its first entry", () => {
+    expect(ipPrefix("203.0.113.42, 10.0.0.1")).toBeNull();
   });
 
   test("never returns a full address", () => {

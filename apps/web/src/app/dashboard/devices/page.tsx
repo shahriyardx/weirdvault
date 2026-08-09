@@ -3,24 +3,35 @@
 /**
  * Registered devices.
  *
- * A client component because the list is mutated in place: revoking a device
- * removes a row, and the confirmation lives in an alert dialog with its own
- * state. Nothing here can be rendered on the server anyway — the device record
- * is about this browser as much as about the account.
+ * A client component, and it has to be. The list itself comes from
+ * GET /api/devices, but two of the facts on this page exist only inside this
+ * browser: which record is *this* device (src/lib/device.ts keeps the id in
+ * IndexedDB next to a non-extractable Ed25519 signing key) and how many
+ * device-bound SSH keys are stored here. The server cannot answer either one —
+ * that is the whole point of device-bound custody — which is why every key
+ * count on this page is scoped to this browser and says so, rather than being
+ * presented per row as if the server knew.
+ *
+ * Revocation is a real DELETE. The server tombstones the record instead of
+ * deleting it, so a revoked row stays visible here afterwards; the page refetches
+ * so what you see is the state the server actually holds, not an optimistic guess.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AppleLogoIcon,
+  ArrowsClockwiseIcon,
   DevicesIcon,
   GlobeIcon,
   KeyIcon,
   LinuxLogoIcon,
+  LockKeyIcon,
   MonitorIcon,
   ProhibitIcon,
   ShieldWarningIcon,
   SignOutIcon,
+  WarningCircleIcon,
   WindowsLogoIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -42,90 +53,54 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getCurrentDeviceId } from "@/lib/device";
+import { listStoredKeys } from "@/lib/keys";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------- model */
 
 type Platform = "macos" | "windows" | "linux" | "ios" | "android" | "other";
 
-interface DeviceRecord {
+/**
+ * One row of GET /api/devices, exactly as it arrives. Timestamps cross the wire
+ * as ISO strings because that is what JSON does to a Date, and `platform` is
+ * nullable because a device may have enrolled before the column existed or from
+ * a client that did not send one.
+ */
+interface ApiDevice {
   id: string;
-  /** User-editable name; defaults to "<browser> on <os>" when the device enrols. */
   label: string;
-  platform: Platform;
-  browser: string;
-  /**
-   * Minutes before this page loaded. The API returns absolute timestamps —
-   * offsets keep the placeholder plausible whenever the page is opened.
-   */
-  registeredAgo: number;
-  lastSeenAgo: number;
-  /**
-   * The network the device was last seen on, already truncated: /24 for IPv4,
-   * /48 for IPv6. Full addresses are not shown on this page.
-   */
-  network: string;
-  /** Keys generated on that device that were never synced anywhere else. */
-  deviceBoundKeys: number;
-  current?: boolean;
+  platform: string | null;
+  lastSeenAt: string | null;
+  lastSeenIpPrefix: string | null;
+  createdAt: string | null;
+  revokedAt: string | null;
 }
 
-/**
- * PLACEHOLDER DATA — awaiting GET /api/devices.
- *
- * Shaped like the response that endpoint will return, so swapping this constant
- * for a fetch is the only change this page needs. No request is made here: the
- * route does not exist yet and inventing one would fail silently in the UI.
- */
-const PLACEHOLDER_DEVICES: DeviceRecord[] = [
-  {
-    id: "6f1c9a24-4c1b-4a8e-9d0a-2b7f5e11c3a2",
-    label: "Chrome on Mac",
-    platform: "macos",
-    browser: "Chrome 141",
-    registeredAgo: 60 * 24 * 96,
-    lastSeenAgo: 2,
-    network: "203.0.113.0/24",
-    deviceBoundKeys: 1,
-    current: true,
-  },
-  {
-    id: "b3d8e770-1f42-4b6d-8f9c-51a0c6d2e884",
-    label: "Firefox on Linux",
-    platform: "linux",
-    browser: "Firefox 145",
-    registeredAgo: 60 * 24 * 41,
-    lastSeenAgo: 60 * 19,
-    network: "198.51.100.0/24",
-    deviceBoundKeys: 2,
-  },
-  {
-    id: "cc41b0f5-9a3e-4d17-b2c8-6e0f4a9d1b73",
-    label: "Safari on iPhone",
-    platform: "ios",
-    browser: "Safari 26",
-    registeredAgo: 60 * 24 * 22,
-    lastSeenAgo: 60 * 24 * 5,
-    network: "2001:db8:4f2::/48",
-    deviceBoundKeys: 0,
-  },
-  {
-    id: "0a7e2d63-58cf-42b1-9e35-cd8a71f4b206",
-    label: "Edge on the office desktop",
-    platform: "windows",
-    browser: "Edge 141",
-    registeredAgo: 60 * 24 * 137,
-    lastSeenAgo: 60 * 24 * 63,
-    network: "192.0.2.0/24",
-    deviceBoundKeys: 0,
-  },
-];
+interface DeviceRecord {
+  id: string;
+  /** Defaulted to "<browser> on <os>" when the device enrolled. */
+  label: string;
+  platform: Platform;
+  /** Epoch ms, or null when the server sent something unparseable. */
+  createdAt: number | null;
+  lastSeenAt: number | null;
+  /**
+   * The network the device was last seen on, already truncated server-side: /24
+   * for IPv4, /48 for IPv6. Null when the request reached the app without a
+   * forwarded address, which happens on a local or non-proxied deployment.
+   */
+  network: string | null;
+  /** Set once revoked. The row is tombstoned, never deleted. */
+  revokedAt: number | null;
+}
 
 const PLATFORMS: Record<Platform, { label: string; Icon: typeof AppleLogoIcon }> = {
   macos: { label: "macOS", Icon: AppleLogoIcon },
@@ -136,52 +111,192 @@ const PLATFORMS: Record<Platform, { label: string; Icon: typeof AppleLogoIcon }>
   other: { label: "Unknown platform", Icon: MonitorIcon },
 };
 
-interface Snapshot {
-  devices: DeviceRecord[];
-  /** Captured once so every relative timestamp on the page agrees. */
-  readAt: number;
+/**
+ * The four things this page can be showing. Errors are kept as a state rather
+ * than a toast because a failed load leaves nothing on screen: the reason has
+ * to live where the list would have been, next to a way to try again.
+ */
+type LoadState =
+  | { status: "loading" }
+  | { status: "ready"; devices: DeviceRecord[]; readAt: number }
+  | { status: "unauthorized" }
+  | { status: "error"; reason: string };
+
+function toPlatform(value: string | null): Platform {
+  return value !== null && value in PLATFORMS ? (value as Platform) : "other";
+}
+
+/** ISO string to epoch ms. A NaN would silently poison the relative formatter. */
+function toTime(value: string | null): number | null {
+  if (!value) return null;
+  const t = Date.parse(value);
+  return Number.isNaN(t) ? null : t;
+}
+
+function parseDevice(row: ApiDevice): DeviceRecord {
+  return {
+    id: row.id,
+    label: row.label,
+    platform: toPlatform(row.platform),
+    createdAt: toTime(row.createdAt),
+    lastSeenAt: toTime(row.lastSeenAt),
+    network: row.lastSeenIpPrefix,
+    revokedAt: toTime(row.revokedAt),
+  };
 }
 
 /* -------------------------------------------------------------------- page */
 
 export default function DevicesPage() {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [refreshing, setRefreshing] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Stands in for `fetch("/api/devices")`. The delay is here so the loading
-    // state is real rather than decorative; replace the whole effect body with
-    // the request once the route lands.
-    const timer = setTimeout(
-      () => setSnapshot({ devices: PLACEHOLDER_DEVICES, readAt: Date.now() }),
-      420,
-    );
-    return () => clearTimeout(timer);
+  /**
+   * Both of these are browser-local and can only be read after mount. They stay
+   * null when IndexedDB is unavailable (a private window, blocked storage) or
+   * when this browser has simply never enrolled — in which case no row is marked
+   * as "this device" and no key count is shown, which is the honest outcome.
+   */
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
+  const [localBoundKeys, setLocalBoundKeys] = useState<number | null>(null);
+
+  const load = useCallback(async (): Promise<"ok" | "unauthorized" | "error"> => {
+    try {
+      const res = await fetch("/api/devices", { cache: "no-store" });
+      if (res.status === 401) {
+        setState({ status: "unauthorized" });
+        return "unauthorized";
+      }
+      if (!res.ok) {
+        setState({ status: "error", reason: await failure(res) });
+        return "error";
+      }
+      const payload = (await res.json()) as { devices?: ApiDevice[] };
+      setState({
+        status: "ready",
+        devices: (payload.devices ?? []).map(parseDevice),
+        // Captured once so every relative timestamp on the page agrees.
+        readAt: Date.now(),
+      });
+      return "ok";
+    } catch (e) {
+      setState({ status: "error", reason: message(e) });
+      return "error";
+    }
   }, []);
 
-  function revoke(device: DeviceRecord) {
-    // Local only until DELETE /api/devices/:id exists. The row is dropped so
-    // the interaction is complete end to end; nothing is sent anywhere.
-    setSnapshot((prev) =>
-      prev ? { ...prev, devices: prev.devices.filter((d) => d.id !== device.id) } : prev,
-    );
-    toast.success(`Revoked ${device.label}`, {
-      description:
-        "The device is signed out and its id is tombstoned, so it cannot register again.",
-    });
+  useEffect(() => {
+    void (async () => {
+      await load();
+    })();
+  }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // getCurrentDeviceId only reads; it does not enrol this browser, so
+        // opening this page never creates a device record as a side effect.
+        const [id, keys] = await Promise.all([getCurrentDeviceId(), listStoredKeys()]);
+        if (cancelled) return;
+        setCurrentDeviceId(id ?? null);
+        setLocalBoundKeys(keys.filter((k) => k.mode === "device-bound").length);
+      } catch {
+        if (!cancelled) {
+          setCurrentDeviceId(null);
+          setLocalBoundKeys(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function refresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   }
 
+  async function revoke(device: DeviceRecord) {
+    const isCurrent = device.id === currentDeviceId;
+    setRevokingId(device.id);
+    try {
+      const res = await fetch(`/api/devices?id=${encodeURIComponent(device.id)}`, {
+        method: "DELETE",
+      });
+
+      if (res.status === 401) {
+        // Nothing was revoked, and the list on screen is no longer trustworthy
+        // either, so drop to the signed-out view rather than leaving stale rows.
+        setState({ status: "unauthorized" });
+        throw new Error("The session has expired, so nothing was revoked. Sign in and try again.");
+      }
+      if (res.status === 404) {
+        // The route answers 404 for "no such device, or already revoked". Either
+        // way our view is stale, so say nothing happened and re-read.
+        toast.error("Nothing was revoked", {
+          description:
+            "The server has no active device with that id — it may have been revoked already. Reloading the list.",
+        });
+        await load();
+        return;
+      }
+      if (!res.ok) throw new Error(await failure(res));
+
+      // Re-read rather than patch local state: the server tombstones, so the row
+      // must come back marked revoked instead of disappearing. Refetching is also
+      // how we find out what revoking *this* browser did to this session.
+      const after = await load();
+
+      if (isCurrent) {
+        toast.success(`Revoked ${device.label}`, {
+          description:
+            after === "unauthorized"
+              ? "That was this browser and the session went with it. Sign in again to enrol as a new device."
+              : after === "ok"
+                ? "The id is tombstoned, so this browser cannot re-register under it. The session row is deleted, but this reload was answered from the cached session cookie, so it stays usable for a few more minutes — sign out to end it now."
+                : "The id is tombstoned, so this browser cannot re-register under it. The list could not be re-read, so whether this session survived is unknown — sign out to be sure.",
+        });
+      } else {
+        toast.success(`Revoked ${device.label}`, {
+          description:
+            "The id is tombstoned, so that browser cannot register under it again.",
+        });
+      }
+    } catch (e) {
+      toast.error("Revoke failed", { description: message(e) });
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  const devices = state.status === "ready" ? state.devices : null;
+
+  const rows = useMemo(() => {
+    if (!devices) return [];
+    // The API sorts by last seen. Revoked records are kept for reference rather
+    // than for action, so they sink below the live ones; sort is stable, so the
+    // server's ordering survives within each group.
+    return [...devices].sort(
+      (a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null),
+    );
+  }, [devices]);
+
   const stats = useMemo(() => {
-    if (!snapshot) return null;
-    const boundKeys = snapshot.devices.reduce((n, d) => n + d.deviceBoundKeys, 0);
-    return { count: snapshot.devices.length, boundKeys };
-  }, [snapshot]);
+    if (!devices) return null;
+    const active = devices.filter((d) => d.revokedAt === null).length;
+    return { total: devices.length, active, revoked: devices.length - active };
+  }, [devices]);
 
   return (
     <div className="min-w-0">
       <PageHeader
         eyebrow="Account"
         title="Devices"
-        description="Every browser that has unlocked your vault holds a non-extractable signing key and a record here. This is the list of things that can currently sync."
+        description="Every browser that has enrolled holds a non-extractable signing key and a record here. This is the list of things that can currently sign in as you and sync your vault."
         actions={
           <Button asChild variant="outline">
             <Link href="/dashboard/activity">Device history</Link>
@@ -194,49 +309,82 @@ export default function DevicesPage() {
         <AlertTitle>Revoking is permanent for that device</AlertTitle>
         <AlertDescription>
           <p>
-            Revoking signs the device out immediately, refuses its next sync, and
-            tombstones its id so the same browser cannot re-register under it. If
-            you sign in there again it enrols as a new device with a new key and
-            a new record — the revoked id is never reissued, which is what keeps
-            older activity rows resolvable.
+            Revoking marks the record revoked, deletes the sessions stamped with
+            that device id, and refuses any later attempt to register that
+            browser&rsquo;s signing key again. A session is stamped when that
+            browser registers, which happens on every sign-in — a session older
+            than its browser&rsquo;s first registration carries no device id and
+            is not matched, so use &ldquo;sign out everywhere&rdquo; in Settings
+            if you need to be certain. The id is tombstoned rather than deleted,
+            so it is never reissued and older activity rows stay resolvable.
+            Signing in there again enrols a new device, with a new key and a new
+            record.
           </p>
           <p>
-            Revocation cannot reach into a browser you no longer control.
-            Device-bound keys stay in its storage, so if the device is lost,
-            remove that key from <code className="text-foreground">~/.ssh/authorized_keys</code>{" "}
-            on the hosts it could reach.
+            What it does not do: reach into a browser you no longer control. A
+            connection already open there is not torn down, a relay token already
+            issued stays valid for the rest of its minute, and device-bound keys
+            stay in that browser&rsquo;s storage. If the device is lost, also
+            remove those keys from{" "}
+            <code className="text-foreground">~/.ssh/authorized_keys</code> on the
+            hosts it could reach.
           </p>
         </AlertDescription>
       </Alert>
 
-      {snapshot === null ? (
+      {state.status === "loading" ? (
         <LoadingState />
-      ) : snapshot.devices.length === 0 ? (
+      ) : state.status === "unauthorized" ? (
+        <UnauthorizedState />
+      ) : state.status === "error" ? (
+        <ErrorState reason={state.reason} onRetry={() => void refresh()} busy={refreshing} />
+      ) : rows.length === 0 ? (
         <EmptyState />
       ) : (
         <Card className="mt-6">
           <CardHeader className="border-b border-border">
             <CardTitle>Registered devices</CardTitle>
             <CardDescription>
-              {stats?.count === 1 ? "1 device" : `${stats?.count} devices`}
-              {stats && stats.boundKeys > 0 && (
+              {stats?.active === 1 ? "1 active device" : `${stats?.active} active devices`}
+              {stats && stats.revoked > 0 && ` · ${stats.revoked} revoked`}
+              {localBoundKeys !== null && localBoundKeys > 0 && (
                 <>
                   {" · "}
-                  {stats.boundKeys} device-bound{" "}
-                  {stats.boundKeys === 1 ? "key" : "keys"} that exist nowhere else
+                  {localBoundKeys} device-bound {localBoundKeys === 1 ? "key" : "keys"}{" "}
+                  in this browser
                 </>
               )}
+              . Key counts exist for this browser only: a device-bound key never
+              leaves the machine that made it, so neither the server nor this page
+              can say what any other device holds.
             </CardDescription>
+            <CardAction>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void refresh()}
+                disabled={refreshing}
+              >
+                <ArrowsClockwiseIcon
+                  data-icon="inline-start"
+                  className={cn(refreshing && "animate-spin")}
+                />
+                Refresh
+              </Button>
+            </CardAction>
           </CardHeader>
 
           <CardContent className="px-0">
             <ul className="divide-y divide-border">
-              {snapshot.devices.map((device) => (
+              {rows.map((device) => (
                 <DeviceRow
                   key={device.id}
                   device={device}
-                  now={snapshot.readAt}
-                  onRevoke={() => revoke(device)}
+                  now={state.readAt}
+                  isCurrent={device.id === currentDeviceId}
+                  localBoundKeys={localBoundKeys}
+                  busy={revokingId === device.id}
+                  onRevoke={() => void revoke(device)}
                 />
               ))}
             </ul>
@@ -249,11 +397,15 @@ export default function DevicesPage() {
           <ShieldWarningIcon className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className="min-w-0">
             A device record is a label, a platform string and an Ed25519 public
-            key. The matching private key is non-extractable and stays in that
-            browser, which is what makes &ldquo;revoke that laptop&rdquo;
-            meaningful rather than a cookie you could copy. Last-seen networks
-            are truncated to a /24 for IPv4 and a /48 for IPv6 — enough to
-            recognise an unfamiliar one, not a precise locator.{" "}
+            key that this browser generated and cannot export. Revoking it ends
+            the sessions stamped with its id and refuses that key for good. Say
+            what is not true of it: the server never challenges the key, so
+            registering a device is authenticated by your session and not by a
+            signature — a stolen session could enrol a device of its own choosing
+            until a challenge-response exists. Last-seen networks are truncated to
+            a /24 for IPv4 and a /48 for IPv6, and are only as trustworthy as the
+            proxy in front of the app; with none configured they are recorded as
+            unknown rather than guessed.{" "}
             <Link href="/security" className="text-primary hover:underline">
               Read the threat model
             </Link>
@@ -270,21 +422,35 @@ export default function DevicesPage() {
 function DeviceRow({
   device,
   now,
+  isCurrent,
+  localBoundKeys,
+  busy,
   onRevoke,
 }: {
   device: DeviceRecord;
   now: number;
+  isCurrent: boolean;
+  /** Device-bound keys in *this* browser; only meaningful on the current row. */
+  localBoundKeys: number | null;
+  busy: boolean;
   onRevoke: () => void;
 }) {
   const { label, Icon } = PLATFORMS[device.platform];
+  const revoked = device.revokedAt !== null;
+  const boundKeys = isCurrent ? localBoundKeys : null;
 
   return (
-    <li className="flex flex-wrap items-start gap-x-4 gap-y-3 px-(--card-spacing) py-3">
+    <li
+      className={cn(
+        "flex flex-wrap items-start gap-x-4 gap-y-3 px-(--card-spacing) py-3",
+        revoked && "opacity-70",
+      )}
+    >
       <span
         aria-hidden
         className={cn(
           "mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm border border-border bg-secondary",
-          device.current ? "text-primary" : "text-muted-foreground",
+          revoked ? "text-muted-foreground" : isCurrent ? "text-primary" : "text-muted-foreground",
         )}
       >
         <Icon className="size-4" />
@@ -292,52 +458,97 @@ function DeviceRow({
 
       <div className="min-w-0 flex-1 basis-56">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium text-foreground">{device.label}</span>
-          {device.current && (
+          <span
+            className={cn(
+              "truncate font-medium text-foreground",
+              revoked && "line-through decoration-muted-foreground",
+            )}
+          >
+            {device.label}
+          </span>
+          {isCurrent && (
             <Badge variant="outline" className="gap-1 text-muted-foreground">
               <MonitorIcon className="text-primary" />
               This device
             </Badge>
           )}
-          {device.deviceBoundKeys > 0 && (
+          {revoked && (
+            <Badge variant="destructive" className="gap-1">
+              <ProhibitIcon />
+              Revoked
+            </Badge>
+          )}
+          {boundKeys !== null && boundKeys > 0 && (
             <Badge variant="outline" className="gap-1 text-muted-foreground">
               <KeyIcon className="text-warning" />
-              {device.deviceBoundKeys} device-bound
+              {boundKeys} device-bound here
             </Badge>
           )}
         </div>
 
         <p className="mt-0.5 truncate text-muted-foreground">
-          {device.browser} · {label} · registered {relative(now - device.registeredAgo * 60_000, now)}
+          {label} · registered {stamp(device.createdAt, now)}
         </p>
 
         <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1">
           <Field
             term="Last seen"
-            value={
-              device.current
-                ? "Now, in this tab"
-                : relative(now - device.lastSeenAgo * 60_000, now)
-            }
+            value={stamp(device.lastSeenAt, now)}
+            title={absolute(device.lastSeenAt)}
           />
-          <Field term="Network" value={device.network} mono />
+          <Field term="Network" value={device.network ?? "Not recorded"} mono />
+          {revoked && (
+            <Field
+              term="Revoked"
+              value={stamp(device.revokedAt, now)}
+              title={absolute(device.revokedAt)}
+            />
+          )}
         </dl>
       </div>
 
       <div className="ml-auto shrink-0">
-        <RevokeDialog device={device} onConfirm={onRevoke} />
+        {revoked ? (
+          // Nothing to offer here: the row is a tombstone, and the API answers
+          // 404 to a second DELETE. A disabled control that explains itself beats
+          // a button that would only produce an error.
+          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted-foreground">
+            <ProhibitIcon className="size-3.5" />
+            Tombstoned · cannot re-register
+          </span>
+        ) : (
+          <RevokeDialog
+            device={device}
+            isCurrent={isCurrent}
+            localBoundKeys={boundKeys}
+            busy={busy}
+            onConfirm={onRevoke}
+          />
+        )}
       </div>
     </li>
   );
 }
 
-function Field({ term, value, mono }: { term: string; value: string; mono?: boolean }) {
+function Field({
+  term,
+  value,
+  mono,
+  title,
+}: {
+  term: string;
+  value: string;
+  mono?: boolean;
+  title?: string;
+}) {
   return (
     <div className="min-w-0">
       <dt className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
         {term}
       </dt>
-      <dd className={cn("truncate text-foreground", mono && "tabular-nums")}>{value}</dd>
+      <dd className={cn("truncate text-foreground", mono && "tabular-nums")} title={title}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -346,17 +557,28 @@ function Field({ term, value, mono }: { term: string; value: string; mono?: bool
 
 function RevokeDialog({
   device,
+  isCurrent,
+  localBoundKeys,
+  busy,
   onConfirm,
 }: {
   device: DeviceRecord;
+  isCurrent: boolean;
+  localBoundKeys: number | null;
+  busy: boolean;
   onConfirm: () => void;
 }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:bg-destructive/10"
+          disabled={busy}
+        >
           <SignOutIcon data-icon="inline-start" />
-          Revoke
+          {busy ? "Revoking…" : "Revoke"}
         </Button>
       </AlertDialogTrigger>
 
@@ -364,9 +586,9 @@ function RevokeDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Revoke {device.label}?</AlertDialogTitle>
           <AlertDialogDescription>
-            {device.current
-              ? "This is the browser you are using. Confirming signs you out here and you will need to sign in again, which enrols this browser as a new device."
-              : "The device is signed out at once and its next sync is refused."}
+            {isCurrent
+              ? "This is the browser you are using. Confirming deletes the sessions stamped with this device id, which will sign you out here, and there is no undo."
+              : "The record is tombstoned and the sessions stamped with that device id are deleted."}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -376,8 +598,12 @@ function RevokeDialog({
               —
             </span>
             <span className="min-w-0">
-              Open sessions end. The relay stops forwarding for that device the
-              moment it checks in.
+              Sessions stamped with this device id are deleted, so that
+              browser&rsquo;s next request is rejected — with up to five minutes
+              of lag, because a session that has read itself recently is served
+              from a short-lived cookie cache rather than the database. A session
+              that was never tied to a device id is not matched at all, and stays
+              live until it expires or is signed out.
             </span>
           </li>
           <li className="flex gap-2">
@@ -394,9 +620,11 @@ function RevokeDialog({
               —
             </span>
             <span className="min-w-0">
-              {device.deviceBoundKeys > 0
-                ? `${device.deviceBoundKeys} device-bound ${device.deviceBoundKeys === 1 ? "key stays" : "keys stay"} in that browser's storage. Remove the matching public ${device.deviceBoundKeys === 1 ? "key" : "keys"} from ~/.ssh/authorized_keys to cut off access to your hosts.`
-                : "No device-bound keys are stored there, so nothing is stranded. Portable keys stay in the vault and remain available on your other devices."}
+              {isCurrent && localBoundKeys !== null
+                ? localBoundKeys > 0
+                  ? `${localBoundKeys} device-bound ${localBoundKeys === 1 ? "key stays" : "keys stay"} in this browser's storage — revoking the device record does not delete them. Remove the matching ${localBoundKeys === 1 ? "line" : "lines"} from ~/.ssh/authorized_keys to cut off access to your hosts.`
+                  : "No device-bound keys are stored in this browser, so nothing is stranded. Portable keys are wrapped in the vault and stay available wherever you unlock it."
+                : "Whether that browser holds device-bound keys cannot be answered from here — such keys never leave the machine that made them, so neither the server nor this page has ever seen them. If it might hold any, remove the matching lines from ~/.ssh/authorized_keys."}
             </span>
           </li>
         </ul>
@@ -442,6 +670,64 @@ function LoadingState() {
   );
 }
 
+/**
+ * The device list is per-account, so without a session there is nothing to show
+ * and no useful subset to guess at.
+ */
+function UnauthorizedState() {
+  return (
+    <Card className="mt-6">
+      <CardContent className="flex flex-col items-start gap-2 py-4">
+        <span
+          aria-hidden
+          className="grid size-8 place-items-center rounded-sm border border-border bg-secondary text-primary"
+        >
+          <LockKeyIcon className="size-4" />
+        </span>
+        <p className="font-heading text-sm font-medium">Sign in to see your devices</p>
+        <p className="max-w-lg text-muted-foreground">
+          The device registry belongs to an account, and this session is not
+          signed in — or it has just ended, which is what happens when you revoke
+          the browser you are sitting at.
+        </p>
+        <Button asChild variant="outline" size="sm" className="mt-1">
+          <Link href="/sign-in">Sign in</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ErrorState({
+  reason,
+  onRetry,
+  busy,
+}: {
+  reason: string;
+  onRetry: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Alert variant="destructive" className="mt-6">
+      <WarningCircleIcon />
+      <AlertTitle>Could not load your devices</AlertTitle>
+      <AlertDescription>
+        <p>
+          {reason} Nothing is listed below because nothing was read — this is not
+          an empty registry, it is an unanswered request.
+        </p>
+        <Button variant="outline" size="sm" className="mt-1" onClick={onRetry} disabled={busy}>
+          <ArrowsClockwiseIcon
+            data-icon="inline-start"
+            className={cn(busy && "animate-spin")}
+          />
+          Try again
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 function EmptyState() {
   return (
     <Card className="mt-6">
@@ -454,9 +740,9 @@ function EmptyState() {
         </span>
         <p className="font-heading text-sm font-medium">No devices registered</p>
         <p className="max-w-lg text-muted-foreground">
-          A device is registered the first time a browser unlocks your vault. If
-          you have just revoked everything, sign in again on the browser you want
-          to keep and it will enrol with a new key.
+          A device is registered the first time a browser enrols with this
+          account. The registry is genuinely empty — the request succeeded and
+          returned nothing.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
           <Link href="/dashboard/terminal">Open terminal</Link>
@@ -488,4 +774,39 @@ function relative(at: number, now: number): string {
     if (abs >= ms) return RTF.format(Math.round(delta / ms), unit);
   }
   return "just now";
+}
+
+/** An unparseable timestamp says so rather than rendering as 1970 or NaN. */
+function stamp(at: number | null, now: number): string {
+  return at === null ? "unknown" : relative(at, now);
+}
+
+function absolute(at: number | null): string | undefined {
+  return at === null ? undefined : new Date(at).toLocaleString();
+}
+
+/* ------------------------------------------------------------------ errors */
+
+/**
+ * The API answers failures with { error }. Showing that string beats a generic
+ * apology: "device revoked" and "id required" mean different things to whoever
+ * has to fix them.
+ */
+async function failure(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    if (typeof body.error === "string" && body.error) {
+      return `The server refused the request: ${body.error} (HTTP ${res.status}).`;
+    }
+  } catch {
+    // No JSON body — a proxy error page or an empty response. Fall through.
+  }
+  return `The server returned ${res.status}.`;
+}
+
+function message(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) {
+    return String((e as { message?: unknown }).message ?? "Unknown error");
+  }
+  return String(e ?? "Unknown error");
 }
