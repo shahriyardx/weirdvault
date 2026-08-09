@@ -105,7 +105,16 @@ func runEnroll(args []string) error {
 
 	var out enrollResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return fmt.Errorf("unreadable response from %s (%d): %s", base, resp.StatusCode, truncate(string(raw), 200))
+		// An empty body is the common shape of a server-side crash, and printing
+		// nothing after the colon reads as the message being cut off rather than
+		// as the fact it is. Say which, because the two send you to different
+		// places: a body means the server had an opinion, none means look at its
+		// logs.
+		detail := truncate(string(raw), 200)
+		if len(bytes.TrimSpace(raw)) == 0 {
+			detail = "(empty body — check the server's logs)"
+		}
+		return fmt.Errorf("unreadable response from %s (%d): %s", base, resp.StatusCode, detail)
 	}
 	if resp.StatusCode != http.StatusOK {
 		if out.Error != "" {

@@ -92,51 +92,71 @@ export async function POST(request: Request) {
   const now = new Date();
   const agentId = randomUUID();
 
-  // Claim the token first. If this touches no rows the token was expired,
-  // already spent, or never real, and nothing else in this handler runs.
-  const claimed = await db
-    .update(schema.agentEnrollment)
-    .set({ usedAt: now, agentId })
-    .where(
-      and(
-        eq(schema.agentEnrollment.tokenHash, hashEnrollmentToken(body.token)),
-        isNull(schema.agentEnrollment.usedAt),
-        gt(schema.agentEnrollment.expiresAt, now),
-      ),
-    )
-    .returning({ userId: schema.agentEnrollment.userId, id: schema.agentEnrollment.id });
-
-  if (claimed.length === 0) {
-    return Response.json({ error: "enrollment refused" }, { status: 401 });
-  }
-  const { userId, id: enrollmentId } = claimed[0];
-
+  /**
+   * Claim, insert, link — all three or none.
+   *
+   * A transaction rather than three statements with compensating writes, and
+   * the ordering inside it is not free choice: `agent_enrollment.agent_id`
+   * references `agent.id`, so setting it in the claiming UPDATE points a
+   * foreign key at a row that does not exist yet. That is not a race, it fails
+   * every single time, and it did.
+   *
+   * The claim is still atomic. The UPDATE carries `used_at IS NULL` and takes a
+   * row lock, so a second daemon presenting the same token blocks, then sees
+   * the row already spent and matches nothing. And because a failed insert
+   * rolls the claim back, there is no longer a window where a token is spent
+   * and no agent exists — which previously needed a hand-written "release the
+   * token" write that was itself a thing that could fail.
+   */
+  let outcome: { ok: true } | { ok: false; status: number; error: string };
   try {
-    await db.insert(schema.agent).values({
-      id: agentId,
-      userId,
-      label: hostname,
-      publicKey,
-      fingerprint: fingerprintFor(publicKey),
-      hostname,
-      os,
-      arch,
-      agentVersion,
+    outcome = await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(schema.agentEnrollment)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(schema.agentEnrollment.tokenHash, hashEnrollmentToken(body.token as string)),
+            isNull(schema.agentEnrollment.usedAt),
+            gt(schema.agentEnrollment.expiresAt, now),
+          ),
+        )
+        .returning({ userId: schema.agentEnrollment.userId, id: schema.agentEnrollment.id });
+
+      if (claimed.length === 0) {
+        // Returned rather than thrown: there is nothing to roll back, and a
+        // throw here would be indistinguishable from a database failure one
+        // catch block later.
+        return { ok: false as const, status: 401, error: "enrollment refused" };
+      }
+
+      const { userId, id: enrollmentId } = claimed[0];
+
+      await tx.insert(schema.agent).values({
+        id: agentId,
+        userId,
+        label: hostname,
+        publicKey,
+        fingerprint: fingerprintFor(publicKey),
+        hostname,
+        os,
+        arch,
+        agentVersion,
+      });
+
+      await tx
+        .update(schema.agentEnrollment)
+        .set({ agentId })
+        .where(eq(schema.agentEnrollment.id, enrollmentId));
+
+      return { ok: true as const };
     });
   } catch (e) {
-    // The token is spent at this point and the agent row is not there, which
-    // would leave the user staring at a waiting page forever. Release it so the
-    // same command can be retried rather than making them mint a new one.
-    //
-    // The usual cause is the unique index on public_key: a machine re-enrolling
-    // with a config it still has, or a cloned disk image carrying somebody's
-    // key into a second VM.
-    await db
-      .update(schema.agentEnrollment)
-      .set({ usedAt: null, agentId: null })
-      .where(eq(schema.agentEnrollment.id, enrollmentId));
-
-    console.warn("agent enrollment failed after claiming a token", e);
+    // The insert is what fails here, and almost always on the unique index over
+    // public_key: a machine re-enrolling with a config it still has, or a cloned
+    // disk image carrying somebody else's key into a second VM. The token is
+    // untouched — the rollback saw to that — so the same command can be retried.
+    console.warn("agent enrollment failed", e);
     return Response.json(
       {
         error:
@@ -145,6 +165,10 @@ export async function POST(request: Request) {
       },
       { status: 409 },
     );
+  }
+
+  if (!outcome.ok) {
+    return Response.json({ error: outcome.error }, { status: outcome.status });
   }
 
   return Response.json({ agentId, relayUrl });
