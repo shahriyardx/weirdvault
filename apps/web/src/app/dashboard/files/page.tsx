@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PlugsConnectedIcon, TerminalWindowIcon } from "@phosphor-icons/react/dist/ssr";
 
 import { RemoteEditor } from "@/components/editor";
@@ -25,7 +26,8 @@ import { useSshSession } from "@/lib/ssh/session-provider";
  * defaulting to whichever is active when you arrive.
  */
 export default function FilesPage() {
-  const { sessions, activeId, sftpFor, sessionFor, write } = useSshSession();
+  const router = useRouter();
+  const { sessions, activeId, setActive, sftpFor, sessionFor, write } = useSshSession();
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -103,7 +105,17 @@ export default function FilesPage() {
               sftp={sftp}
               session={session}
               onEdit={setEditing}
-              onOpenTerminalAt={(dir) => id && write(id, `cd ${JSON.stringify(dir)}\n`)}
+              // "Open terminal here" used to cd the shell and leave you looking
+              // at the file listing, so the only visible effect was none. It
+              // goes to the terminal now — and retargets the focused pane at
+              // this session first, since the session being browsed is not
+              // necessarily the one that pane was showing.
+              onOpenTerminalAt={(dir) => {
+                if (!id) return;
+                write(id, `cd ${JSON.stringify(dir)}\n`);
+                setActive(id);
+                router.push("/dashboard/terminal");
+              }}
             />
           </div>
 
