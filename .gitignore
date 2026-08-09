@@ -26,3 +26,7 @@ target/
 
 # the phase 0 harness, removed — kept out of the tree if it reappears locally
 spike/
+
+# Built on demand by scripts/build-agent.mjs, like ssh.wasm. Not committed:
+# ~8 MB per target, and one command rebuilds them.
+apps/web/public/agent-bin/

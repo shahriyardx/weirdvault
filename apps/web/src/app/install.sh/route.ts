@@ -152,19 +152,28 @@ fi
 
 # ---------------------------------------------------------------- install
 
+mkdir -p "\$INSTALL_DIR"
 install -m 0755 "\$tmp/agent" "\${INSTALL_DIR}/webxterm-agent"
 
 # A dedicated account with no shell and no home. The agent needs no privileges
 # beyond reading its own config and opening outbound sockets, and running it as
 # root would mean a bug in a network-facing daemon is a root bug.
-if ! id "\$SERVICE_USER" >/dev/null 2>&1; then
+#
+# macOS is skipped rather than attempted. Creating a service account there means
+# dscl and a free UID search, and there is no systemd to run it under anyway —
+# so on a Mac this installs the binary and enrols it, and you start it yourself.
+# Warning about a missing useradd on a platform that has never had one reads as
+# something going wrong when nothing is.
+if [ "\$os" = "darwin" ]; then
+  SERVICE_USER="root"
+elif ! id "\$SERVICE_USER" >/dev/null 2>&1; then
   if command -v useradd >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin "\$SERVICE_USER" 2>/dev/null || \\
       useradd --system --no-create-home --shell /sbin/nologin "\$SERVICE_USER"
   elif command -v adduser >/dev/null 2>&1; then
     adduser --system --no-create-home --shell /sbin/nologin "\$SERVICE_USER"
   else
-    echo "warning: could not create a service user; the agent will run as root" >&2
+    echo "warning: no useradd or adduser here, so the agent will run as root" >&2
     SERVICE_USER="root"
   fi
 fi
@@ -186,8 +195,11 @@ chmod 0600 "\${CONFIG_DIR}/agent.json"
 
 if ! command -v systemctl >/dev/null 2>&1; then
   echo
-  echo "No systemd here. Start the agent yourself with:"
-  echo "  \${INSTALL_DIR}/webxterm-agent run --config=\${CONFIG_DIR}/agent.json"
+  echo "Enrolled. There is no systemd here, so start the agent yourself:"
+  echo "  sudo \${INSTALL_DIR}/webxterm-agent run --config=\${CONFIG_DIR}/agent.json"
+  echo
+  echo "To keep it running across reboots, wrap that in whatever this machine"
+  echo "uses — launchd on macOS, an rc script, or a supervisor of your choice."
   exit 0
 fi
 
