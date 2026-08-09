@@ -1,19 +1,19 @@
 "use client";
 
-import Link from "next/link";
-import { PlusIcon, ShieldCheckIcon, SignOutIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  LockKeyIcon,
+  LockKeyOpenIcon,
+  SignOutIcon,
+} from "@phosphor-icons/react/dist/ssr";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { signOut } from "@/lib/auth-client";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import { useVaultUnlocked } from "@/lib/vault/session";
+import { lock, requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
 
 export function DashboardTopBar() {
-  const { sessions } = useSshSession();
   const vaultUnlocked = useVaultUnlocked();
 
   return (
@@ -22,29 +22,37 @@ export function DashboardTopBar() {
       <Separator orientation="vertical" className="!h-5 self-center" />
 
       <div className="ml-auto flex items-center gap-2">
+        {/* State and its action in one control, because they are the same
+            decision. This used to be an inert badge reading "Local only" when
+            the vault was shut, which named the consequence instead of the state
+            and gave no way to change it — and there was no way to lock the vault
+            deliberately at all, short of signing out. */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="outline" className="gap-1.5 text-[10px] font-normal">
-              <ShieldCheckIcon
-                className={vaultUnlocked ? "text-success" : "text-muted-foreground"}
-              />
-              {vaultUnlocked ? "Vault unlocked" : "Local only"}
-            </Badge>
+            <Button
+              variant="outline"
+              size="xs"
+              className="font-normal"
+              onClick={() => (vaultUnlocked ? lock() : requestUnlock())}
+            >
+              {vaultUnlocked ? (
+                <LockKeyOpenIcon data-icon="inline-start" className="text-success" />
+              ) : (
+                <LockKeyIcon data-icon="inline-start" className="text-warning" />
+              )}
+              {vaultUnlocked ? "Vault unlocked" : "Vault locked"}
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
             {vaultUnlocked
-              ? "Hosts, keys and pins sync as ciphertext the server cannot read"
-              : "Sign in to sync hosts and keys across devices"}
+              ? "Lock the vault. The key is dropped from memory; your session stays open."
+              : "Unlock to read your hosts, keys and snippets."}
           </TooltipContent>
         </Tooltip>
 
-        <Button asChild size="sm" variant={sessions.length ? "outline" : "default"}>
-          <Link href="/dashboard/connect">
-            <PlusIcon />
-            New session
-          </Link>
-        </Button>
-
+        {/* No "New session" button here. Starting a session lives in exactly one
+            place — the + beside Sessions in the sidebar — and three entry points
+            to the same connection form was two too many. */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
