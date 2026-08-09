@@ -9,6 +9,8 @@
 //! much. That is stated plainly in docs/THREAT-MODEL.md rather than glossed
 //! over, and it is the reason self-hosting is a first-class option.
 
+mod agent;
+mod http;
 mod quota;
 mod reporter;
 mod ssrf;
@@ -36,8 +38,9 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
+use agent::Agents;
 use quota::{Limits, Quotas};
 
 #[derive(Clone)]
@@ -47,14 +50,30 @@ struct AppState {
     allowed_ports: Arc<Vec<u16>>,
     allow_private: bool,
     dial_timeout: Duration,
+    agents: Arc<Agents>,
 }
 
+/// A connection request names one destination, in one of two ways.
+///
+/// `host`+`port` is an address to dial. `agent` is a machine that dialled us
+/// first and is waiting on a control connection. They are mutually exclusive,
+/// checked below, and their tokens are not interchangeable — see token.rs.
 #[derive(Debug, Deserialize)]
 struct ConnectParams {
-    host: String,
-    port: u16,
+    host: Option<String>,
+    port: Option<u16>,
+    agent: Option<String>,
     token: String,
 }
+
+/// What an agent presents when it dials back to carry one session.
+#[derive(Debug, Deserialize)]
+struct StreamParams {
+    ticket: String,
+}
+
+/// The port an agent forwards to when the caller does not say.
+const DEFAULT_SSH_PORT: u16 = 22;
 
 #[tokio::main]
 async fn main() {
@@ -90,12 +109,25 @@ async fn main() {
         .filter_map(|p| p.trim().parse().ok())
         .collect();
 
+    // Resolved before the listener, for the same reason the reporter is: a
+    // relay that starts and cannot ever authenticate an agent should say so at
+    // boot, not when somebody's home server fails to appear.
+    let agents = match Agents::from_env() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
+    agent::log_startup_state(&agents);
+
     let state = AppState {
         secret: Arc::new(secret.into_bytes()),
         quotas: Quotas::new(Limits::default()),
         allowed_ports: Arc::new(allowed_ports.clone()),
         allow_private,
         dial_timeout: Duration::from_secs(10),
+        agents,
     };
 
     // Started before the listener so a broken RELAY_USAGE_URL stops the process
@@ -115,6 +147,14 @@ async fn main() {
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
+        // The agent's two sockets. `control` is long-lived and carries JSON;
+        // `stream` is one per session and carries the same SSH ciphertext /ws
+        // does. They are separate paths rather than one path with a mode flag
+        // because they authenticate completely differently — a signed challenge
+        // versus a one-time ticket — and a single handler branching on a query
+        // parameter is how those two get accidentally swapped.
+        .route("/agent/control", get(agent_control))
+        .route("/agent/stream", get(agent_stream))
         .route("/healthz", get(health))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state.clone());
@@ -157,6 +197,7 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
     axum::Json(serde_json::json!({
         "status": "ok",
         "active_connections": state.quotas.active_total(),
+        "agents_connected": state.agents.connected(),
     }))
 }
 
@@ -166,16 +207,46 @@ async fn ws_handler(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
 ) -> Response {
-    if !state.allowed_ports.contains(&params.port) {
-        return (StatusCode::FORBIDDEN, "destination port not allowed").into_response();
-    }
-
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
 
-    let claims = match token::verify(&state.secret, &params.token, &params.host, params.port, now) {
+    match (&params.agent, &params.host) {
+        (Some(agent_id), None) => {
+            connect_via_agent(ws, &state, &params, agent_id, now, peer).await
+        }
+        (None, Some(host)) => {
+            let Some(port) = params.port else {
+                return (StatusCode::BAD_REQUEST, "port is required with host").into_response();
+            };
+            connect_to_address(ws, state.clone(), &params, host, port, now, peer).await
+        }
+        (Some(_), Some(_)) => (
+            StatusCode::BAD_REQUEST,
+            "name a host or an agent, not both",
+        )
+            .into_response(),
+        (None, None) => (StatusCode::BAD_REQUEST, "host or agent is required").into_response(),
+    }
+}
+
+/// The original path: dial an address the relay can reach.
+#[allow(clippy::too_many_arguments)]
+async fn connect_to_address(
+    ws: WebSocketUpgrade,
+    state: AppState,
+    params: &ConnectParams,
+    host: &str,
+    port: u16,
+    now: u64,
+    peer: SocketAddr,
+) -> Response {
+    if !state.allowed_ports.contains(&port) {
+        return (StatusCode::FORBIDDEN, "destination port not allowed").into_response();
+    }
+
+    let claims = match token::verify(&state.secret, &params.token, host, port, now) {
         Ok(c) => c,
         Err(e) => {
             warn!(%peer, error = %e, "rejected relay token");
@@ -185,10 +256,10 @@ async fn ws_handler(
 
     // Vet before the upgrade so a refusal is an HTTP error the client can read,
     // not a WebSocket that opens and immediately closes.
-    let ip = match ssrf::resolve_and_vet(&params.host, params.port, state.allow_private).await {
+    let ip = match ssrf::resolve_and_vet(host, port, state.allow_private).await {
         Ok(ip) => ip,
         Err(e) => {
-            warn!(%peer, account = %claims.sub, host = %params.host, error = %e, "rejected destination");
+            warn!(%peer, account = %claims.sub, %host, error = %e, "rejected destination");
             return (StatusCode::FORBIDDEN, e.to_string()).into_response();
         }
     };
@@ -201,12 +272,148 @@ async fn ws_handler(
         }
     };
 
-    let target = SocketAddr::new(ip, params.port);
-    let host = params.host.clone();
+    let target = SocketAddr::new(ip, port);
+    let host = host.to_string();
 
     ws.on_upgrade(move |socket| async move {
         if let Err(e) = bridge(socket, target, state.dial_timeout, &guard).await {
             warn!(account = %guard.account(), %host, %target, error = %e, "connection ended with error");
+        }
+    })
+}
+
+/// The NAT path: ask a machine that dialled us to dial back.
+///
+/// There is no SSRF check here and that is not an omission. The guard exists
+/// because the relay chooses an address to connect to, and a user who can pick
+/// that address can point it at anything on the relay's network. Here the relay
+/// picks nothing: the destination is a machine that authenticated to us with its
+/// own key, and the only address involved is loopback on that machine, chosen by
+/// software the owner installed there. The port allowlist still applies, because
+/// that one is about which services this product forwards at all.
+async fn connect_via_agent(
+    ws: WebSocketUpgrade,
+    state: &AppState,
+    params: &ConnectParams,
+    agent_id: &str,
+    now: u64,
+    peer: SocketAddr,
+) -> Response {
+    if !state.agents.enabled() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "this relay is not configured for agents",
+        )
+            .into_response();
+    }
+
+    let port = params.port.unwrap_or(DEFAULT_SSH_PORT);
+    if !state.allowed_ports.contains(&port) {
+        return (StatusCode::FORBIDDEN, "destination port not allowed").into_response();
+    }
+
+    let claims = match token::verify_agent(&state.secret, &params.token, agent_id, now) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(%peer, error = %e, "rejected agent relay token");
+            return (StatusCode::UNAUTHORIZED, e.to_string()).into_response();
+        }
+    };
+
+    // Checked before the upgrade so "that machine is not online" is an HTTP
+    // status the browser can read. It races — the agent can drop in the gap —
+    // which is why the post-upgrade path reports its own failure too.
+    let Some(owner) = state.agents.owner(agent_id) else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "that machine's agent is not connected",
+        )
+            .into_response();
+    };
+
+    // Two independent statements of who owns this machine, required to agree.
+    // See Agents::owner for why this is worth a comparison even though the
+    // control plane already checked it.
+    if owner != claims.sub {
+        warn!(
+            %peer,
+            agent = %agent_id,
+            token_account = %claims.sub,
+            agent_account = %owner,
+            "refused: the token's account does not own this agent"
+        );
+        return (StatusCode::FORBIDDEN, "that agent belongs to another account").into_response();
+    }
+
+    let guard = match state.quotas.acquire(&claims.sub) {
+        Ok(g) => g,
+        Err(e) => {
+            warn!(account = %claims.sub, error = %e, "quota exceeded");
+            return (StatusCode::TOO_MANY_REQUESTS, e.to_string()).into_response();
+        }
+    };
+
+    let agents = state.agents.clone();
+    let agent_id = agent_id.to_string();
+
+    ws.on_upgrade(move |browser| async move {
+        let started = Instant::now();
+        let stream = match agents.open(&agent_id, port).await {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(agent = %agent_id, error = %e, "could not open a stream to the agent");
+                close_with_reason(browser, e.to_string()).await;
+                return;
+            }
+        };
+
+        info!(account = %guard.account(), agent = %agent_id, port, "agent connection open");
+        let (up, down) = splice(browser, stream, &guard).await;
+        info!(
+            account = %guard.account(),
+            agent = %agent_id,
+            up_bytes = up,
+            down_bytes = down,
+            duration_ms = started.elapsed().as_millis() as u64,
+            "agent connection closed"
+        );
+    })
+}
+
+/// An agent's long-lived control connection.
+async fn agent_control(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
+    if !state.agents.enabled() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "this relay is not configured for agents",
+        )
+            .into_response();
+    }
+    let agents = state.agents.clone();
+    ws.on_upgrade(move |socket| agents.serve_control(socket))
+}
+
+/// An agent dialling back to carry one session.
+async fn agent_stream(
+    ws: WebSocketUpgrade,
+    Query(params): Query<StreamParams>,
+    State(state): State<AppState>,
+) -> Response {
+    if !state.agents.enabled() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "this relay is not configured for agents",
+        )
+            .into_response();
+    }
+
+    let agents = state.agents.clone();
+    ws.on_upgrade(move |socket| async move {
+        // The claim is the authorisation, and it is atomic: the ticket is
+        // removed by whoever claims it, so a replay finds nothing. A refusal
+        // drops the socket, which the agent sees as a close.
+        if !agents.accept_stream(&params.ticket, socket) {
+            debug!("agent presented an unknown or already-claimed ticket");
         }
     })
 }
@@ -248,7 +455,7 @@ fn dial_failure_reason(err: &std::io::Error, target: SocketAddr) -> String {
 
 /// Truncates on a character boundary, never mid-codepoint — an invalid UTF-8
 /// close reason is discarded by the browser just like an over-long one.
-fn truncate_utf8(mut s: String, max: usize) -> String {
+pub(crate) fn truncate_utf8(mut s: String, max: usize) -> String {
     if s.len() <= max {
         return s;
     }
@@ -363,6 +570,82 @@ async fn bridge(
         "connection closed"
     );
     Ok(())
+}
+
+/// Closes a browser socket with a reason it can actually read.
+///
+/// Same discipline as a failed dial: the browser cannot see the HTTP status of
+/// an upgrade that already succeeded, so a bare drop surfaces to the user as
+/// "handshake failed: EOF" and sends them to debug their server.
+async fn close_with_reason(mut socket: WebSocket, reason: String) {
+    let _ = socket
+        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+            code: 1011,
+            reason: truncate_utf8(reason, MAX_CLOSE_REASON).into(),
+        })))
+        .await;
+}
+
+/// Copies binary frames between two WebSockets until either closes.
+///
+/// The agent half is already a WebSocket, so unlike `bridge` there is no TCP
+/// socket here and nothing to dial — this is a splice, not a proxy. Frame
+/// boundaries are preserved rather than re-chunked, which costs nothing and
+/// means the agent's reads and the browser's writes stay one-to-one.
+///
+/// Returns (up, down) in bytes, counted from the browser's point of view so the
+/// numbers mean the same thing they do on the direct path.
+async fn splice(
+    browser: WebSocket,
+    agent: WebSocket,
+    guard: &quota::ConnectionGuard,
+) -> (u64, u64) {
+    let (mut browser_tx, mut browser_rx) = browser.split();
+    let (mut agent_tx, mut agent_rx) = agent.split();
+
+    let up_counter = guard.counter();
+    let down_counter = guard.counter();
+
+    let up = tokio::spawn(async move {
+        let mut total = 0u64;
+        while let Some(Ok(msg)) = browser_rx.next().await {
+            match msg {
+                Message::Binary(data) => {
+                    total += data.len() as u64;
+                    up_counter.add_up(data.len() as u64);
+                    if agent_tx.send(Message::Binary(data)).await.is_err() {
+                        break;
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+        let _ = agent_tx.close().await;
+        total
+    });
+
+    let down = tokio::spawn(async move {
+        let mut total = 0u64;
+        while let Some(Ok(msg)) = agent_rx.next().await {
+            match msg {
+                Message::Binary(data) => {
+                    total += data.len() as u64;
+                    down_counter.add_down(data.len() as u64);
+                    if browser_tx.send(Message::Binary(data)).await.is_err() {
+                        break;
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+        let _ = browser_tx.close().await;
+        total
+    });
+
+    let (up, down) = tokio::join!(up, down);
+    (up.unwrap_or(0), down.unwrap_or(0))
 }
 
 fn is_private(ip: std::net::IpAddr) -> bool {
