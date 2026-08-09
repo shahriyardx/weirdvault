@@ -26,6 +26,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useSshSession } from "@/lib/ssh/session-provider";
 import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
+import { noAutofillSecret, noAutofillText } from "@/lib/no-autofill";
 
 export default function ConnectPage() {
   const router = useRouter();
@@ -93,9 +94,9 @@ export default function ConnectPage() {
                 <Label htmlFor="hostname">Hostname</Label>
                 <Input
                   id="hostname"
+                  name="remote-hostname"
                   placeholder="server.example.com"
-                  autoComplete="off"
-                  spellCheck={false}
+                  {...noAutofillText}
                   value={form.hostname}
                   onChange={(e) => setForm({ ...form, hostname: e.target.value })}
                   required
@@ -116,11 +117,14 @@ export default function ConnectPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="username">Username</Label>
+              {/* The remote account's name, not this account's. A field called
+                  "username" is filled by heuristic whatever the attributes say,
+                  so the name goes too. See lib/no-autofill.ts. */}
               <Input
                 id="username"
+                name="remote-login"
                 placeholder="root"
-                autoComplete="off"
-                spellCheck={false}
+                {...noAutofillText}
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
                 required
@@ -181,10 +185,15 @@ export default function ConnectPage() {
             {usePassword && (
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>
+                {/* autoComplete="off" is ignored on password fields by Chrome
+                    and Safari; only "new-password" suppresses the fill. This is
+                    the remote host's password — filling the webxterm one here
+                    would send it to that host on connect. */}
                 <Input
                   id="password"
+                  name="remote-host-secret"
                   type="password"
-                  autoComplete="off"
+                  {...noAutofillSecret}
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                 />
