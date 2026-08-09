@@ -17,26 +17,20 @@
 //! during an incident, whereas over-counting locks a paying user out of their
 //! own servers over a number nobody can reproduce.
 //!
-//! ## Plain HTTP only
-//!
-//! The request is written by hand onto a TCP socket. The relay has no TLS stack
-//! and this is not worth adding one for: in every deployment shape we ship, the
-//! control plane is a neighbour on a private network (see compose.prod.yaml,
-//! where both services speak plain HTTP behind a terminator). `Endpoint::parse`
-//! therefore refuses `https://` loudly rather than appearing to encrypt. If your
-//! relay is across the public internet from your control plane, put a TLS
-//! terminator beside the relay and point `RELAY_USAGE_URL` at it — the bearer
-//! secret in this request is worth protecting.
+//! The request itself is built and sent by `crate::http`, which also owns the
+//! reasons it is plain HTTP only.
 
 use std::{sync::Arc, time::Duration};
 
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-};
 use tracing::{debug, info, warn};
 
+use crate::http::{check_secret, post_json, ConfigError, Endpoint};
 use crate::quota::{AccountBytes, Quotas};
+
+/// Named in any configuration error, so a failure at boot says which line of
+/// the .env to go and fix.
+const URL_VAR: &str = "RELAY_USAGE_URL";
+const SECRET_VAR: &str = "RELAY_USAGE_SECRET";
 
 /// How many accounts go in one request.
 ///
@@ -44,70 +38,6 @@ use crate::quota::{AccountBytes, Quotas};
 /// several modest requests rather than one enormous one; the ingest endpoint
 /// applies the same limit and rejects anything larger.
 const MAX_ENTRIES_PER_BATCH: usize = 500;
-
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-const IO_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Where the batches go, already split into the pieces a request line needs.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Endpoint {
-    pub host: String,
-    pub port: u16,
-    pub path: String,
-}
-
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ConfigError {
-    #[error("RELAY_USAGE_URL must start with http:// (the relay has no TLS stack; see reporter.rs)")]
-    NotHttp,
-    #[error("RELAY_USAGE_URL has no host")]
-    NoHost,
-    #[error("RELAY_USAGE_URL has an unparseable port")]
-    BadPort,
-    #[error("RELAY_USAGE_SECRET must not contain control characters")]
-    UnsafeSecret,
-}
-
-impl Endpoint {
-    /// A deliberately small URL parser: one scheme, one shape.
-    ///
-    /// Bringing in a URL crate to read an operator-set environment variable
-    /// would be more code to audit than the thing it parses. Anything this does
-    /// not understand is rejected with a message naming the variable, which is
-    /// better than a relay that starts and quietly reports nowhere.
-    pub fn parse(url: &str) -> Result<Self, ConfigError> {
-        let rest = url.strip_prefix("http://").ok_or(ConfigError::NotHttp)?;
-        let (authority, path) = match rest.find('/') {
-            Some(i) => (&rest[..i], &rest[i..]),
-            None => (rest, "/"),
-        };
-        if authority.is_empty() {
-            return Err(ConfigError::NoHost);
-        }
-
-        let (host, port) = match authority.rsplit_once(':') {
-            Some((h, p)) => (h, p.parse::<u16>().map_err(|_| ConfigError::BadPort)?),
-            None => (authority, 80),
-        };
-        if host.is_empty() {
-            return Err(ConfigError::NoHost);
-        }
-
-        Ok(Self {
-            host: host.to_string(),
-            port,
-            path: path.to_string(),
-        })
-    }
-
-    fn authority(&self) -> String {
-        if self.port == 80 {
-            self.host.clone()
-        } else {
-            format!("{}:{}", self.host, self.port)
-        }
-    }
-}
 
 /// Everything the reporter needs, resolved once at startup so a misconfiguration
 /// is a log line at boot rather than a surprise an hour later.
@@ -139,15 +69,8 @@ impl Reporter {
 
         let (target, disabled) = match (url, secret) {
             (Some(url), Some(secret)) => {
-                // A secret carrying CR or LF would let whoever set it inject
-                // headers into the request built below. It comes from the
-                // operator rather than a user, so this is a typo guard rather
-                // than a defence — but a header-splitting bug is not something
-                // to leave to a typo.
-                if secret.chars().any(|c| c.is_control()) {
-                    return Err(ConfigError::UnsafeSecret);
-                }
-                (Some((Endpoint::parse(&url)?, secret)), None)
+                check_secret(SECRET_VAR, &secret)?;
+                (Some((Endpoint::parse(URL_VAR, &url)?, secret)), None)
             }
             (None, _) => (None, Some("RELAY_USAGE_URL is not set")),
             (_, None) => (None, Some("RELAY_USAGE_SECRET is not set")),
@@ -208,7 +131,7 @@ impl Reporter {
 
         for chunk in batch.chunks(MAX_ENTRIES_PER_BATCH) {
             let body = encode_batch(chunk);
-            match post(endpoint, secret, &body).await {
+            match post_json(endpoint, secret, &body).await.map(|(s, _)| s) {
                 Ok(status) if (200..300).contains(&status) => {
                     debug!(accounts = chunk.len(), status, "usage reported");
                 }
@@ -251,64 +174,6 @@ fn encode_batch(entries: &[AccountBytes]) -> String {
     serde_json::json!({ "entries": entries }).to_string()
 }
 
-/// One request, one connection, no keep-alive pool.
-///
-/// This runs once a minute. A pool would be an optimisation of something that
-/// is already free, paid for in state that has to be kept correct.
-async fn post(endpoint: &Endpoint, secret: &str, body: &str) -> std::io::Result<u16> {
-    let mut stream = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        TcpStream::connect((endpoint.host.as_str(), endpoint.port)),
-    )
-    .await
-    .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "connect timed out"))??;
-
-    let request = build_request(endpoint, secret, body);
-    tokio::time::timeout(IO_TIMEOUT, stream.write_all(request.as_bytes()))
-        .await
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "write timed out"))??;
-
-    // Only the status line is read. The body carries counts that are useful in
-    // a log and nothing this process acts on, and `Connection: close` means the
-    // socket is discarded either way.
-    let mut buf = [0u8; 128];
-    let n = tokio::time::timeout(IO_TIMEOUT, stream.read(&mut buf))
-        .await
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "read timed out"))??;
-
-    parse_status(&buf[..n])
-}
-
-fn build_request(endpoint: &Endpoint, secret: &str, body: &str) -> String {
-    format!(
-        "POST {path} HTTP/1.1\r\n\
-         Host: {authority}\r\n\
-         Authorization: Bearer {secret}\r\n\
-         Content-Type: application/json\r\n\
-         Content-Length: {len}\r\n\
-         Connection: close\r\n\
-         \r\n\
-         {body}",
-        path = endpoint.path,
-        authority = endpoint.authority(),
-        len = body.len(),
-    )
-}
-
-fn parse_status(head: &[u8]) -> std::io::Result<u16> {
-    let text = String::from_utf8_lossy(head);
-    let line = text.lines().next().unwrap_or_default();
-    line.split_whitespace()
-        .nth(1)
-        .and_then(|code| code.parse::<u16>().ok())
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "no HTTP status line in the response",
-            )
-        })
-}
-
 /// Says out loud what is and is not running. A cap nobody is counting towards
 /// is worse than no cap, because everything downstream reads as if it were.
 pub fn log_startup_state(reporter: &Reporter, disabled: Option<&'static str>) {
@@ -330,63 +195,14 @@ pub fn log_startup_state(reporter: &Reporter, disabled: Option<&'static str>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_a_url_with_an_explicit_port_and_path() {
-        assert_eq!(
-            Endpoint::parse("http://web:3000/api/relay/usage").unwrap(),
-            Endpoint {
-                host: "web".into(),
-                port: 3000,
-                path: "/api/relay/usage".into(),
-            }
-        );
-    }
-
-    #[test]
-    fn defaults_the_port_and_the_path() {
-        assert_eq!(
-            Endpoint::parse("http://control.internal").unwrap(),
-            Endpoint {
-                host: "control.internal".into(),
-                port: 80,
-                path: "/".into(),
-            }
-        );
-    }
-
-    #[test]
-    fn refuses_https_rather_than_pretending_to_encrypt() {
-        assert_eq!(
-            Endpoint::parse("https://web/api").unwrap_err(),
-            ConfigError::NotHttp
-        );
-    }
-
-    #[test]
-    fn refuses_urls_it_cannot_honour() {
-        assert_eq!(Endpoint::parse("http://").unwrap_err(), ConfigError::NoHost);
-        assert_eq!(Endpoint::parse("web:3000").unwrap_err(), ConfigError::NotHttp);
-        assert_eq!(
-            Endpoint::parse("http://web:notaport/x").unwrap_err(),
-            ConfigError::BadPort
-        );
-    }
-
-    #[test]
-    fn omits_the_default_port_from_the_host_header() {
-        let ep = Endpoint::parse("http://control.internal/ingest").unwrap();
-        assert!(build_request(&ep, "s3cret", "{}").contains("Host: control.internal\r\n"));
-
-        let ep = Endpoint::parse("http://web:3000/ingest").unwrap();
-        assert!(build_request(&ep, "s3cret", "{}").contains("Host: web:3000\r\n"));
-    }
+    use crate::http::build_request;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn the_request_declares_the_body_it_actually_sends() {
         // A Content-Length that disagrees with the body is a request the server
         // either truncates or waits forever for.
-        let ep = Endpoint::parse("http://web:3000/api/relay/usage").unwrap();
+        let ep = Endpoint::parse(URL_VAR, "http://web:3000/api/relay/usage").unwrap();
         let body = encode_batch(&[AccountBytes {
             account: "u1".into(),
             bytes_up: 12,
@@ -559,12 +375,4 @@ mod tests {
         assert_eq!(quotas.tracked_accounts(), 0, "the idle account should be evicted");
     }
 
-    #[test]
-    fn reads_the_status_code_off_the_response() {
-        assert_eq!(parse_status(b"HTTP/1.1 204 No Content\r\n\r\n").unwrap(), 204);
-        assert_eq!(parse_status(b"HTTP/1.1 401 Unauthorized\r\n").unwrap(), 401);
-        // A closed socket is a failure, not a success with no status.
-        assert!(parse_status(b"").is_err());
-        assert!(parse_status(b"garbage\r\n").is_err());
-    }
 }
