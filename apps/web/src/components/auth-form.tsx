@@ -311,8 +311,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </CardTitle>
         <CardDescription>
           {signUp
-            ? "Your email and password derive the vault key on this device. Only a separate, one-way branch of it is sent to us."
-            : "Your password is stretched on this device and never sent. What reaches the server cannot open the vault."}
+            ? "Your password derives the vault key here. It is never sent."
+            : "Your password never leaves this device."}
         </CardDescription>
       </CardHeader>
 
@@ -371,40 +371,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
               </Button>
             )}
 
-            {/* The consequence, said before it happens rather than after.
-                Neither of these involves a password, so neither derives a key:
-                the account is authenticated and the vault is shut until one is
-                typed. Users who are not told this read the password prompt that
-                follows as a bug.
-
-                The second sentence branches on sign-up rather than on GitHub,
-                which is the distinction that decides what actually happens next.
-                Only a first-ever sign-up sets a vault password; anybody arriving
-                on /sign-in already has one, because a passkey can only be
-                registered from inside the dashboard and
-                (auth)/set-vault-password sends an account that already has a
-                credential straight through. Telling a returning user they are
-                about to "set a vault password" would be describing a page they
-                will never see.
-
-                The sentence is deliberately unflattering about what these
-                buttons save you. They replace a sign-in, which happens rarely;
-                the password is still typed after every reload, because the key
-                only ever lives in this tab's memory. Implying otherwise would be
-                a promise the product does not keep. */}
-            <p className="text-xs/relaxed text-muted-foreground">
-              {githubAvailable === true && !signUp && passkeySupported
-                ? "Neither of these can open your vault — no password is typed, so no key is derived. "
-                : githubAvailable === true
-                  ? "GitHub proves who you are. It cannot open your vault — no password is typed, so no key is derived. "
-                  : "A passkey proves who you are. It cannot open your vault — no password is typed, so no key is derived. "}
-              {signUp
-                ? "You will set a vault password straight afterwards, and enter it again after each reload."
-                : githubAvailable === true
-                  ? "You will be asked for your vault password on arrival — set there if this is a new account — and again after each reload: this saves you the sign-in, not the password."
-                  : "You will be asked for your vault password on arrival, and again after each reload: a passkey saves you the sign-in, not the password."}
-            </p>
-
+            {/* Neither route derives a vault key, so the unlock dialog still
+                asks for a password on arrival. That used to be explained here in
+                a paragraph nobody needed: the dialog it warns about is one
+                screen away and says so itself. */}
             <div className="flex items-center gap-3 pt-1" aria-hidden>
               <span className="h-px flex-1 bg-border" />
               <span className="text-[0.7rem] tracking-wide text-muted-foreground uppercase">
@@ -466,8 +436,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             />
             {signUp && (
               <p id="password-hint" className="text-xs/relaxed text-muted-foreground">
-                Ten characters or more. It is never stored anywhere, on your
-                device or ours, so choose something you can reproduce exactly.
+                Ten characters or more. It is never stored, so it cannot be
+                reset.
               </p>
             )}
           </div>
@@ -500,12 +470,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             )}
           </Button>
 
-          {/* The pause is long enough to read as a bug, so it gets one line.
-              The panel beside the form explains why it costs what it costs. */}
-          <p className="text-xs/relaxed text-muted-foreground">
-            The button pauses for a second or two — longer on a phone. That is
-            the key derivation running here. The wait is the work.
-          </p>
+          {/* The second-long pause after pressing this used to get a sentence
+              here. The button's own "Deriving keys…" label says the same thing
+              in the moment it matters, which is the only moment it matters. */}
         </form>
       </CardContent>
 
@@ -596,8 +563,7 @@ function TwoFactorChallenge({
           Enter your second factor
         </CardTitle>
         <CardDescription>
-          Your password was accepted. This account also asks for a code from an
-          authenticator app before a session is created.
+          Password accepted. Enter the code from your authenticator app.
           {methods.length > 0 && !methods.includes("totp") && (
             <>
               {" "}
@@ -629,11 +595,11 @@ function TwoFactorChallenge({
               disabled={busy}
               required
             />
-            <p className="text-xs/relaxed text-muted-foreground">
-              {backup
-                ? "Each backup code works once. Using one here spends it."
-                : "The code changes every thirty seconds. If it is refused twice, check the clock on the device generating it."}
-            </p>
+            {backup && (
+              <p className="text-xs/relaxed text-muted-foreground">
+                Each backup code works once.
+              </p>
+            )}
           </div>
 
           {error && (

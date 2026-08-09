@@ -181,7 +181,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Account"
         title="Settings"
-        description="Your identity, the password that derives your vault key, and the data we hold on your behalf — which is one encrypted blob and some timestamps."
+        description="Your account, your vault password, and your data."
       />
 
       {/* The tabs read the query string, which makes them dynamic: the recovery
@@ -255,7 +255,7 @@ function SettingsTabs() {
         <TabsContent value="security" className="space-y-6">
           <SecurityGroup
             title="Your account"
-            summary="Who can open a session as you. These are the controls an attacker with your password would still have to get past — and the ones they would not need if they had a stolen copy of your encrypted data instead, because none of them touches the encryption."
+            summary="Who can sign in as you. None of these encrypt anything."
           />
           <TwoFactorSection email={user?.email ?? null} enabled={user?.twoFactorEnabled ?? false} />
           <PasskeysSection />
@@ -263,7 +263,7 @@ function SettingsTabs() {
 
           <SecurityGroup
             title="Your vault"
-            summary="The password, and the only two things derived from it. Everything here changes what can decrypt your hosts, keys and snippets — which is why all of it is irreversible and none of it can be done for you."
+            summary="What can decrypt your hosts, keys and snippets. Irreversible."
           />
           <ChangePasswordSection
             email={user?.email ?? null}
@@ -306,10 +306,7 @@ function AccountSection({
             <IdentificationCardIcon className="size-4 text-primary" />
             Profile
           </CardTitle>
-          <CardDescription>
-            The only two things we know about you by name. Everything else you
-            store — hosts, keys, snippets — reaches us as ciphertext.
-          </CardDescription>
+          <CardDescription>Your name and email.</CardDescription>
         </CardHeader>
 
         <CardContent>
@@ -355,24 +352,20 @@ function AccountSection({
         </CardContent>
 
         <CardFooter>
-          <NotImplemented>
-            Editing the display name is not wired up yet. It is cosmetic — it is
-            stored on the account and shown here, and nothing else reads it.
-          </NotImplemented>
+          <NotImplemented>Editing the display name is not wired up yet.</NotImplemented>
         </CardFooter>
       </Card>
 
+      {/* Kept, unlike the rest of the prose that used to surround it. It is not
+          a description of a control — it is the answer to "why can I not change
+          my email", which is otherwise unguessable. */}
       <Alert>
         <InfoIcon className="text-primary" />
-        <AlertTitle>Your email address is part of the key derivation</AlertTitle>
+        <AlertTitle>Your email cannot be changed</AlertTitle>
         <AlertDescription>
           <span>
-            The vault key is derived from your password using your email address
-            as the Argon2id salt, so a new device can unlock the vault with
-            nothing but those two values and no server round trip. The
-            consequence is that changing the email changes the key, which means
-            re-encrypting the vault — the same migration as changing the
-            password. It is deliberately not a one-click action.
+            It is the salt your vault key is derived from. Changing it would mean
+            re-encrypting the whole vault.
           </span>
         </AlertDescription>
       </Alert>
@@ -468,11 +461,7 @@ function BillingSection() {
           Plan and billing
         </CardTitle>
         <CardDescription>
-          One subscription per account, one price, no seats — an account is a
-          person here. Cards, invoices and cancellation all live in Stripe&rsquo;s
-          billing portal rather than in this app, so no card number reaches this
-          server, not even in transit. What we store is a customer id, a status
-          and a renewal date.
+          Cards, invoices and cancellation are handled by Stripe.
         </CardDescription>
         <CardAction className="flex items-center gap-2">
           {billing ? (
@@ -503,11 +492,7 @@ function BillingSection() {
             <WarningCircleIcon />
             <AlertTitle>Could not read your plan</AlertTitle>
             <AlertDescription>
-              <span>
-                {error} Nothing is shown rather than a guess — this page will not
-                tell you which plan you are on when it does not know. Your
-                subscription is unaffected; only this read failed.
-              </span>
+              <span>{error} Your subscription is unaffected; only this read failed.</span>
             </AlertDescription>
           </Alert>
         ) : !billing ? (
@@ -523,11 +508,8 @@ function BillingSection() {
                 <AlertTitle>This is an assumption, not a lookup</AlertTitle>
                 <AlertDescription>
                   <span>
-                    The server could not read the subscription table and granted
-                    Pro rather than refusing it — the safe direction when the
-                    alternative is cutting somebody off over a failed query. So
-                    the plan above may not be the plan you are on. It will
-                    correct itself when the database is reachable again.
+                    Your plan could not be read, so Pro was granted rather than
+                    refused. It will correct itself shortly.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -542,14 +524,8 @@ function BillingSection() {
                 </AlertTitle>
                 <AlertDescription>
                   <span>
-                    All that is known here is that Stripe sent you back — the
-                    query string it sent you with is not evidence of a payment,
-                    so this card will not claim one. A subscription becomes real
-                    here when Stripe&rsquo;s webhook reaches this server, which
-                    is normally seconds and can be longer. Refresh above in a
-                    moment. If it has not changed within a few minutes, nothing
-                    was lost: whatever happened is with Stripe and the portal
-                    will show it.
+                    Stripe confirms payments to us separately, usually within
+                    seconds. Refresh above in a moment.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -558,16 +534,9 @@ function BillingSection() {
             {justReturnedFromPortal && (
               <Alert>
                 <InfoIcon className="text-primary" />
-                <AlertTitle>Anything you just changed at Stripe may not be here yet</AlertTitle>
+                <AlertTitle>Changes may take a moment to appear</AlertTitle>
                 <AlertDescription>
-                  <span>
-                    The plan, status and date below are this server&rsquo;s copy,
-                    and Stripe&rsquo;s changes reach it through a webhook rather
-                    than through your browser. So a cancellation or a plan change
-                    made a moment ago can still be showing its old value.
-                    Refreshing above in a moment is the whole fix; Stripe is the
-                    one that knows.
-                  </span>
+                  <span>Refresh above if the details below still look stale.</span>
                 </AlertDescription>
               </Alert>
             )}
@@ -590,15 +559,13 @@ function BillingSection() {
             <p className="flex items-start gap-2 text-muted-foreground">
               <InfoIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />
               <span className="min-w-0">
-                On this plan: {formatBytes(billing.limits.relayAllowanceBytes)} of
-                relay transfer a month, {billing.limits.auditRetentionLabel} of
-                activity history, and session recording{" "}
-                {billing.limits.sessionRecording ? "enabled" : "off"}. Those are
-                the numbers the server enforces, read from the server — see{" "}
+                {formatBytes(billing.limits.relayAllowanceBytes)} relay transfer a
+                month · {billing.limits.auditRetentionLabel} of activity history ·
+                session recording{" "}
+                {billing.limits.sessionRecording ? "on" : "off"} ·{" "}
                 <Link href="/pricing" className="underline underline-offset-2">
-                  pricing
-                </Link>{" "}
-                for the comparison.
+                  compare plans
+                </Link>
               </span>
             </p>
 
@@ -608,13 +575,10 @@ function BillingSection() {
                 <AlertTitle>This subscription is set to end</AlertTitle>
                 <AlertDescription>
                   <span>
-                    It will not renew, and Pro stops on{" "}
-                    {formatDate(billing.currentPeriodEnd)} — you keep everything
-                    you have paid for until then. After that, saving new
-                    recordings stops and activity history shortens to the Free
-                    window, which deletes the events outside it. Recordings
-                    already stored stay playable and downloadable. Undo it in the
-                    billing portal.
+                    Pro stops on {formatDate(billing.currentPeriodEnd)}. New
+                    recordings stop and activity history shortens to the Free
+                    window, deleting older events; recordings you already have
+                    stay. Undo it in the billing portal.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -625,18 +589,13 @@ function BillingSection() {
                 <InfoIcon className="text-primary" />
                 <AlertTitle>Nothing can be bought on this deployment</AlertTitle>
                 <AlertDescription>
+                  {/* Operator-facing, so it keeps its variable names — this is
+                      the one audience that cannot guess what to do next. */}
                   <span>
-                    This server is missing a Stripe key or the price to charge
-                    against, so there is no upgrade to offer — a self-hosted
-                    install working as intended rather than a fault. The plan
-                    above is whatever the subscription table says, which on an
-                    install that has never taken a payment is Free. The operator
-                    sets <code className="font-mono">STRIPE_SECRET_KEY</code> and{" "}
-                    <code className="font-mono">STRIPE_PRICE_PRO</code> to change
-                    that; apps/web/README.md has the rest. If this account has a
-                    subscription, the portal button below is still offered:
-                    managing one does not need the price, only the key, so it
-                    works unless that is the half that is missing.
+                    No payment provider is configured. The operator sets{" "}
+                    <code className="font-mono">STRIPE_SECRET_KEY</code> and{" "}
+                    <code className="font-mono">STRIPE_PRICE_PRO</code>; see
+                    apps/web/README.md.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -789,16 +748,9 @@ function RelayTransferSection() {
           Relay transfer this month
         </CardTitle>
         <CardDescription>
-          Every byte the relay carries for you, in both directions. It forwards
-          SSH ciphertext and cannot tell a file transfer from a keystroke, so
-          there is nothing it could exempt — an SFTP upload and a session of
-          typing are the same traffic to it. Connections that do not go through
-          our relay are not counted here, because we are not carrying them.
-          Neither are saved session recordings: they are uploaded to this server
-          directly and never cross the relay, so nothing you store counts
-          against this number. Recordings have a ceiling of their own —{" "}
-          {formatBytes(MAX_ACCOUNT_RECORDING_BYTES)} of stored ciphertext per
-          account, with the figure and what you are using on the{" "}
+          Everything the relay carries for you, in both directions. Recordings
+          have a separate {formatBytes(MAX_ACCOUNT_RECORDING_BYTES)} ceiling,
+          shown on the{" "}
           <Link href="/dashboard/recordings" className="underline underline-offset-2">
             Recordings page
           </Link>
@@ -826,12 +778,9 @@ function RelayTransferSection() {
             <WarningCircleIcon />
             <AlertTitle>Could not read your transfer usage</AlertTitle>
             <AlertDescription>
-              <span>
-                {error} Nothing is shown rather than a zero — a meter that reads
-                empty because a request failed is the one thing worse than no
-                meter. Nothing about your allowance changed; only this page
-                failed to read it.
-              </span>
+              {/* No zero on failure: a meter reading empty because a request
+                  failed is worse than no meter at all. */}
+              <span>{error} Your allowance is unaffected.</span>
               <Button
                 variant="outline"
                 size="sm"
@@ -887,13 +836,9 @@ function RelayTransferSection() {
                 <AlertTitle>New connections through the relay are refused</AlertTitle>
                 <AlertDescription>
                   <span>
-                    Sessions you already have open are untouched and will run
-                    until you close them — nothing is cut mid-transfer. Starting
-                    a new one will fail until the counter resets on{" "}
-                    {formatUtcDate(usage.resetsAt)}. Run your own relay and this
-                    limit does not exist: it is here because relay bandwidth
-                    costs us money, and a relay you host is bandwidth you are
-                    already paying for.
+                    Open sessions keep running. New ones fail until{" "}
+                    {formatUtcDate(usage.resetsAt)}. Running your own relay
+                    removes the limit.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -907,9 +852,8 @@ function RelayTransferSection() {
                 </AlertTitle>
                 <AlertDescription>
                   <span>
-                    At the limit, new relay connections are refused until{" "}
-                    {formatUtcDate(usage.resetsAt)}. Sessions already open keep
-                    running. Self-hosting the relay removes the cap entirely.
+                    At the limit, new connections are refused until{" "}
+                    {formatUtcDate(usage.resetsAt)}.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -920,15 +864,15 @@ function RelayTransferSection() {
                 <WarningCircleIcon />
                 <AlertTitle>Nothing is counting on this deployment</AlertTitle>
                 <AlertDescription>
+                  {/* Operator-facing. The figures above are structurally zero
+                      rather than genuinely small, and that difference has to be
+                      visible or the meter lies quietly. */}
                   <span>
-                    No relay can report into this server — the shared secret for
-                    the usage endpoint is not configured — so the figures above
-                    are structurally zero rather than genuinely small, and no
-                    connection will ever be refused for transfer. They are shown
-                    rather than hidden so the difference is visible.{" "}
+                    Usage reporting is not configured, so the figures above are
+                    always zero. Set{" "}
                     <code className="font-mono">RELAY_USAGE_SECRET</code> and{" "}
-                    <code className="font-mono">RELAY_USAGE_URL</code> in
-                    apps/relay/README.md are the two halves of it.
+                    <code className="font-mono">RELAY_USAGE_URL</code>; see
+                    apps/relay/README.md.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -940,16 +884,10 @@ function RelayTransferSection() {
                     ? `Last reported ${formatDateTime(usage.updatedAt)}, `
                     : "No relay has reported traffic for this account this month, "}
                   {readAt === null
-                    ? "read by this page just now. "
-                    : `read by this page at ${formatClock(readAt)} and not since. `}
-                  The relay batches its counts and posts them about once a
-                  minute, so a session you are in right now may not be in the
-                  total yet. A relay that cannot reach this server drops its
-                  batch rather than queueing it, so the figure normally reads low
-                  rather than high. One exception, because it is real: a batch
-                  flushed just after midnight UTC on the first is stamped with
-                  the month it arrived in, so on the first of the month this can
-                  include up to a minute of last month&apos;s traffic.
+                    ? "read just now. "
+                    : `read at ${formatClock(readAt)}. `}
+                  Counts arrive about once a minute, so a session in progress may
+                  not be included yet.
                 </span>
               </p>
             )}
@@ -1117,10 +1055,7 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
           Authenticator app
         </CardTitle>
         <CardDescription>
-          A six-digit code from an app on your phone, asked for after your
-          password at sign-in. It is checked against a shared secret we hold
-          encrypted, so unlike everything in the Vault group below, this is
-          something the server can verify.
+          A six-digit code from your phone, asked for after your password.
         </CardDescription>
         <CardAction>
           {availability === null ? (
@@ -1138,49 +1073,21 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* The point of requirement two, on the card it applies to, in the words
-            a user would need to hear before they mis-trust it. */}
-        <Alert>
-          <InfoIcon className="text-primary" />
-          <AlertTitle>This protects your account, not your data</AlertTitle>
-          <AlertDescription>
-            <span>
-              Two-factor authentication decides who can open a session. It does
-              not encrypt anything, and it is not part of your vault key — that
-              key is derived from your password in your browser, so anyone who
-              has your password can decrypt a stolen copy of your vault offline,
-              with no session and no code from your phone. Turning this on is
-              worth doing; believing it guards your hosts and keys is not. The
-              control that does that is your password, below.
-            </span>
-          </AlertDescription>
-        </Alert>
-
-        {/* Two consequences that are not obvious from anywhere else, and that a
-            user would otherwise discover at the worst possible moment. Both are
-            properties of how Better Auth wires the challenge, verified by
-            reading it rather than assumed, and both are stated before enrolment
-            rather than after. */}
+        {/* The "protects your account, not your data" alert that used to sit
+            here is now one line in the group heading above. What survives is
+            only what a user cannot find out any other way, and would otherwise
+            discover at the worst possible moment. */}
         <Alert variant="destructive">
           <WarningCircleIcon />
           <AlertTitle>Two things it does not cover</AlertTitle>
           <AlertDescription>
             <ul className="list-disc space-y-1 pl-4">
               <li>
-                Only the email-and-password sign-in is challenged. A passkey
-                sign-in and a GitHub sign-in create a session directly and are
-                never asked for a code, so if you have either of those on this
-                account, this is a second lock on one of several doors. Remove
-                your passkeys, in the next card, if you want it to be more than
-                that.
+                Passkey and GitHub sign-ins are never asked for a code.
               </li>
               <li>
-                Recovery codes do not bypass it, and the recovery page cannot ask
-                for a code. With this on, redeeming a recovery code will refuse
-                and spend the code. So if you forget your password{" "}
-                <em>and</em> lose your authenticator, there is no way back in —
-                keep the backup codes this card issues somewhere you would still
-                reach in that situation.
+                Recovery codes stop working while this is on. Keep the backup
+                codes below somewhere safe.
               </li>
             </ul>
           </AlertDescription>
@@ -1193,10 +1100,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
             {availability.missing.length > 0
               ? `the ${availability.missing.join(", ")} ${availability.missing.length === 1 ? "column" : "columns"}`
               : "columns"}{" "}
-            that the installed version of Better Auth writes when a factor is
-            enabled, so the request would fail rather than half-succeed. This
-            needs a schema change and a migration from whoever owns the database;
-            nothing you can do here fixes it, which is why there is no button.
+            that the installed version of Better Auth writes. This needs a
+            migration from whoever runs the database.
           </NotImplemented>
         ) : codes ? (
           <GeneratedCodes
@@ -1234,11 +1139,7 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={busy !== null || !email}
               />
-              <p className="text-muted-foreground">
-                Needed for both buttons below. What is sent is the same one-way
-                branch of your password that signs you in, derived here — so this
-                is a real re-authentication and not a formality.
-              </p>
+              <p className="text-muted-foreground">Needed for both buttons below.</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1266,11 +1167,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
                   <AlertDialogHeader>
                     <AlertDialogTitle>Turn off the authenticator app?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Your password alone will sign you in again, and every backup
-                      code is deleted. The secret is destroyed, so the entry in
-                      your authenticator app stops working and setting this up
-                      again means scanning a new code. Your vault is unaffected —
-                      it was never protected by this.
+                      Your password alone will sign you in again. Backup codes are
+                      deleted and setting this up again means scanning a new code.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -1302,10 +1200,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
                 disabled={busy !== null || !email}
               />
               <p className="text-muted-foreground">
-                What is sent is the same one-way branch of your password that
-                signs you in, derived here. Nothing is enabled by this step: it
-                produces a secret and a set of backup codes, and the factor stays
-                off until a code from your app has been checked.
+                Nothing is switched on until you have entered a code from your
+                app.
               </p>
             </div>
 
@@ -1590,52 +1486,24 @@ function PasskeysSection() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Requirement five, stated where somebody is deciding whether to bother.
-            A passkey removes the sign-in, which happens rarely; the password is
-            typed after every reload because the vault key lives in tab memory
-            and dies with it. Letting the UI imply "no more passwords" would be a
-            promise this product cannot keep. */}
-        <Alert>
-          <InfoIcon className="text-primary" />
-          <AlertTitle>A passkey replaces the sign-in, not the password</AlertTitle>
-          <AlertDescription>
-            <span>
-              Your vault key is derived from your password and held only in the
-              tab that derived it, so you are asked for the password after every
-              reload — far more often than you sign in. A passkey saves you the
-              sign-in. It cannot save you the password, and a session opened with
-              one arrives with the vault locked until you type it.
-            </span>
-          </AlertDescription>
-        </Alert>
-
-        {/* The interaction between the two cards, said on both. A passkey
-            sign-in creates a session directly and is never challenged for a
-            code, so registering one alongside an authenticator app widens the
-            account back out — which is a reasonable choice, but not one anybody
-            should make without being told. */}
-        <NotImplemented>
-          A passkey sign-in is not asked for a two-factor code. If you have the
-          authenticator app in the card above enabled, a registered passkey is a
-          way in that skips it.
-        </NotImplemented>
+        {/* One line where there were two alerts. Both facts still matter — a
+            passkey does not replace the vault password, and it skips the
+            two-factor challenge — but they are facts, not essays. */}
+        <p className="text-muted-foreground">
+          A passkey signs you in. You still enter your vault password afterwards,
+          and a passkey sign-in is not asked for a two-factor code.
+        </p>
 
         {loadError ? (
           <Alert variant="destructive">
             <WarningCircleIcon />
             <AlertTitle>Could not read your passkeys</AlertTitle>
-            <AlertDescription>
-              {loadError} Nothing is listed rather than a guess — you may or may
-              not have passkeys registered.
-            </AlertDescription>
+            <AlertDescription>{loadError}</AlertDescription>
           </Alert>
         ) : passkeys === null ? (
           <Skeleton className="h-16 w-full" />
         ) : passkeys.length === 0 ? (
-          <p className="text-muted-foreground">
-            No passkeys registered. Your email and password are the only way to
-            open a session.
-          </p>
+          <p className="text-muted-foreground">No passkeys registered.</p>
         ) : (
           <ul className="divide-y divide-border border border-border">
             {passkeys.map((p) => {
@@ -1679,7 +1547,7 @@ function PasskeysSection() {
                         {p.backedUp ? (
                           <span className="inline-flex items-center gap-1">
                             <CloudCheckIcon className="size-3.5 text-primary" />
-                            Synced, so it works on your other devices
+                            Synced
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1">
@@ -1720,12 +1588,7 @@ function PasskeysSection() {
                             Remove “{p.name?.trim() || "Unnamed passkey"}”?
                           </AlertDialogTitle>
                           <AlertDialogDescription>
-                            It stops signing you in immediately. Added{" "}
-                            {formatDate(p.createdAt)}
-                            {p.backedUp
-                              ? ", and synced through a provider, so removing it here covers every device it reached."
-                              : ", and held only on the device that created it."}{" "}
-                            Nothing about your vault changes. Your email and
+                            It stops signing you in immediately. Your email and
                             password still work.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
@@ -1776,11 +1639,8 @@ function PasskeysSection() {
         {/* Said before it happens, because SESSION_NOT_FRESH reads like a bug
             and is not one. */}
         <p className="text-muted-foreground">
-          Registering needs a session created in the last day. If the server
-          refuses with a freshness error, sign out and back in first — adding a
-          way into an account is treated as a sensitive change, and a session
-          that has been open for a week is not proof that you are still the one
-          holding it.
+          Needs a session less than a day old. If it is refused, sign out and
+          back in.
         </p>
       </CardContent>
     </Card>
@@ -1903,13 +1763,8 @@ function ChangePasswordSection({
           Change password
         </CardTitle>
         <CardDescription>
-          Your password is stretched with Argon2id in this tab and split by HKDF
-          into an auth token, which is sent, a vault key, which is not, and an
-          audit key, which is not either. Changing it re-derives all three, so the
-          vault document is decrypted under the old key and re-encrypted under the
-          new one, and every portable SSH key inside it is unwrapped and re-wrapped
-          individually — they carry their own encryption and would otherwise
-          survive as ciphertext nothing can open.
+          Re-encrypts your whole vault. It takes a few seconds and cannot be
+          interrupted.
         </CardDescription>
       </CardHeader>
 
@@ -1920,13 +1775,8 @@ function ChangePasswordSection({
             <AlertTitle>You signed in with a recovery code</AlertTitle>
             <AlertDescription>
               <span>
-                That code is now spent, and your remaining codes still open this
-                account with the password you have forgotten. Setting a new
-                password here re-keys the vault and retires the whole set, which
-                is the only way to close that door. Generate a fresh set
-                afterwards. You are not asked for a current password: the code
-                you redeemed carried the old keys, and they are held in this tab
-                until this change lands.
+                Set a new password here. Your remaining codes are retired by it,
+                so generate a fresh set afterwards.
               </span>
             </AlertDescription>
           </Alert>
@@ -1938,17 +1788,12 @@ function ChangePasswordSection({
             <AlertTitle>This tab can no longer finish the recovery</AlertTitle>
             <AlertDescription>
               <span>
-                The keys your recovery code produced were held in memory only,
-                and this tab does not have them any more — a reload or a new tab
-                drops them, which is the same rule that locks the vault on
-                refresh. Re-keying needs either the current password or a fresh
-                redemption, so until one of those happens your remaining codes
-                stay live and still open this account. Redeem another code from{" "}
+                The keys from your recovery code were dropped on reload. Redeem
+                another code from{" "}
                 <Link href="/recover" className="text-foreground underline underline-offset-4">
                   the recovery page
                 </Link>{" "}
-                and change the password without leaving the tab, or, if you have
-                remembered the password, type it below.
+                without leaving the tab, or enter your password below.
               </span>
             </AlertDescription>
           </Alert>
@@ -1959,19 +1804,8 @@ function ChangePasswordSection({
           <AlertTitle>Two things this permanently changes</AlertTitle>
           <AlertDescription>
             <ul className="list-disc space-y-1 pl-4">
-              <li>
-                Existing activity rows become unreadable. Hostnames in the audit
-                log are blinded with a key derived from your password, and the
-                rows already written keep the old blinding — they will show as
-                opaque hosts from now on. Nothing can undo that without keeping a
-                copy of the old key somewhere, which is exactly what we refuse to
-                do.
-              </li>
-              <li>
-                Any recovery codes stop working and are deleted. They seal the
-                old keys, so after this they open nothing. Generate a new set
-                below once the change finishes.
-              </li>
+              <li>Hostnames in your existing activity log become unreadable.</li>
+              <li>Recovery codes are deleted. Generate a new set below.</li>
             </ul>
           </AlertDescription>
         </Alert>
@@ -2003,8 +1837,7 @@ function ChangePasswordSection({
               disabled={busy}
             />
             <p className="text-muted-foreground">
-              Ten characters or more. It is stored nowhere, on your device or
-              ours, so choose something you can reproduce exactly.
+              Ten characters or more. It is never stored, so it cannot be reset.
             </p>
           </div>
           <div className="space-y-1.5">
@@ -2069,10 +1902,7 @@ function RekeyProgressPanel({ progress }: { progress: RekeyProgress }) {
         <span>{progress.label}…</span>
       </p>
       <Progress value={pct} />
-      <p className="text-muted-foreground">
-        Leave this tab open. The vault is committed before the password is, so an
-        interruption is recoverable — but only by running this again.
-      </p>
+      <p className="text-muted-foreground">Leave this tab open.</p>
     </div>
   );
 }
@@ -2112,17 +1942,13 @@ function RekeySummary({ result }: { result: RekeyResult }) {
             {result.keysUnreadable}{" "}
             {result.keysUnreadable === 1 ? "key" : "keys"} would not open with
             your old password and {result.keysUnreadable === 1 ? "was" : "were"}{" "}
-            left exactly as found. They were already unusable before this ran;
-            nothing here broke or fixed them.
+            left untouched. They were already unusable before this ran.
           </li>
         )}
-        <li>
-          Every other session was signed out — each was holding the old vault key
-          in memory.
-        </li>
+        <li>Every other session was signed out.</li>
         <li>
           {result.recoveryCleared
-            ? "Any recovery codes were deleted, because they sealed the old keys. Generate a new set below."
+            ? "Recovery codes were deleted. Generate a new set below."
             : `Recovery codes could not be deleted (${result.recoveryError ?? "unknown error"}). They no longer work either way; remove them below when the server is reachable.`}
         </li>
       </ul>
@@ -2171,10 +1997,8 @@ function SessionsSection() {
           Sessions
         </CardTitle>
         <CardDescription>
-          Signing out ends a session and clears the vault key from memory. It
-          does not erase what is already stored in this browser — hosts, pinned
-          host keys and device-bound keys stay in IndexedDB until they are
-          deleted or the site data is cleared.
+          Signing out locks the vault. Data stored in this browser stays until
+          you clear it.
         </CardDescription>
       </CardHeader>
 
@@ -2204,8 +2028,7 @@ function SessionsSection() {
               <AlertDialogTitle>Revoke every session?</AlertDialogTitle>
               <AlertDialogDescription>
                 Every browser signed in to this account is signed out, including
-                this one. Nothing is deleted and no key is rotated — use this
-                when a device is lost or a session might be someone else&apos;s.
+                this one. Nothing is deleted.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2321,12 +2144,8 @@ function RecoveryCodesSection({
           Recovery codes
         </CardTitle>
         <CardDescription>
-          A recovery code is a sealed copy of your keys: the vault key, the audit
-          key and the auth token, encrypted under a key derived from 120 random
-          bits that are shown once and never sent to us. Present the code and it
-          both signs you in and unlocks the vault. It is the only construction
-          that survives a forgotten password without handing us something we
-          could decrypt with.
+          The only way back in if you forget your password. Each code signs you
+          in and unlocks the vault, once.
         </CardDescription>
         <CardAction>
           {status === null ? (
@@ -2349,13 +2168,8 @@ function RecoveryCodesSection({
           <AlertTitle>A recovery code is your password, in text form</AlertTitle>
           <AlertDescription>
             <span>
-              Anyone holding one can sign in as you and read every host, key and
-              snippet in your vault — that is the point of it, and it is the
-              risk. It cannot be guessed, but unlike a password it is not in your
-              head: it is in whatever you wrote it down in. Treat a code in a
-              screenshot, a chat message or a notes app as a full compromise of
-              this account. Print them, or put them in a password manager you
-              trust with everything else.
+              Anyone holding one can sign in as you and read your whole vault.
+              Print them or keep them in a password manager.
             </span>
           </AlertDescription>
         </Alert>
@@ -2374,10 +2188,7 @@ function RecoveryCodesSection({
               <Alert variant="destructive">
                 <WarningCircleIcon />
                 <AlertTitle>Could not read your recovery status</AlertTitle>
-                <AlertDescription>
-                  {loadError} Nothing is shown above rather than a guess — you may
-                  or may not have codes enrolled.
-                </AlertDescription>
+                <AlertDescription>{loadError}</AlertDescription>
               </Alert>
             ) : enrolled ? (
               <Alert>
@@ -2392,9 +2203,7 @@ function RecoveryCodesSection({
                     {status.lastUsedAt
                       ? `, last used ${formatDate(status.lastUsedAt)}`
                       : ", never used"}
-                    . Each code works once. Generating a new set replaces every
-                    remaining code, and changing your password deletes them all —
-                    they seal the keys your current password derives.
+                    . Generating a new set replaces the remaining codes.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -2404,13 +2213,10 @@ function RecoveryCodesSection({
                 <AlertTitle>Nothing can open your vault but your password</AlertTitle>
                 <AlertDescription>
                   <span>
-                    With no codes enrolled, forgetting the password means the
-                    vault cannot be opened — not by you and not by us, because we
-                    have never held anything that could open it. Generate a set
-                    below, or export the encrypted vault from the Data tab and
-                    keep the password somewhere you trust.{" "}
+                    Forget it and the vault is gone — we cannot reset it.
+                    Generate a set below.{" "}
                     <Link href="/security" className="text-primary hover:underline">
-                      Why we cannot reset it for you
+                      Why
                     </Link>
                     .
                   </span>
@@ -2430,14 +2236,8 @@ function RecoveryCodesSection({
                   disabled={busy !== null || !email}
                 />
                 <p className="text-muted-foreground">
-                  Needed because the keys have to be re-derived as raw bytes to
-                  be sealed. The unlocked session holds them as non-extractable
-                  handles that cannot be copied — which is the property that
-                  makes typing the password here unavoidable rather than
-                  ceremonial. What you type is checked against the key this tab
-                  is unlocked with before any code is generated: a typo here
-                  would otherwise produce ten codes that open nothing, and you
-                  would only find out on the day you needed them.
+                  Checked before any code is generated, so a typo cannot produce
+                  codes that open nothing.
                 </p>
               </div>
 
@@ -2467,11 +2267,8 @@ function RecoveryCodesSection({
                       <AlertDialogHeader>
                         <AlertDialogTitle>Delete every recovery code?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          The sealed copies are deleted from the server. The codes
-                          you wrote down become useless, and your password becomes
-                          the only thing that can open this vault again. Do this
-                          if you think a code has leaked — but generate a new set
-                          straight afterwards, or a forgotten password is final.
+                          The codes you wrote down stop working, and your password
+                          becomes the only way in. Generate a new set afterwards.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -2496,8 +2293,7 @@ function RecoveryCodesSection({
                   <Progress value={Math.round((progress.done / progress.total) * 100)} />
                   <p className="text-muted-foreground">
                     Sealing code {Math.min(progress.done + 1, progress.total)} of{" "}
-                    {progress.total}. Each one gets its own key derivation, which
-                    is what makes this take a moment.
+                    {progress.total}.
                   </p>
                 </div>
               )}
@@ -2511,8 +2307,7 @@ function RecoveryCodesSection({
           <p className="flex items-start gap-2 text-muted-foreground">
             <CheckCircleIcon className="mt-0.5 size-3.5 shrink-0 text-success" />
             <span className="min-w-0">
-              The codes are gone from this page and exist only where you put
-              them. We cannot show them again — we never had them.
+              The codes cannot be shown again.
             </span>
           </p>
         </CardFooter>
@@ -2660,11 +2455,8 @@ function ExportSection() {
           Export the vault
         </CardTitle>
         <CardDescription>
-          Downloads the encrypted blob exactly as stored: AES-256-GCM under your
-          vault key, with the IV and ciphertext base64-encoded. Hosts, portable
-          keys, pinned host keys and snippets are inside it — the same four
-          record kinds a restore reports. We cannot read the file we just handed
-          you, and we cannot help you open it later.
+          Your hosts, keys and snippets, still encrypted. Only your password can
+          open the file.
         </CardDescription>
       </CardHeader>
 
@@ -2677,9 +2469,7 @@ function ExportSection() {
           )}
           Download encrypted vault
         </Button>
-        <span className="text-muted-foreground">
-          Keep it anywhere. It is useless without your password.
-        </span>
+        <span className="text-muted-foreground">Useless without your password.</span>
       </CardContent>
     </Card>
   );
@@ -2821,14 +2611,9 @@ function ImportSection() {
           Import a vault
         </CardTitle>
         <CardDescription>
-          Selecting a file checks its shape here, in this tab; nothing is
-          uploaded. Restoring decrypts it with the vault key already in memory
-          and <span className="text-foreground">merges</span> it into what this
-          device holds — record by record, newest wins. It never overwrites the
-          vault wholesale, so importing a six-month-old export cannot delete the
-          hosts and keys you have added since. A host you deleted on this device
-          also stays deleted: deletions are recorded and merge too, so the older
-          copy in the file does not bring it back.
+          <span className="text-foreground">Merges</span> into what this device
+          already holds, newest wins. Nothing is overwritten wholesale and
+          nothing is uploaded.
         </CardDescription>
       </CardHeader>
 
@@ -2881,7 +2666,7 @@ function ImportSection() {
             </AlertTitle>
             <AlertDescription>
               {inspected.ok
-                ? `${inspected.name} carries ${inspected.bytes.toLocaleString()} base64 characters of ciphertext in format v1. Whether your password opens it can only be established by decrypting, which merging does.`
+                ? `${inspected.name}. Whether your password opens it is only known once you merge.`
                 : inspected.reason}
             </AlertDescription>
           </Alert>
@@ -3059,22 +2844,9 @@ function DeleteAccountSection({ email }: { email: string | null }) {
           Delete account
         </CardTitle>
         <CardDescription>
-          Deletes the user row and everything the database hangs off it: every
-          session, the credential itself, the encrypted vault blob, your
-          registered devices, your recordings and their share links, and the
-          recovery envelopes. Audit rows stay, with the user reference set to
-          null — they carry no hostname and no address beyond a truncated
-          network, so what survives is a shape rather than a history of you.
-          What is beyond reach: public keys you installed in an authorized_keys
-          file on your servers. A subscription{" "}
-          <span className="text-foreground">
-            is cancelled at Stripe before the account is deleted
-          </span>
-          , immediately rather than at the end of the period, because there is no
-          account left to use the rest of it with — Stripe does not refund the
-          remainder. If that cancellation fails, the deletion is refused rather
-          than performed, since deleting our record of a live charge would leave
-          it running with no way to reach it.
+          Deletes your vault, devices, recordings and recovery codes. Any
+          subscription is cancelled immediately, with no refund for the rest of
+          the period.
         </CardDescription>
       </CardHeader>
 
@@ -3101,12 +2873,8 @@ function DeleteAccountSection({ email }: { email: string | null }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {target || "this account"}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This cannot be undone. The vault blob is deleted with the
-                account, and since we never held a key for it, there is no copy
-                anywhere that we could restore. Export it first if you want to
-                keep it. Any subscription is cancelled at Stripe first, in the
-                same request and before anything is deleted; if that fails,
-                nothing is deleted and you are told.
+                This cannot be undone and we hold no copy to restore. Export your
+                vault first if you want to keep it.
               </AlertDialogDescription>
             </AlertDialogHeader>
 
@@ -3137,11 +2905,6 @@ function DeleteAccountSection({ email }: { email: string | null }) {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={busy}
                 />
-                <p className="text-muted-foreground">
-                  Needed to derive the auth token the server checks. It is
-                  stretched in this tab; the password itself is not sent, here or
-                  anywhere else.
-                </p>
               </div>
 
               <Alert>
@@ -3149,12 +2912,9 @@ function DeleteAccountSection({ email }: { email: string | null }) {
                 <AlertTitle>This browser is cleaned up, other devices are not</AlertTitle>
                 <AlertDescription>
                   <span>
-                    On success the vault key is dropped from memory and this
-                    browser&apos;s IndexedDB stores — hosts, pinned host keys,
-                    snippets and stored keys — are cleared. Device-bound private
-                    keys go with them and cannot be recovered. Any other browser
-                    you signed in from keeps its own copies until you clear the
-                    site data there.
+                    Local data here is cleared, device-bound keys included. Other
+                    browsers keep their copies until you clear the site data
+                    there.
                   </span>
                 </AlertDescription>
               </Alert>
