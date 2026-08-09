@@ -1,7 +1,13 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { cookies, headers } from "next/headers";
+import { and, eq } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
+import { db, schema } from "@/lib/db";
+import { dbErrorSummary } from "@/lib/db/errors";
+import { relayAllowanceFor } from "@/lib/billing/subscription";
+import { periodFor, periodResetsAt } from "@/lib/billing/tiers";
+import { RELAY_QUOTA_EXCEEDED } from "@/lib/usage";
 
 /**
  * Mints a short-lived relay token.
@@ -13,6 +19,15 @@ import { auth } from "@/lib/auth";
  * general TCP proxy.
  *
  * Must stay byte-compatible with apps/relay/src/token.rs.
+ *
+ * This is also where the monthly transfer allowance is enforced, and the choice
+ * of place is the whole design. The relay counts bytes and posts them to
+ * /api/relay/usage; it never learns what an allowance is. Refusing here means
+ * an account over its allowance is refused a *new* connection, while sessions
+ * already open keep running to their natural end — nobody's file transfer is
+ * severed at a byte boundary because a counter crossed a line. It costs one
+ * indexed row read per connection attempt, which is on the connection path and
+ * not on the data path.
  */
 
 const TTL_SECONDS = 60;
@@ -58,6 +73,62 @@ async function subjectFor(): Promise<{ sub: string; ttl: number; anonymous: bool
   return { sub: `anon:${anon}`, ttl: ANON_TTL_SECONDS, anonymous: true };
 }
 
+/**
+ * Whether this account has anything left this month.
+ *
+ * Fails open. If the usage table cannot be read, the token is minted and the
+ * failure is logged: refusing every connection on the site because one query
+ * timed out is a far worse outcome than a user getting some unmetered transfer
+ * during an incident. It is the same direction the relay's reporter takes when
+ * the control plane is unreachable, and for the same reason — under-enforcing an
+ * abuse control degrades, over-enforcing it locks people out of their servers.
+ *
+ * `relayAllowanceFor` now resolves a subscription to decide which allowance
+ * applies, and it takes the same direction independently: a subscription table
+ * that cannot be read grants Pro rather than refusing it. So a database problem
+ * during an incident produces the larger allowance and then, one line down, no
+ * enforcement at all — both failures point the same way by construction rather
+ * than by coincidence.
+ */
+async function allowanceCheck(userId: string): Promise<
+  | { over: false }
+  | { over: true; usedBytes: number; allowanceBytes: number; resetsAt: string }
+> {
+  const now = new Date();
+  try {
+    const allowanceBytes = await relayAllowanceFor(userId);
+    const [row] = await db
+      .select({
+        bytesUp: schema.relayUsage.bytesUp,
+        bytesDown: schema.relayUsage.bytesDown,
+      })
+      .from(schema.relayUsage)
+      .where(
+        and(
+          eq(schema.relayUsage.userId, userId),
+          eq(schema.relayUsage.period, periodFor(now)),
+        ),
+      )
+      .limit(1);
+
+    const usedBytes = (row?.bytesUp ?? 0) + (row?.bytesDown ?? 0);
+    if (usedBytes < allowanceBytes) return { over: false };
+
+    return {
+      over: true,
+      usedBytes,
+      allowanceBytes,
+      resetsAt: periodResetsAt(now).toISOString(),
+    };
+  } catch (e) {
+    // Summarised rather than logged whole: a drizzle query error's message is
+    // the SQL and its bound parameters, and the parameters here are a user id
+    // and a billing period. See lib/db/errors.ts.
+    console.warn("relay allowance check failed; minting anyway", dbErrorSummary(e));
+    return { over: false };
+  }
+}
+
 export async function POST(request: Request) {
   const { sub, ttl, anonymous } = await subjectFor();
 
@@ -80,6 +151,32 @@ export async function POST(request: Request) {
   }
   if (!Number.isInteger(port) || port < 1 || port > MAX_PORT) {
     return Response.json({ error: "invalid port" }, { status: 400 });
+  }
+
+  // Anonymous subjects are not metered. There is no user row behind an
+  // `anon:<uuid>` cookie, so /api/relay/usage discards their bytes and there is
+  // nothing here to compare against — see the comment there. The relay's global
+  // connection cap and the port allowlist are what bound anonymous use.
+  if (!anonymous) {
+    const allowance = await allowanceCheck(sub);
+    if (allowance.over) {
+      // 402 is the only status that means "the account is out of allowance"
+      // rather than "this request was wrong" or "you are going too fast". It is
+      // now literally true rather than merely the closest fit: Pro carries a
+      // larger allowance, so paying is one of the ways out of this refusal. The
+      // others are waiting for the reset, or running your own relay, and the
+      // response carries the reset date so the caller can say which.
+      return Response.json(
+        {
+          error: "relay transfer allowance used up",
+          code: RELAY_QUOTA_EXCEEDED,
+          usedBytes: allowance.usedBytes,
+          allowanceBytes: allowance.allowanceBytes,
+          resetsAt: allowance.resetsAt,
+        },
+        { status: 402 },
+      );
+    }
   }
 
   const claims = {

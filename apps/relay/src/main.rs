@@ -10,6 +10,7 @@
 //! over, and it is the reason self-hosting is a first-class option.
 
 mod quota;
+mod reporter;
 mod ssrf;
 mod token;
 
@@ -96,6 +97,21 @@ async fn main() {
         allow_private,
         dial_timeout: Duration::from_secs(10),
     };
+
+    // Started before the listener so a broken RELAY_USAGE_URL stops the process
+    // rather than producing a relay that serves traffic and reports nothing.
+    let (usage_reporter, reporting_disabled) = match reporter::Reporter::from_env(state.quotas.clone())
+    {
+        Ok(pair) => pair,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
+    reporter::log_startup_state(&usage_reporter, reporting_disabled);
+    // Detached: it owns its own shutdown signal, and nothing on the connection
+    // path ever waits on it.
+    tokio::spawn(usage_reporter.run());
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
@@ -285,12 +301,19 @@ async fn bridge(
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (mut tcp_rx, mut tcp_tx) = tcp.into_split();
 
+    // Counted as the bytes move, not when the socket closes. A session that
+    // stays open for a week and pushes a backup through SFTP has to be visible
+    // to the transfer allowance while it is happening; see quota.rs.
+    let up_counter = guard.counter();
+    let down_counter = guard.counter();
+
     let up = tokio::spawn(async move {
         let mut total: u64 = 0;
         while let Some(Ok(msg)) = ws_rx.next().await {
             match msg {
                 Message::Binary(data) => {
                     total += data.len() as u64;
+                    up_counter.add_up(data.len() as u64);
                     if tcp_tx.write_all(&data).await.is_err() {
                         break;
                     }
@@ -313,6 +336,7 @@ async fn bridge(
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
                     total += n as u64;
+                    down_counter.add_down(n as u64);
                     if ws_tx
                         .send(Message::Binary(buf[..n].to_vec().into()))
                         .await
@@ -329,7 +353,6 @@ async fn bridge(
 
     let (up_bytes, down_bytes) = tokio::join!(up, down);
     let (up_bytes, down_bytes) = (up_bytes.unwrap_or(0), down_bytes.unwrap_or(0));
-    guard.record(up_bytes, down_bytes);
 
     info!(
         account = %guard.account(),
@@ -352,6 +375,41 @@ fn is_private(ip: std::net::IpAddr) -> bool {
 }
 
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+    wait_for_shutdown().await;
     info!("shutting down");
+}
+
+/// Resolves on SIGINT or SIGTERM.
+///
+/// SIGTERM matters more than SIGINT here: `docker stop` and every orchestrator
+/// send it, and a process that only listens for Ctrl-C is killed outright ten
+/// seconds later. That was survivable when shutdown did nothing; it is not now
+/// that the usage reporter has a final batch to flush.
+///
+/// Called from two places — the server's graceful shutdown and the reporter —
+/// which is fine: each awaits its own registration and both are notified.
+pub async fn wait_for_shutdown() {
+    let interrupt = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(e) => {
+                // Never resolve rather than resolve immediately: returning here
+                // would look exactly like a shutdown request and take the
+                // process down at boot.
+                warn!(error = %e, "cannot listen for SIGTERM");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    tokio::select! {
+        _ = interrupt => {}
+        _ = terminate => {}
+    }
 }
