@@ -100,7 +100,9 @@ Set on Vercel:
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 48` |
 | `BETTER_AUTH_URL` | `https://your-app` |
 | `RELAY_SECRET` | **must match the relay exactly** |
+| `RELAY_AGENT_SECRET` | **must match the relay exactly.** Blank means machines with no public address cannot be enrolled at all — the relay refuses agent connections and the dashboard says so rather than minting a token for an agent that could never connect |
 | `NEXT_PUBLIC_RELAY_URL` | `wss://your-relay/ws` |
+| `AGENT_RELEASE_BASE_URL` | Where agent binaries are published. Defaults to `<your origin>/agent-bin`, which is what `bun run agent` writes — set it if you serve them from a release host instead |
 | `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address; unset means no address is recorded |
 
 `NEXT_PUBLIC_*` is inlined at build time, so changing the relay URL means a

@@ -10,6 +10,37 @@
 # Put a TLS terminator in front (Caddy, nginx, a load balancer). Both services
 # speak plain HTTP; the browser requires wss:// for the relay on an https page,
 # so TLS is not optional in production.
+#
+# ## Configuration comes from .env
+#
+# The web container reads the whole file with `env_file`, so the names in .env
+# are the names the process reads and nothing renames anything on the way in.
+#
+# The relay is the deliberate exception, and it is a boundary rather than a
+# style: it is the internet-facing process, and the reason it holds no database
+# credentials today is that it was never given any. `env_file` here would hand
+# it DATABASE_URL, BETTER_AUTH_SECRET and the Stripe keys to save nine lines.
+# So it gets an explicit list, interpolated from the same .env — one file, no
+# duplication, and a blast radius that stays where it was put.
+#
+# Two things this trades away, worth knowing rather than discovering:
+#
+#   - `env_file` cannot supply build args. NEXT_PUBLIC_* is inlined into the
+#     browser bundle at build time, so it is passed below as well, and changing
+#     it needs `docker compose build web` rather than a restart.
+#   - `env_file` has no equivalent of ${VAR:?message}, so a variable you forgot
+#     is silently empty instead of a refusal to start. The app says so on screen
+#     for the optional ones; the required ones are still checked below.
+#
+# ## Reverse proxy
+#
+# The relay publishes a port here so a terminator outside compose can reach it.
+# If you would rather serve everything on one origin — one certificate, one
+# domain, no second published port — drop `ports` from the relay, route /ws and
+# /agent to relay:8080 in your proxy, and set NEXT_PUBLIC_RELAY_URL to
+# wss://your-app/ws. Two things to configure there: no idle timeout (nginx
+# defaults to 60s and will cut an SSH session sitting at a prompt), and
+# proxy_buffering off (or interactive typing arrives in clumps).
 
 name: webxterm
 
@@ -38,7 +69,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL:?set PUBLIC_RELAY_URL in .env}
+        # A build arg, not an environment variable, and it has to be both:
+        # NEXT_PUBLIC_* is inlined into the browser bundle when the image is
+        # built, and read again at runtime on the server. env_file covers the
+        # second; only this covers the first.
+        NEXT_PUBLIC_RELAY_URL: ${NEXT_PUBLIC_RELAY_URL:?set NEXT_PUBLIC_RELAY_URL in .env}
     restart: unless-stopped
     # service_healthy, not service_started: the container migrates before it
     # serves, so it needs Postgres accepting connections rather than merely
@@ -46,34 +81,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-webxterm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-webxterm}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
-      BETTER_AUTH_URL: ${PUBLIC_APP_URL:?set PUBLIC_APP_URL in .env}
-      # Must match the relay exactly: it is how the relay verifies that a
-      # connection request came from this control plane.
-      RELAY_SECRET: ${RELAY_SECRET:?set RELAY_SECRET in .env}
-      # Authenticates the relay's usage reports to /api/relay/usage. Optional,
-      # and unset means nothing is counted and the monthly transfer allowance is
-      # never enforced — the correct default for a relay you host yourself, and
-      # the Settings meter says so on screen rather than showing a bare zero.
-      # Must match the relay's copy below.
-      RELAY_USAGE_SECRET: ${RELAY_USAGE_SECRET:-}
-      # Authenticates the relay's agent-verification calls to /api/agents/verify.
-      # Unset means agents are disabled on both sides: machines with no public
-      # address cannot be enrolled, and the "Add a machine" flow says so rather
-      # than minting a token for an agent that could never connect. Must match
-      # the relay's copy below.
-      RELAY_AGENT_SECRET: ${RELAY_AGENT_SECRET:-}
-      NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL}
-      # How many proxies you have put in front of this container. Unset by
-      # default, and unset means the audit log records no client address at all
-      # — X-Forwarded-For is written by the caller, and the only entry that is
-      # not is the one your own proxy appended. Set it to 1 behind a single
-      # reverse proxy (Caddy, nginx), 2 behind a CDN in front of that, and so
-      # on. Guessing high is worse than leaving it unset: it reads an entry the
-      # client still controls.
-      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-}
+    # Everything: DATABASE_URL, BETTER_AUTH_*, the three relay secrets, Stripe,
+    # GitHub, TRUSTED_PROXY_HOPS, AGENT_RELEASE_BASE_URL. Adding a variable to
+    # .env is all it takes — no second edit here, which is what used to leave
+    # five documented variables reaching the file and never the container.
+    env_file:
+      - .env
     ports:
       - "${WEB_PORT:-3000}:3000"
 
@@ -82,8 +95,12 @@ services:
       context: .
       dockerfile: apps/relay/Dockerfile
     restart: unless-stopped
+    # Listed rather than env_file. See the header: this is the process on the
+    # internet, and the four secrets below are all it should ever be able to
+    # read. Values still come from .env — compose interpolates them — so there
+    # is one file to edit and no copy to keep in step.
     environment:
-      RELAY_SECRET: ${RELAY_SECRET}
+      RELAY_SECRET: ${RELAY_SECRET:?set RELAY_SECRET in .env}
       RELAY_ADDR: 0.0.0.0:8080
       # Destination allowlist. Add ports only if you genuinely SSH on them —
       # every extra port widens what this relay can be pointed at.
@@ -98,9 +115,7 @@ services:
       # itself, which is the point of routing this through an HTTP endpoint
       # rather than handing Postgres credentials to the internet-facing service.
       # Plain http:// on the compose network — the relay has no TLS stack and
-      # refuses an https:// URL rather than appearing to encrypt. If you split
-      # these two across the public internet, put a terminator beside the relay
-      # and point this at it.
+      # refuses an https:// URL rather than appearing to encrypt.
       #
       # Both of these unset is a supported configuration: nothing is counted, no
       # allowance is enforced, and the relay says so at startup.
