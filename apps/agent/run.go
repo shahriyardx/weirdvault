@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -33,7 +34,28 @@ const (
 
 	backoffMin = 1 * time.Second
 	backoffMax = 60 * time.Second
+
+	// The relay's "you are not an agent this deployment will accept" — revoked,
+	// deleted, or never enrolled. In the application range RFC 6455 reserves, so
+	// it cannot collide with a protocol code the library sends on its own.
+	//
+	// Must match AGENT_REJECTED in apps/relay/src/agent.rs.
+	statusAgentRejected = 4001
+
+	// Exit code for that case, distinct so a supervisor can tell "this will
+	// never work" from "the network was down". The systemd unit written by
+	// install.sh carries RestartPreventExitStatus for exactly this.
+	exitRejected = 3
 )
+
+// errRejected ends the run loop instead of retrying.
+//
+// A revoked agent that reconnects every few seconds forever is a machine
+// burning power to be told "no" until somebody happens to read a log — and it
+// fills that log with an error that looks like an outage but is a decision.
+// Only the relay knows which it is, so it says so in the close code and this
+// acts on it.
+var errRejected = errors.New("rejected")
 
 type controlMessage struct {
 	Type      string `json:"type"`
@@ -78,6 +100,19 @@ func runAgent(args []string) error {
 			break
 		}
 		if err != nil {
+			if websocket.CloseStatus(err) == statusAgentRejected {
+				log.Printf("")
+				log.Printf("This machine is no longer accepted: %s", closeText(err))
+				log.Printf("")
+				log.Printf("It was most likely revoked from the dashboard. Reconnecting cannot")
+				log.Printf("undo that, so the agent is stopping rather than retrying forever.")
+				log.Printf("")
+				log.Printf("To use this machine again, enrol it afresh:")
+				log.Printf("  1. Dashboard -> Machines -> Add a machine")
+				log.Printf("  2. rm %s", *configPath)
+				log.Printf("  3. run the install command it gives you")
+				return errRejected
+			}
 			log.Printf("connection ended: %v", err)
 		}
 
@@ -330,6 +365,19 @@ func readJSON(ctx context.Context, conn *websocket.Conn, out *controlMessage) er
 		}
 		return json.Unmarshal(data, out)
 	}
+}
+
+// closeText pulls the relay's own words out of a close error.
+//
+// The wrapped error stringifies as a sentence about readers and status codes,
+// which is true and useless to somebody whose machine stopped working. The
+// reason field is the part written for them.
+func closeText(err error) string {
+	var ce websocket.CloseError
+	if errors.As(err, &ce) && ce.Reason != "" {
+		return ce.Reason
+	}
+	return "no reason given"
 }
 
 // jitter spreads reconnects out.

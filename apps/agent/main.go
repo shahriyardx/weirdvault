@@ -35,6 +35,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -89,6 +90,13 @@ func main() {
 	}
 
 	if err != nil {
+		// A rejection has already explained itself at length, and prefixing it
+		// with "error:" would bury the instructions under a word. Its own exit
+		// code lets a supervisor tell "this will never work" from "the network
+		// was down" — see RestartPreventExitStatus in the systemd unit.
+		if errors.Is(err, errRejected) {
+			os.Exit(exitRejected)
+		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

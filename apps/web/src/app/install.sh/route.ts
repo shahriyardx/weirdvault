@@ -217,6 +217,11 @@ ExecStart=\${INSTALL_DIR}/webxterm-agent run --config=\${CONFIG_DIR}/agent.json
 Restart=always
 RestartSec=5
 
+# Exit 3 means the relay said this agent is revoked or unknown. The agent
+# already stopped retrying for that reason; without this line systemd would
+# restart it every five seconds forever and undo the decision.
+RestartPreventExitStatus=3
+
 # The agent reads one config file and opens outbound sockets. Everything else
 # it could reach is a bug waiting to matter, so none of it is reachable.
 NoNewPrivileges=yes

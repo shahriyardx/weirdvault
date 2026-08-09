@@ -141,6 +141,46 @@ struct VerifyResponse {
     error: Option<String>,
 }
 
+/// Why an agent was turned away, and — more usefully — whether trying again
+/// could ever work.
+///
+/// The distinction is the whole reason this type exists. A revoked agent that
+/// reconnects every few seconds forever is a machine burning battery to be told
+/// "no" until someone notices, and it looks identical in a log to a control
+/// plane that is briefly down. The agent needs to stop in the first case and
+/// keep trying in the second, and only this side knows which is which.
+enum Refusal {
+    /// Settled. Re-enrolment is the only way back, so the agent should stop.
+    Final(String),
+    /// Might work later — the control plane was unreachable, or answered in a
+    /// way we could not read. Keep retrying.
+    Transient(String),
+}
+
+impl Refusal {
+    fn message(&self) -> &str {
+        match self {
+            Refusal::Final(m) | Refusal::Transient(m) => m,
+        }
+    }
+
+    /// The close code the agent reads to decide whether to give up.
+    ///
+    /// 4001 is in the 4000-4999 range RFC 6455 reserves for applications, so it
+    /// cannot collide with a protocol code the library might send on its own.
+    fn close_code(&self) -> u16 {
+        match self {
+            Refusal::Final(_) => AGENT_REJECTED,
+            Refusal::Transient(_) => 1011,
+        }
+    }
+}
+
+/// "You are not an agent this deployment will accept. Stop asking."
+///
+/// Must match statusAgentRejected in apps/agent/run.go.
+pub const AGENT_REJECTED: u16 = 4001;
+
 impl Agents {
     /// Reads the environment. Agent support is off unless both variables are
     /// set, and off means /agent answers 503 rather than accepting sockets it
@@ -273,30 +313,34 @@ impl Agents {
         let (mut ws_tx, mut ws_rx) = socket.split();
 
         let handshake = async {
-            let hello: Hello = recv_json(&mut ws_rx).await?;
+            // A malformed hello or proof is a protocol mismatch, not a verdict
+            // on this agent: a build too old or too new for this relay. Retrying
+            // will not fix it either, but calling it Final would tell a user
+            // their machine was revoked when it was not.
+            let hello: Hello = recv_json(&mut ws_rx).await.map_err(Refusal::Transient)?;
             let nonce = random_b64(NONCE_BYTES);
 
             let challenge = serde_json::json!({ "type": "challenge", "nonce": nonce }).to_string();
             ws_tx
                 .send(Message::Text(challenge.into()))
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| Refusal::Transient(e.to_string()))?;
 
-            let proof: Proof = recv_json(&mut ws_rx).await?;
+            let proof: Proof = recv_json(&mut ws_rx).await.map_err(Refusal::Transient)?;
             let account = verifier
                 .verify(&hello.agent_id, &nonce, &proof.signature)
                 .await?;
-            Ok::<_, String>((hello.agent_id, account))
+            Ok::<_, Refusal>((hello.agent_id, account))
         };
 
         let (agent_id, account) = match tokio::time::timeout(HANDSHAKE_TIMEOUT, handshake).await {
             Ok(Ok(pair)) => pair,
-            Ok(Err(reason)) => {
-                warn!(%reason, "agent control handshake refused");
+            Ok(Err(refusal)) => {
+                warn!(reason = %refusal.message(), "agent control handshake refused");
                 let _ = ws_tx
                     .send(Message::Close(Some(axum::extract::ws::CloseFrame {
-                        code: 1008, // policy violation
-                        reason: crate::truncate_utf8(reason, 123).into(),
+                        code: refusal.close_code(),
+                        reason: crate::truncate_utf8(refusal.message().to_string(), 123).into(),
                     })))
                     .await;
                 return;
@@ -417,8 +461,9 @@ struct Verifier {
 }
 
 impl Verifier {
-    /// Returns the owning account id, or a reason to refuse.
-    async fn verify(&self, agent_id: &str, nonce: &str, signature: &str) -> Result<String, String> {
+    /// Returns the owning account id, or a refusal that says whether retrying
+    /// could ever help.
+    async fn verify(&self, agent_id: &str, nonce: &str, signature: &str) -> Result<String, Refusal> {
         let body = serde_json::json!({
             "agentId": agent_id,
             "nonce": nonce,
@@ -426,26 +471,38 @@ impl Verifier {
         })
         .to_string();
 
+        // Unreachable is transient by definition: the control plane restarting
+        // must not knock every agent in the fleet offline permanently.
         let (status, body) = post_json(&self.endpoint, &self.secret, &body)
             .await
-            .map_err(|e| format!("could not reach the control plane: {e}"))?;
+            .map_err(|e| Refusal::Transient(format!("could not reach the control plane: {e}")))?;
 
         // Fails closed, unlike the usage reporter next door, and the difference
         // is deliberate: under-counting bytes during an outage costs money,
         // whereas admitting an unverified agent would let anyone who knows an
         // agent id impersonate the machine behind it.
+        // A non-2xx is the control plane failing to answer, not answering "no" —
+        // a verdict arrives as 200 with ok:false. 401 here means the relay's own
+        // credential is wrong, which is an operator problem that will be fixed
+        // without re-enrolling anybody.
         if !(200..300).contains(&status) {
-            return Err(format!("the control plane refused this agent ({status})"));
+            return Err(Refusal::Transient(format!(
+                "the control plane could not answer ({status})"
+            )));
         }
 
-        let parsed: VerifyResponse =
-            serde_json::from_str(&body).map_err(|e| format!("unreadable verify response: {e}"))?;
+        let parsed: VerifyResponse = serde_json::from_str(&body)
+            .map_err(|e| Refusal::Transient(format!("unreadable verify response: {e}")))?;
 
         match (parsed.ok, parsed.user_id) {
             (true, Some(user)) => Ok(user),
-            _ => Err(parsed
-                .error
-                .unwrap_or_else(|| "the control plane refused this agent".into())),
+            // A considered "no". The agent was revoked, deleted, or never
+            // existed, and nothing it can do on its own will change that.
+            _ => Err(Refusal::Final(
+                parsed
+                    .error
+                    .unwrap_or_else(|| "this agent is not accepted here".into()),
+            )),
         }
     }
 }
