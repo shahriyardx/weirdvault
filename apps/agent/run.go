@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"unicode/utf8"
 	"time"
 
 	"github.com/coder/websocket"
@@ -194,22 +195,6 @@ func openStream(ctx context.Context, cfg *Config, ticket string, port int) error
 	if ticket == "" {
 		return fmt.Errorf("open request carried no ticket")
 	}
-	// The relay asks for a port and the relay got that port from the browser.
-	// This is the boundary that keeps an agent from being a way into everything
-	// else listening on loopback; see Config.allows.
-	if !cfg.allows(port) {
-		return fmt.Errorf("refused: port %d is not in allowedPorts %v", port, cfg.AllowedPorts)
-	}
-
-	local, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), localTimeout)
-	if err != nil {
-		return fmt.Errorf("could not reach sshd: %w", err)
-	}
-	defer local.Close()
-
-	if tcp, ok := local.(*net.TCPConn); ok {
-		tcp.SetNoDelay(true) // interactive typing must not wait on Nagle
-	}
 
 	streamURL, err := url.Parse(cfg.streamURL())
 	if err != nil {
@@ -219,6 +204,12 @@ func openStream(ctx context.Context, cfg *Config, ticket string, port int) error
 	q.Set("ticket", ticket)
 	streamURL.RawQuery = q.Encode()
 
+	// The ticket is claimed *before* the local dial, and the order is the whole
+	// point. Failing locally without dialling back leaves the browser waiting on
+	// a rendezvous nobody will keep, so the user learns that sshd is not running
+	// as "the agent did not answer in time" — fifteen seconds later, blaming the
+	// wrong component. Claiming first means a refusal is a close frame carrying
+	// the real reason, which the relay forwards and the browser prints.
 	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
 	conn, _, err := websocket.Dial(dialCtx, streamURL.String(), nil)
@@ -228,8 +219,49 @@ func openStream(ctx context.Context, cfg *Config, ticket string, port int) error
 	conn.SetReadLimit(readLimit)
 	defer conn.CloseNow()
 
+	// The relay asks for a port and the relay got that port from the browser.
+	// This is the boundary that keeps an agent from being a way into everything
+	// else listening on loopback; see Config.allows.
+	if !cfg.allows(port) {
+		reason := fmt.Sprintf("this agent only forwards to %v, not %d", cfg.AllowedPorts, port)
+		conn.Close(websocket.StatusPolicyViolation, closeReason(reason))
+		return fmt.Errorf("refused: %s", reason)
+	}
+
+	local, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), localTimeout)
+	if err != nil {
+		// The overwhelmingly common cause is that there is no SSH server
+		// listening on that machine at all — Remote Login switched off on macOS,
+		// sshd not installed, or bound to a different port. Saying which port was
+		// tried is what turns this from a mystery into a one-line fix.
+		reason := fmt.Sprintf("nothing is listening on 127.0.0.1:%d — is sshd running?", port)
+		conn.Close(websocket.StatusInternalError, closeReason(reason))
+		return fmt.Errorf("could not reach sshd: %w", err)
+	}
+	defer local.Close()
+
+	if tcp, ok := local.(*net.TCPConn); ok {
+		tcp.SetNoDelay(true) // interactive typing must not wait on Nagle
+	}
+
 	splice(ctx, conn, local)
 	return nil
+}
+
+// RFC 6455 caps a close reason at 123 bytes. Over that and the frame is
+// invalid, the peer discards the reason, and the user is back to a bare EOF.
+func closeReason(s string) string {
+	const max = 123
+	if len(s) <= max {
+		return s
+	}
+	// Trimmed on a rune boundary: invalid UTF-8 is discarded just like an
+	// over-long reason.
+	trimmed := s[:max-3]
+	for len(trimmed) > 0 && !utf8.ValidString(trimmed) {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+	return trimmed + "..."
 }
 
 // splice copies between the relay socket and sshd until either end stops.

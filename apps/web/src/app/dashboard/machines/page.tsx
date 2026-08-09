@@ -20,11 +20,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowsClockwiseIcon,
   CheckCircleIcon,
   CopyIcon,
   DesktopTowerIcon,
+  PlugsConnectedIcon,
   PlusIcon,
   ProhibitIcon,
   TerminalWindowIcon,
@@ -32,6 +34,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
 import { PageHeader } from "@/components/shell/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -58,6 +61,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { listHosts, type Host } from "@/lib/hosts";
+import { useSshSession } from "@/lib/ssh/session-provider";
+import { useConnectHost } from "@/lib/ssh/use-connect-host";
 
 interface Agent {
   id: string;
@@ -100,6 +106,24 @@ export default function MachinesPage() {
   const [loadedAt, setLoadedAt] = useState(0);
   const [enrolling, setEnrolling] = useState(false);
 
+  /**
+   * Saved hosts, so a machine that has been connected to before does not send
+   * you back through the form.
+   *
+   * SSH needs a username and a key, and neither is stored server-side — the
+   * agent deliberately holds no SSH credentials, so the first connection has to
+   * ask. Once it has been asked, the answer lives in the vault as an ordinary
+   * host record, and there is nothing left to ask for.
+   */
+  const [hosts, setHosts] = useState<Host[]>([]);
+  const router = useRouter();
+  const prompt = useCredentialPrompt();
+  const { keys: usableKeys } = useSshSession();
+  const { connectToHost, connecting } = useConnectHost({
+    askFor: prompt.askFor,
+    onConnected: () => router.push("/dashboard/terminal"),
+  });
+
   const load = useCallback(async () => {
     const res = await fetch("/api/agents");
     if (!res.ok) {
@@ -115,6 +139,7 @@ export default function MachinesPage() {
   useEffect(() => {
     void (async () => {
       await load();
+      setHosts(await listHosts());
     })();
   }, [load]);
 
@@ -151,7 +176,15 @@ export default function MachinesPage() {
       ) : (
         <div className="mt-6 space-y-3">
           {live.map((a) => (
-            <AgentRow key={a.id} agent={a} now={loadedAt} onChanged={load} />
+            <AgentRow
+              key={a.id}
+              agent={a}
+              now={loadedAt}
+              host={hosts.find((h) => h.agentId === a.id) ?? null}
+              busy={connecting !== null}
+              onConnect={connectToHost}
+              onChanged={load}
+            />
           ))}
           {revoked.length > 0 && (
             <>
@@ -159,12 +192,26 @@ export default function MachinesPage() {
                 Revoked
               </p>
               {revoked.map((a) => (
-                <AgentRow key={a.id} agent={a} now={loadedAt} onChanged={load} />
+                <AgentRow
+                  key={a.id}
+                  agent={a}
+                  now={loadedAt}
+                  host={null}
+                  busy={false}
+                  onConnect={connectToHost}
+                  onChanged={load}
+                />
               ))}
             </>
           )}
         </div>
       )}
+
+      <CredentialPrompt
+        pending={prompt.pending}
+        keys={usableKeys}
+        onSettle={prompt.settle}
+      />
 
       {enrolling && (
         <EnrollDialog
@@ -201,10 +248,17 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 function AgentRow({
   agent,
   now,
+  host,
+  busy,
+  onConnect,
   onChanged,
 }: {
   agent: Agent;
   now: number;
+  /** A saved host pointing at this machine, if one exists. */
+  host: Host | null;
+  busy: boolean;
+  onConnect: (host: Host) => Promise<string | null>;
   onChanged: () => Promise<void>;
 }) {
   const [renaming, setRenaming] = useState(false);
@@ -278,6 +332,27 @@ function AgentRow({
 
       {!revoked && (
         <div className="flex gap-1">
+          {/* One click once we know who to log in as, a form the first time.
+              SSH needs a username and a key; the agent holds neither, so there
+              is genuinely nothing to connect with until you have said once. */}
+          {host ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void onConnect(host)}
+            >
+              <PlugsConnectedIcon />
+              Connect as {host.username}
+            </Button>
+          ) : (
+            <Button asChild variant="secondary" size="sm">
+              <Link href={`/dashboard/connect?agent=${encodeURIComponent(agent.id)}`}>
+                <PlugsConnectedIcon />
+                Set up
+              </Link>
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => setRenaming(true)}>
             Rename
           </Button>

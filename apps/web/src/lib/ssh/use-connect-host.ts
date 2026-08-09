@@ -71,6 +71,11 @@ export function useConnectHost(opts: ConnectHostOptions = {}) {
           hostname: host.hostname,
           port: host.port,
           username: host.username,
+          // Without this a saved agent host is dialled as an address, and its
+          // hostname is a label rather than one — so every connection from the
+          // hosts list, the overview and the sidebar would fail on a name that
+          // does not resolve.
+          agentId: host.agentId,
           key,
           password,
         });

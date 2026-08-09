@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import {
   FloppyDiskIcon,
   PlugsConnectedIcon,
@@ -29,7 +29,19 @@ import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
 import { noAutofillSecret, noAutofillText } from "@/lib/no-autofill";
 
 export default function ConnectPage() {
+  // useSearchParams needs a boundary above it, and the fallback is the form
+  // itself minus the preselection — not a spinner. Arriving here from Connect
+  // on a machine should never show less than arriving here from the sidebar.
+  return (
+    <Suspense fallback={null}>
+      <ConnectForm />
+    </Suspense>
+  );
+}
+
+function ConnectForm() {
   const router = useRouter();
+  const params = useSearchParams();
   const { keys, activeKey, setActiveKey, connect, phase, error, pinned, mismatch, refreshKeys } =
     useSshSession();
   const vaultUnlocked = useVaultUnlocked();
@@ -62,8 +74,11 @@ export default function ConnectPage() {
   // as "nothing selected" and throws if an item claims it, so the sentinel has to
   // be a real value that means the absence of one.
   const DIRECT = "direct";
-  const [reach, setReach] = useState<string>(DIRECT);
+  // Preselected from ?agent= when you arrive from the Machines page, so
+  // "Connect" there lands on a form that already knows what you clicked.
+  const [reach, setReach] = useState<string>(params.get("agent") || DIRECT);
   const agentId = reach === DIRECT ? "" : reach;
+  const machine = machines.find((m) => m.id === agentId) ?? null;
 
   useEffect(() => {
     void (async () => {
@@ -72,9 +87,19 @@ export default function ConnectPage() {
       const body = (await res.json()) as {
         agents: { id: string; label: string; revokedAt: string | null }[];
       };
-      setMachines(body.agents.filter((a) => !a.revokedAt).map(({ id, label }) => ({ id, label })));
+      const live = body.agents.filter((a) => !a.revokedAt).map(({ id, label }) => ({ id, label }));
+      setMachines(live);
+
+      // The name is only ever a label for an agent host, so there is nothing
+      // for the user to invent: default it to what they called the machine.
+      // Only when the field is untouched — retyping over someone's edit
+      // because a fetch landed late is worse than not filling it at all.
+      const preselected = live.find((m) => m.id === params.get("agent"));
+      if (preselected) {
+        setForm((f) => (f.hostname === "" ? { ...f, hostname: preselected.label } : f));
+      }
     })();
-  }, []);
+  }, [params]);
 
   async function submit(e: React.FormEvent, opts: { save?: boolean } = {}) {
     e.preventDefault();
@@ -122,25 +147,31 @@ export default function ConnectPage() {
           <CardContent className="space-y-4">
             {machines.length > 0 && (
               <div className="space-y-1.5">
-                <Label htmlFor="reach">Reach it</Label>
+                {/* This used to read "Through <machine>", which describes a jump
+                    host — something you pass through on the way to a different
+                    server. It is the opposite: the machine IS the destination,
+                    and its agent forwards to sshd on its own loopback. The
+                    wording sent people looking for a "direct" option that was
+                    already the one they had selected. */}
+                <Label htmlFor="reach">Connect to</Label>
                 <Select value={reach} onValueChange={setReach}>
                   <SelectTrigger id="reach" className="w-full">
-                    <SelectValue placeholder="Directly, by address" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={DIRECT}>Directly, by address</SelectItem>
+                    <SelectItem value={DIRECT}>A server at an address</SelectItem>
                     {machines.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        Through {m.label}
+                        {m.label} — enrolled machine
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {agentId && (
+                {machine && (
                   <p className="text-muted-foreground text-xs leading-relaxed">
-                    The hostname below becomes a label rather than an address — the
-                    connection goes to that machine&rsquo;s own loopback. Keep it stable:
-                    host key pins are stored against it.
+                    SSH straight into {machine.label}. It has no address to dial, so
+                    its agent carries the connection to sshd there — same handshake,
+                    same key, same host key check.
                   </p>
                 )}
               </div>
@@ -148,7 +179,7 @@ export default function ConnectPage() {
 
             <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
               <div className="space-y-1.5">
-                <Label htmlFor="hostname">{agentId ? "Name" : "Hostname"}</Label>
+                <Label htmlFor="hostname">{agentId ? "Show it as" : "Hostname"}</Label>
                 <Input
                   id="hostname"
                   name="remote-hostname"
@@ -158,6 +189,11 @@ export default function ConnectPage() {
                   onChange={(e) => setForm({ ...form, hostname: e.target.value })}
                   required
                 />
+                {agentId && (
+                  <p className="text-muted-foreground text-xs">
+                    A label for your host list. Rename it whenever you like.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="port">Port</Label>

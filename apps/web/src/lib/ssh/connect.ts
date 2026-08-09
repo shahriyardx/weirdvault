@@ -21,13 +21,16 @@ export interface ConnectOptions {
   port: number;
   username: string;
   /**
-   * Reach the machine through its agent rather than by dialling `hostname`.
+   * This host *is* an enrolled machine, reached through its own agent.
    *
-   * Everything after the WebSocket is identical — the same SSH handshake, the
-   * same key, the same host-key pin against the same `hostname:port`. Only the
-   * URL differs, which is the property worth preserving: a host that moves
-   * behind NAT keeps its pin, and a compromised agent still cannot present a
-   * different host key without the mismatch being caught below.
+   * Not a jump host and not a proxy to somewhere else: the agent forwards to
+   * sshd on its own loopback, so the far end is that machine. Everything after
+   * the WebSocket is identical — same SSH handshake, same key, same host key
+   * verification — and a compromised agent still cannot present a different
+   * host key without the mismatch below catching it.
+   *
+   * `hostname` is a display label when this is set, which is why the pin is
+   * keyed separately; see pinKeyFor.
    */
   agentId?: string;
   key?: SshKey;
@@ -42,14 +45,29 @@ export interface ConnectOptions {
   save?: boolean;
 }
 
+/**
+ * What a host key is pinned against.
+ *
+ * For an ordinary host that is the address, because the address is what
+ * identifies the machine. For an agent host there is no address — `hostname` is
+ * a label the user typed and can rename at will — so the pin is keyed on the
+ * agent instead. Keying it on the label would mean renaming a machine silently
+ * discarded its pinned key and re-pinned whatever answered next, which is a
+ * mismatch warning that never fires: exactly the case pinning exists to catch.
+ */
+function pinKeyFor(opts: Pick<ConnectOptions, "hostname" | "agentId">): string {
+  return opts.agentId ? `agent:${opts.agentId}` : opts.hostname;
+}
+
 export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   const { hostname, port, username } = opts;
+  const pinKey = pinKeyFor(opts);
 
   if (!opts.key && !opts.password) {
     throw new Error("Provide a key or a password");
   }
 
-  const known = await getPin(hostname, port);
+  const known = await getPin(pinKey, port);
   let seen: HostKeyInfo | null = null;
 
   const session = await rawConnect({
@@ -95,7 +113,7 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   // connection would let a failed MITM attempt poison the store.
   if (seen && (seen as HostKeyInfo).status === "unknown") {
     const info = seen as HostKeyInfo;
-    await pin(hostname, port, {
+    await pin(pinKey, port, {
       key: info.key,
       fingerprint: info.fingerprint,
       type: info.type,
@@ -107,7 +125,7 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
     });
     opts.onPinned?.(info);
   } else {
-    await touchPin(hostname, port);
+    await touchPin(pinKey, port);
   }
 
   await rememberHost(
@@ -147,6 +165,11 @@ export async function connectAndInstallKey(
     port: opts.port,
     username: opts.username,
     keyId: opts.key.id,
+    // Carried through, or this write would blank it. rememberHost spreads these
+    // fields over the existing record, so omitting agentId on a machine that has
+    // one turns it back into an address host — and the next connection would try
+    // to dial a label that is not a hostname.
+    agentId: opts.agentId,
     auth: "key",
   });
 

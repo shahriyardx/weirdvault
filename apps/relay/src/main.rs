@@ -320,31 +320,6 @@ async fn connect_via_agent(
         }
     };
 
-    // Checked before the upgrade so "that machine is not online" is an HTTP
-    // status the browser can read. It races — the agent can drop in the gap —
-    // which is why the post-upgrade path reports its own failure too.
-    let Some(owner) = state.agents.owner(agent_id) else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "that machine's agent is not connected",
-        )
-            .into_response();
-    };
-
-    // Two independent statements of who owns this machine, required to agree.
-    // See Agents::owner for why this is worth a comparison even though the
-    // control plane already checked it.
-    if owner != claims.sub {
-        warn!(
-            %peer,
-            agent = %agent_id,
-            token_account = %claims.sub,
-            agent_account = %owner,
-            "refused: the token's account does not own this agent"
-        );
-        return (StatusCode::FORBIDDEN, "that agent belongs to another account").into_response();
-    }
-
     let guard = match state.quotas.acquire(&claims.sub) {
         Ok(g) => g,
         Err(e) => {
@@ -356,8 +331,48 @@ async fn connect_via_agent(
     let agents = state.agents.clone();
     let agent_id = agent_id.to_string();
 
+    // Everything below happens *after* the upgrade, and that is the correction
+    // rather than an oversight. This used to refuse an offline machine with a
+    // 503 before upgrading, on the stated grounds that an HTTP status is
+    // something the client can read. A browser cannot: a failed WebSocket
+    // handshake surfaces as a bare `error` event with no status and no body, so
+    // the single most ordinary situation in this whole feature — the machine is
+    // asleep, or the agent was never started — reached the user as "could not
+    // reach the relay", pointing at the one component that was working.
+    //
+    // Accept the socket, then close it with a reason the client can actually
+    // read. Same discipline as a failed dial; see dial_failure_reason.
+    let account = claims.sub.clone();
+
     ws.on_upgrade(move |browser| async move {
         let started = Instant::now();
+
+        let Some(owner) = agents.owner(&agent_id) else {
+            close_with_reason(
+                browser,
+                "that machine's agent is not connected — is it powered on, and is \
+                 webxterm-agent running there?"
+                    .into(),
+            )
+            .await;
+            return;
+        };
+
+        // Two independent statements of who owns this machine, required to
+        // agree. See Agents::owner for why this is worth comparing even though
+        // the control plane checked it before signing the token.
+        if owner != account {
+            warn!(
+                %peer,
+                agent = %agent_id,
+                token_account = %account,
+                agent_account = %owner,
+                "refused: the token's account does not own this agent"
+            );
+            close_with_reason(browser, "that agent belongs to another account".into()).await;
+            return;
+        }
+
         let stream = match agents.open(&agent_id, port).await {
             Ok(s) => s,
             Err(e) => {
@@ -627,6 +642,13 @@ async fn splice(
 
     let down = tokio::spawn(async move {
         let mut total = 0u64;
+        // Forwarded rather than swallowed. The agent closes with a reason when
+        // it cannot do what was asked — nothing listening on that port, a port
+        // outside its allowlist — and those are the failures a user is most
+        // likely to hit and least able to guess at. Dropping the frame here
+        // turned "is sshd running?" into an unexplained disconnect.
+        let mut closing: Option<axum::extract::ws::CloseFrame> = None;
+
         while let Some(Ok(msg)) = agent_rx.next().await {
             match msg {
                 Message::Binary(data) => {
@@ -636,11 +658,33 @@ async fn splice(
                         break;
                     }
                 }
-                Message::Close(_) => break,
+                Message::Close(frame) => {
+                    // Only a reason worth reading. A normal end-of-session close
+                    // carries none, and inventing one would put a spurious error
+                    // on every clean logout.
+                    closing = frame.filter(|f| !f.reason.is_empty());
+                    break;
+                }
                 _ => {}
             }
         }
-        let _ = browser_tx.close().await;
+
+        match closing {
+            Some(frame) => {
+                let _ = browser_tx
+                    .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                        // 1011, not the agent's own code: the agent's codes are
+                        // about its socket, and what the browser needs to know is
+                        // that the far end failed and why.
+                        code: 1011,
+                        reason: truncate_utf8(frame.reason.to_string(), MAX_CLOSE_REASON).into(),
+                    })))
+                    .await;
+            }
+            None => {
+                let _ = browser_tx.close().await;
+            }
+        }
         total
     });
 
