@@ -11,6 +11,7 @@ const doc = (over: Partial<VaultDocument> = {}): VaultDocument => ({
   hosts: [],
   keys: [],
   hostKeys: [],
+  snippets: [],
   tombstones: {},
   updatedAt: 0,
   ...over,
@@ -36,6 +37,14 @@ const key = (id: string, at: number) =>
     createdAt: at,
   });
 
+const snippet = (id: string, body: string, updatedAt: number) => ({
+  id,
+  name: id,
+  body,
+  createdAt: 0,
+  updatedAt,
+});
+
 const pin = (id: string, keyB64: string, pinnedAt: number) => ({
   id,
   key: keyB64,
@@ -60,6 +69,31 @@ describe("mergeVault", () => {
       doc({ hosts: [{ ...host("a", 200), label: "remote" }] }),
     );
     expect(merged.hosts).toHaveLength(1);
+    expect(merged.hosts[0].label).toBe("remote");
+  });
+
+  /**
+   * The regression this pair exists for. A host edited in place — renamed, moved
+   * to a folder, pointed at a different key — moves neither lastUsedAt nor
+   * createdAt, so before Host.updatedAt the edited copy and the server's stale
+   * one carried an identical stamp. mergeById breaks a tie in favour of the
+   * remote copy, so the edit was silently reverted and then written back over
+   * IndexedDB by applyLocally. No error, no conflict, no toast.
+   */
+  test("an edit whose only newer field is updatedAt wins the tie", () => {
+    const merged = mergeVault(
+      doc({ hosts: [{ ...host("a", 100), label: "web-prod", updatedAt: 500 }] }),
+      doc({ hosts: [{ ...host("a", 100), label: "web-01" }] }),
+    );
+    expect(merged.hosts).toHaveLength(1);
+    expect(merged.hosts[0].label).toBe("web-prod");
+  });
+
+  test("without updatedAt on either side the old stamp still decides", () => {
+    const merged = mergeVault(
+      doc({ hosts: [{ ...host("a", 100), label: "local" }] }),
+      doc({ hosts: [{ ...host("a", 300), label: "remote" }] }),
+    );
     expect(merged.hosts[0].label).toBe("remote");
   });
 
@@ -122,6 +156,51 @@ describe("mergeVault", () => {
     expect(merged.hostKeys).toHaveLength(0);
   });
 
+  test("a snippet edited on two devices keeps the later body", () => {
+    // Unlike hosts and keys, a snippet's whole point is being edited in place,
+    // so this is the common case rather than the awkward one.
+    const merged = mergeVault(
+      doc({ snippets: [snippet("s1", "rsync --dry-run", 100)] }),
+      doc({ snippets: [snippet("s1", "rsync -a --delete", 200)] }),
+    );
+    expect(merged.snippets).toHaveLength(1);
+    expect(merged.snippets[0].body).toBe("rsync -a --delete");
+  });
+
+  test("a snippet deleted on one device disappears from the other", () => {
+    const merged = mergeVault(
+      doc({ tombstones: { s1: 300 } }),
+      doc({ snippets: [snippet("s1", "sudo rm -rf /var/cache/*", 100)] }),
+    );
+    expect(merged.snippets).toHaveLength(0);
+  });
+
+  test("a snippet edited after the delete comes back", () => {
+    const merged = mergeVault(
+      doc({ snippets: [snippet("s1", "journalctl -fu api", 400)] }),
+      doc({ tombstones: { s1: 300 } }),
+    );
+    expect(merged.snippets).toHaveLength(1);
+    expect(merged.snippets[0].body).toBe("journalctl -fu api");
+  });
+
+  test("a vault written before snippets existed still merges", () => {
+    // Every account that used webxterm before this feature shipped has a blob
+    // in this shape. Dropping the local snippets here — or throwing — would be
+    // the worst possible first sync after an upgrade.
+    const legacy = {
+      hosts: [host("a", 100)],
+      keys: [],
+      hostKeys: [],
+      tombstones: {},
+      updatedAt: 0,
+    } as unknown as VaultDocument;
+
+    const merged = mergeVault(doc({ snippets: [snippet("s1", "uptime", 100)] }), legacy);
+    expect(merged.snippets).toHaveLength(1);
+    expect(merged.hosts).toHaveLength(1);
+  });
+
   test("merging is symmetric in what it retains", () => {
     const a = doc({ hosts: [host("a", 100)], keys: [key("k", 50)] });
     const b = doc({ hosts: [host("b", 200)], hostKeys: [pin("h:22", "K", 10)] });
@@ -138,10 +217,12 @@ describe("mergeVault", () => {
       hosts: [host("a", 100)],
       keys: [key("k", 100)],
       hostKeys: [pin("h:22", "K", 100)],
+      snippets: [snippet("s", "df -h", 100)],
     });
     const merged = mergeVault(local, doc());
     expect(merged.hosts).toHaveLength(1);
     expect(merged.keys).toHaveLength(1);
     expect(merged.hostKeys).toHaveLength(1);
+    expect(merged.snippets).toHaveLength(1);
   });
 });
