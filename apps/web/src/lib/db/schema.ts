@@ -701,3 +701,106 @@ export const passkey = pgTable(
     uniqueIndex("passkey_credential_idx").on(t.credentialID),
   ],
 );
+
+/* ------------------------------------------------------------------ *
+ * Agents: machines that cannot be dialled.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A machine that reaches us instead of us reaching it.
+ *
+ * A server behind a home router has no address the relay can connect to, so a
+ * small daemon on that machine holds an outbound connection and waits. This row
+ * is that machine's identity: an Ed25519 public key it generated during
+ * enrollment and proves possession of on every reconnect.
+ *
+ * What is deliberately NOT here is anything about the host itself — no
+ * username, no label the user typed, no port. Those live in the encrypted vault
+ * with every other host record, because they are the user's data and the server
+ * has no business reading them. This table holds only what the relay must be
+ * able to check without a key: which public key, whose account, still valid or
+ * not. A row here says a machine may connect; it says nothing about what is on
+ * it.
+ *
+ * `hostname`, `os` and `arch` are the exception, and they are self-reported by
+ * the agent at enrollment purely so the dashboard can say "this is the box you
+ * just typed on" rather than showing a bare UUID. Nothing trusts them.
+ */
+export const agent = pgTable(
+  "agent",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** What the user calls it. Defaults to the reported hostname. */
+    label: text("label").notNull(),
+    /** Ed25519 public key, base64. The only thing that authenticates the agent. */
+    publicKey: text("public_key").notNull(),
+    /**
+     * SHA256:… over the public key, stored rather than derived on read.
+     *
+     * It is shown twice — on the enrollment page and by `webxterm-agent status`
+     * — and the whole point is that a person compares them. Computing it in two
+     * places is how they end up formatted differently and stop comparing.
+     */
+    fingerprint: text("fingerprint").notNull(),
+    /** Self-reported at enrollment, for display only. */
+    hostname: text("hostname"),
+    os: text("os"),
+    arch: text("arch"),
+    agentVersion: text("agent_version"),
+    /**
+     * Set when the user revokes it. Checked on every relay verification, so a
+     * revoke takes effect on the agent's next reconnect at the latest — and
+     * immediately for any new session, since /api/relay-token reads this too.
+     *
+     * A tombstone rather than a delete: the id must never be re-issued, and a
+     * host record in somebody's vault still points at it.
+     */
+    revokedAt: timestamp("revoked_at"),
+    /** Stamped by the relay's verification call — the last time it connected. */
+    lastSeenAt: timestamp("last_seen_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("agent_user_idx").on(t.userId),
+    uniqueIndex("agent_public_key_idx").on(t.publicKey),
+  ],
+);
+
+/**
+ * A one-time token that turns into an agent.
+ *
+ * Enrollment has to be authenticated by something the machine can be given over
+ * a copy-paste, because the machine has no session and the person at the
+ * keyboard may not have a browser on it. So: a short-lived single-use secret,
+ * minted by a signed-in user, spent by the daemon.
+ *
+ * Only the hash is stored. The token is a bearer credential that grants
+ * attaching a machine to an account, and a leaked database should not be a
+ * leaked set of live enrollment tokens — the same reason session tokens are not
+ * stored in the clear. It is spent by an UPDATE with `used_at IS NULL` in the
+ * WHERE clause rather than a read-then-write, so two daemons racing the same
+ * token produce one agent and one refusal.
+ */
+export const agentEnrollment = pgTable(
+  "agent_enrollment",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** SHA-256 of the token, hex. Never the token itself. */
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    /** The agent it became, once spent. Lets the waiting page find it. */
+    agentId: text("agent_id").references(() => agent.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("agent_enrollment_token_idx").on(t.tokenHash),
+    index("agent_enrollment_user_idx").on(t.userId),
+  ],
+);

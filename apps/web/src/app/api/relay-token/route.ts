@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { cookies, headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
@@ -138,18 +138,31 @@ export async function POST(request: Request) {
     return Response.json({ error: "relay not configured" }, { status: 503 });
   }
 
-  let body: { host?: unknown; port?: unknown };
+  let body: { host?: unknown; port?: unknown; agent?: unknown };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "invalid JSON" }, { status: 400 });
   }
 
-  const { host, port } = body;
-  if (typeof host !== "string" || !host || typeof port !== "number") {
-    return Response.json({ error: "host (string) and port (number) required" }, { status: 400 });
+  const { host, port, agent } = body;
+
+  // One destination or the other, never both. The relay refuses a token that
+  // names both anyway, but a request that asks for both is a caller bug worth
+  // naming here rather than letting it fail one hop later.
+  if (agent !== undefined && host !== undefined) {
+    return Response.json({ error: "name a host or an agent, not both" }, { status: 400 });
   }
-  if (!Number.isInteger(port) || port < 1 || port > MAX_PORT) {
+
+  const wantsAgent = typeof agent === "string" && agent.length > 0;
+
+  if (!wantsAgent && (typeof host !== "string" || !host || typeof port !== "number")) {
+    return Response.json(
+      { error: "host (string) and port (number), or agent (string), required" },
+      { status: 400 },
+    );
+  }
+  if (typeof port === "number" && (!Number.isInteger(port) || port < 1 || port > MAX_PORT)) {
     return Response.json({ error: "invalid port" }, { status: 400 });
   }
 
@@ -179,12 +192,56 @@ export async function POST(request: Request) {
     }
   }
 
-  const claims = {
-    sub,
-    host,
-    port,
-    exp: Math.floor(Date.now() / 1000) + ttl,
-  };
+  /**
+   * Ownership is checked here, and only here.
+   *
+   * The relay cannot do it — it holds no database, which is the entire point of
+   * the token — so a signed token naming `agent:<id>` *is* the statement that
+   * this account may reach that machine. Every property of the agent path rests
+   * on this query being right, which is why it is scoped by user id in the WHERE
+   * clause and refuses a revoked row in the same breath rather than reading the
+   * row and deciding afterwards.
+   *
+   * An anonymous subject can never own an agent, so this refuses before it
+   * queries: `anon:<uuid>` has no user row for the join to find and the lookup
+   * would be a slow way to reach the same answer.
+   */
+  if (wantsAgent) {
+    if (anonymous) {
+      return Response.json({ error: "sign in to reach your own machines" }, { status: 401 });
+    }
+
+    const [owned] = await db
+      .select({ id: schema.agent.id })
+      .from(schema.agent)
+      .where(
+        and(
+          eq(schema.agent.id, agent as string),
+          eq(schema.agent.userId, sub),
+          isNull(schema.agent.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    // 404, not 403: telling an account that an id it does not own is a real
+    // agent is a fact about somebody else's machines.
+    if (!owned) {
+      return Response.json({ error: "no such machine" }, { status: 404 });
+    }
+  }
+
+  const claims = wantsAgent
+    ? {
+        sub,
+        agent: agent as string,
+        exp: Math.floor(Date.now() / 1000) + ttl,
+      }
+    : {
+        sub,
+        host,
+        port,
+        exp: Math.floor(Date.now() / 1000) + ttl,
+      };
 
   const payload = b64url(Buffer.from(JSON.stringify(claims), "utf8"));
   const signature = b64url(createHmac("sha256", secret).update(payload).digest());
