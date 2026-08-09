@@ -102,10 +102,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { blindHost } from "@/lib/audit/blind";
 import { buildHostLabels, shortRef } from "@/lib/audit/query";
 import { useBilling } from "@/lib/billing/client";
-import { getCurrentDeviceId } from "@/lib/device";
 import {
   MAX_ACCOUNT_RECORDING_BYTES,
   MAX_BLOB_BYTES,
@@ -116,13 +114,12 @@ import {
   castFor,
   discardRecording,
   retrySave,
-  startRecording,
-  stopRecording,
   subscribeSaved,
   useRecorders,
   type EndReason,
   type RecorderState,
 } from "@/lib/recording/capture";
+import { useSessionRecorder } from "@/lib/recording/use-session-recorder";
 import { toAsciicast, type Cast } from "@/lib/recording/format";
 import {
   MAX_SHARE_VIEWS,
@@ -159,7 +156,7 @@ const END_REASONS: Record<EndReason, string> = {
 
 export default function RecordingsPage() {
   const unlocked = useVaultUnlocked();
-  const { sessions, tapSession, sizeFor } = useSshSession();
+  const { sessions } = useSshSession();
   const recorders = useRecorders();
   /**
    * The plan, as the server states it. Never resolved here: a tab knows which
@@ -291,54 +288,9 @@ export default function RecordingsPage() {
 
   /* ----------------------------------------------------------- recording */
 
-  async function start(session: SessionEntry) {
-    if (!getVaultKey()) {
-      // Not a silent no-op and not a failure at the end: the vault is what
-      // encrypts the transcript, so there is nothing to do until it is open.
-      requestUnlock();
-      toast.error("The vault is locked", {
-        description: "A recording is encrypted with the vault key before it is stored, so recording cannot start until you unlock.",
-      });
-      return;
-    }
-
-    const auditKey = getAuditKey();
-    const targetRef = auditKey
-      ? await blindHost(auditKey, session.target.hostname, session.target.port)
-      : null;
-    const deviceId = (await getCurrentDeviceId()) ?? null;
-    const size = sizeFor(session.id);
-
-    try {
-      startRecording({
-        sessionId: session.id,
-        label: session.label,
-        host: `${session.target.username}@${session.target.hostname}:${session.target.port}`,
-        targetRef,
-        deviceId,
-        cols: size?.cols ?? 80,
-        rows: size?.rows ?? 24,
-        tap: (fn) => tapSession(session.id, fn),
-      });
-    } catch (error) {
-      toast.error("Could not start recording", { description: message(error) });
-      return;
-    }
-
-    toast.success(`Recording ${session.label}`, {
-      description: size
-        ? "Everything the shell prints from now on is captured in this tab."
-        : "This pane has not reported its size yet, so the recording assumes 80×24 until it does.",
-    });
-  }
-
-  async function stop(sessionId: string) {
-    try {
-      await stopRecording(sessionId);
-    } catch (error) {
-      toast.error("Could not save the recording", { description: message(error) });
-    }
-  }
+  // Shared with the terminal toolbar, which can start and stop a recording
+  // without coming here. See lib/recording/use-session-recorder.ts.
+  const { start, stop } = useSessionRecorder();
 
   /* ------------------------------------------------------------ playback */
 

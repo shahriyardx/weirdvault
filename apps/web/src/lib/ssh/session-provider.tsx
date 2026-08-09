@@ -144,6 +144,17 @@ interface SessionContextValue {
   /** Opens a NEW session; never replaces an existing one. */
   connect: (req: ConnectRequest) => Promise<string>;
   disconnect: (id?: string) => void;
+  /**
+   * Renames a session for this tab only.
+   *
+   * The generated label is `user@host`, which stops being useful the moment you
+   * have three shells on one box — `#2` and `#3` say nothing about which is
+   * tailing logs and which is mid-deploy. This is presentation and nothing else:
+   * it never reaches the host, the vault, or the audit log, and it dies with the
+   * tab along with the session it names. An empty or blank name restores the
+   * generated one rather than leaving a row with no label at all.
+   */
+  renameSession: (id: string, label: string) => void;
 
   error: string | null;
   note: string | null;
@@ -388,6 +399,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [activeId],
   );
 
+  const renameSession = useCallback(
+    (id: string, label: string) => {
+      const l = live.current.get(id);
+      if (!l) return;
+      const trimmed = label.trim();
+      // Blank means "give me the default back", not "leave it nameless".
+      l.entry = { ...l.entry, label: trimmed || labelFor(l.entry.target, id) };
+      syncEntries();
+    },
+    [labelFor, syncEntries],
+  );
+
   const subscribe = useCallback((id: string, fn: (b: Uint8Array) => void) => {
     const l = live.current.get(id);
     if (!l) return () => {};
@@ -470,6 +493,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       refreshHosts,
       connect,
       disconnect,
+      renameSession,
       error,
       note,
       pinned,
@@ -485,7 +509,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       phase, sessions, activeId, keys, hosts, activeKey, refreshKeys,
-      refreshHosts, connect, disconnect, error, note, pinned, mismatch, subscribe,
+      refreshHosts, connect, disconnect, renameSession, error, note, pinned, mismatch, subscribe,
       tapSession, sizeFor, resize, panes, splitDirection, focusedPane,
     ],
   );
