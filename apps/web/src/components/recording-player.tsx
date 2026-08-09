@@ -54,6 +54,25 @@ import { terminalTheme } from "@/lib/terminal-theme";
 
 const SPEEDS = [0.5, 1, 2, 4] as const;
 
+/**
+ * How far the replay may be scaled up.
+ *
+ * Past roughly this, a shell recorded in a small pane stops reading as a
+ * terminal and starts reading as a slide. The cap is on the transform, not on
+ * the grid — nothing is lost either way, it is only a question of what looks
+ * like a terminal.
+ */
+const MAX_SCALE = 2.5;
+
+/** The share of the window height the replay may take, leaving room for controls. */
+const VIEWPORT_SHARE = 0.62;
+
+/** Below this, a short window should scroll rather than shrink the replay to nothing. */
+const MIN_BOX_HEIGHT = 240;
+
+/** Matches the `p-2` on the box the replay sits in. */
+const BOX_PADDING = 8;
+
 /** The keys a range input responds to; everything else is navigation. */
 const SCRUB_KEYS = new Set([
   "ArrowLeft",
@@ -133,7 +152,27 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
       const naturalWidth = screen.offsetWidth;
       const naturalHeight = screen.offsetHeight;
       if (naturalWidth === 0 || naturalHeight === 0) return;
-      const next = Math.min(1, outer.clientWidth / naturalWidth);
+
+      // Scaling up as well as down. This used to be `Math.min(1, …)`, which
+      // meant an 80×24 recording — the common case, and the smallest — rendered
+      // at its natural 13px and sat in the middle of a dialog three times its
+      // width. A terminal recording has no resolution to lose: it is a character
+      // grid, and the transform re-rasterises DOM text rather than stretching
+      // pixels, so filling the box costs nothing.
+      //
+      // Height is a constraint too, and was not before. Without it a 60-row
+      // recording widened to fit and then ran off the bottom of the viewport.
+      const room = Math.max(MIN_BOX_HEIGHT, window.innerHeight * VIEWPORT_SHARE);
+      // clientWidth includes the padding, so fitting to it overflows the content
+      // box by exactly the padding — invisible while the scale was capped at 1
+      // and the grid rarely filled the box, and a clipped right-hand column now
+      // that it does.
+      const available = Math.max(1, outer.clientWidth - BOX_PADDING * 2);
+      const next = Math.min(
+        available / naturalWidth,
+        room / naturalHeight,
+        MAX_SCALE,
+      );
       setScale(next);
       setBoxHeight(naturalHeight * next);
     };
@@ -146,10 +185,15 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
     // The screen is observed too: a resize event inside the recording changes
     // the grid, and with it how much room the replay needs.
     observer.observe(screen);
+    // And the window, because the height budget above is a share of the
+    // viewport: shortening the window without narrowing it changes the answer
+    // and moves neither observed box.
+    window.addEventListener("resize", measure);
 
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      window.removeEventListener("resize", measure);
       termRef.current = null;
       term.dispose();
     };

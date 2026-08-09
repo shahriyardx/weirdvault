@@ -239,6 +239,18 @@ export interface TerminalHandle {
   size(): { cols: number; rows: number };
 }
 
+/**
+ * Terminal cell size, in pixels.
+ *
+ * A range rather than a free number: below about 9px the glyphs stop being
+ * distinguishable at any DPI, and above about 24 a normal window holds too few
+ * columns for the output most shell tools assume. The default matches what the
+ * dashboard's other monospace surfaces use.
+ */
+export const MIN_FONT_SIZE = 9;
+export const MAX_FONT_SIZE = 24;
+export const DEFAULT_FONT_SIZE = 13;
+
 interface Props {
   ref?: Ref<TerminalHandle>;
   onInput?: (data: string) => void;
@@ -249,13 +261,32 @@ interface Props {
    * the view is split.
    */
   showKeyboardBar?: boolean;
+  /**
+   * Cell size in pixels.
+   *
+   * Owned by the caller because it is a preference that outlives any one pane
+   * and has to be the same in all of them — four panes at four sizes is not a
+   * feature. Changing it re-fits, so the column count changes with it and the
+   * remote PTY is told; that is the point rather than a side effect, since
+   * zooming in on a shell means fewer, bigger columns.
+   */
+  fontSize?: number;
 }
 
-export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }: Props) {
+export function TerminalView({
+  ref,
+  onInput,
+  onResize,
+  showKeyboardBar = false,
+  fontSize = DEFAULT_FONT_SIZE,
+}: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  // Held so a font-size change can clear the glyph atlas. Null where WebGL was
+  // refused and the canvas fallback is doing the painting, which needs nothing.
+  const webglRef = useRef<WebglAddon | null>(null);
 
   // Modifier state is held twice on purpose. The state renders the row; the
   // ref is what input is judged against, because keystrokes arrive from xterm
@@ -298,6 +329,23 @@ export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }
     cbs.current = { onInput, onResize };
   }, [onInput, onResize]);
 
+  const fontSizeRef = useRef(fontSize);
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+    const term = termRef.current;
+    if (!term || term.options.fontSize === fontSize) return;
+    term.options.fontSize = fontSize;
+    // The cell size has changed, so the grid that fitted the container no longer
+    // does. Re-fit, and clear the WebGL atlas — it caches glyphs at the old size
+    // and would otherwise paint them scaled and blurred into the new cells.
+    webglRef.current?.clearTextureAtlas();
+    try {
+      fitRef.current?.fit();
+    } catch {
+      /* not laid out */
+    }
+  }, [fontSize]);
+
   useImperativeHandle(ref, () => ({
     write: (d) => termRef.current?.write(d as string),
     clear: () => termRef.current?.clear(),
@@ -311,7 +359,10 @@ export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }
 
     const term = new Terminal({
       fontFamily: monoFontStack(),
-      fontSize: 13,
+      // Read from the ref, not the prop: this effect deliberately runs once, so
+      // closing over the prop would pin the terminal to whatever the size was at
+      // mount. The effect below applies later changes.
+      fontSize: fontSizeRef.current,
       lineHeight: 1.2,
       cursorBlink: true,
       allowProposedApi: true,
@@ -326,7 +377,7 @@ export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }
     // failure here should degrade rendering, not break the terminal.
     let webgl: WebglAddon | null = null;
     try {
-      webgl = new WebglAddon();
+      webgl = webglRef.current = new WebglAddon();
       term.loadAddon(webgl);
     } catch {
       /* canvas fallback */
@@ -354,7 +405,29 @@ export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }
         term.refresh(0, term.rows - 1);
       });
 
+    /**
+     * Report the size before the first fit, not after.
+     *
+     * This registration used to sit sixty lines further down, after `fit.fit()`
+     * had already run. xterm fires onResize only when the dimensions actually
+     * change, so the one fit that matters — the jump from xterm's default 80×24
+     * to the real geometry — fired into a handler that did not exist yet. If no
+     * later fit changed the numbers again, nothing was ever reported: the remote
+     * PTY kept its opening size and the session's recorded geometry stayed null,
+     * which is why `startRecording` fell back to 80×24 and replayed a 170-column
+     * transcript wrapped at 80. The live pane looked right because xterm was
+     * rendering at the true size the whole time; only everything downstream of
+     * the callback was wrong.
+     */
+    term.onResize(({ cols, rows }) => cbs.current.onResize?.(cols, rows));
+
     fit.fit();
+    // And once explicitly, because "no change" is a real outcome: a container
+    // that happens to fit exactly 80×24, or a fit that ran before layout and
+    // computed nothing, both leave onResize silent. Publishing unconditionally
+    // costs one redundant call and removes the whole class of failure.
+    cbs.current.onResize?.(term.cols, term.rows);
+
     termRef.current = term;
     fitRef.current = fit;
 
@@ -388,7 +461,6 @@ export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }
     };
 
     term.onData((d) => cbs.current.onInput?.(foldTyped(d)));
-    term.onResize(({ cols, rows }) => cbs.current.onResize?.(cols, rows));
 
     const ro = new ResizeObserver(() => {
       try {
@@ -404,6 +476,8 @@ export function TerminalView({ ref, onInput, onResize, showKeyboardBar = false }
       ro.disconnect();
       term.dispose();
       termRef.current = null;
+      fitRef.current = null;
+      webglRef.current = null;
     };
     // spendMods is stable for the life of the component; this effect must run
     // exactly once, because re-running it throws away the terminal and every
