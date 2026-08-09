@@ -49,9 +49,38 @@ this way isn't a claim, it's marketing.
 └──────────────────────────────────────────────────────────┘
 ```
 
+For a machine with no public address the middle hop is longer, and the trust
+placed in it is not:
+
+```
+┌─ USER'S BROWSER ─────────────────────────────────────────┐
+└────────────────────────┬─────────────────────────────────┘
+                         │ SSH ciphertext over WebSocket
+┌────────────────────────▼─── semi-trusted ────────────────┐
+│  RELAY — pairs two sockets it cannot read                 │
+└────────────────────────┬─────────────────────────────────┘
+                         │ the SAME ciphertext, over a second
+                         │ WebSocket the agent dialled outward
+┌────────────────────────▼─── semi-trusted ────────────────┐
+│  AGENT on the user's own machine — a pipe to a port.      │
+│  Holds no SSH credentials. Cannot decrypt.                │
+└────────────────────────┬─────────────────────────────────┘
+                         │ TCP to 127.0.0.1
+┌────────────────────────▼─── trusted by the user ─────────┐
+│  THEIR SSH SERVER — unmodified sshd                       │
+└──────────────────────────────────────────────────────────┘
+```
+
+The agent is deliberately *not* a new trust boundary. It sees what the relay
+sees: ciphertext and metadata. Its Ed25519 key authenticates the machine to the
+relay and authorises nothing else — it cannot log in, cannot read the session,
+and cannot present a different SSH host key without host-key pinning in the
+browser catching it. See §6.
+
 **Design rule:** compromise of the relay *and* the control plane together must
 not yield plaintext sessions or vault contents. Everything below is judged
-against that rule.
+against that rule. Adding the agent does not change it: compromise of all three
+still yields ciphertext.
 
 ---
 
@@ -302,7 +331,19 @@ with no cloud IAM role attached.
 2. **Relay metadata.** Removed only by self-hosting.
 3. **Deterministic KDF salt.** Acceptable, with a known upgrade path.
 4. **Signing oracle while the tab is open.** Inherent to the design.
-5. **No third-party audit yet.** This document used to say one had to happen
+5. **An agent pins its machine to one relay instance.** The registry is
+   in-memory, so a fleet behind a load balancer needs `/ws` and `/agent/control`
+   to land on the same instance. Availability, not confidentiality — a
+   mis-routed request finds no agent and is refused rather than being sent
+   anywhere it should not go — but it is the one place the relay stopped being
+   stateless, and it is worth knowing before scaling out.
+6. **Revoking an agent does not drop its live control socket.** It takes effect
+   immediately for anything new: `/api/agents/verify` refuses the next
+   reconnect, and `/api/relay-token` refuses to mint. The window is one already
+   open control connection carrying no new sessions. Closing it would require
+   the control plane to reach into every relay instance, which is the coupling
+   the token design exists to avoid.
+7. **No third-party audit yet.** This document used to say one had to happen
    before charging for anything. Billing shipped first, so that commitment was
    broken rather than met, and recording it here is more useful than quietly
    rewording it. No outside firm has reviewed this code and there is no SOC 2 or
@@ -321,4 +362,4 @@ with no cloud IAM role attached.
    warning.
 5. Publish what the relay can see, in the product, not just here.
 6. Get a third-party audit. This was written as "before billing anyone" and
-   billing shipped without one; see residual risk 5.
+   billing shipped without one; see residual risk 7.

@@ -59,6 +59,12 @@ services:
       # the Settings meter says so on screen rather than showing a bare zero.
       # Must match the relay's copy below.
       RELAY_USAGE_SECRET: ${RELAY_USAGE_SECRET:-}
+      # Authenticates the relay's agent-verification calls to /api/agents/verify.
+      # Unset means agents are disabled on both sides: machines with no public
+      # address cannot be enrolled, and the "Add a machine" flow says so rather
+      # than minting a token for an agent that could never connect. Must match
+      # the relay's copy below.
+      RELAY_AGENT_SECRET: ${RELAY_AGENT_SECRET:-}
       NEXT_PUBLIC_RELAY_URL: ${PUBLIC_RELAY_URL}
       # How many proxies you have put in front of this container. Unset by
       # default, and unset means the audit log records no client address at all
@@ -101,6 +107,23 @@ services:
       RELAY_USAGE_URL: ${RELAY_USAGE_URL:-http://web:3000/api/relay/usage}
       RELAY_USAGE_SECRET: ${RELAY_USAGE_SECRET:-}
       RELAY_USAGE_INTERVAL_SECS: ${RELAY_USAGE_INTERVAL_SECS:-60}
+      #
+      # Agents. A machine with no public address holds an outbound connection to
+      # /agent/control here and the relay pairs a browser to it on demand. The
+      # relay cannot authenticate that machine on its own — it has no keys and no
+      # database — so it asks the control plane, over the same private network
+      # and with the same plain HTTP as the usage reports above.
+      #
+      # Both unset is a supported configuration and means agents are off. Setting
+      # exactly one is a typo, and the relay says so at startup with a warning
+      # naming the missing half — from the outside a half-configured relay looks
+      # identical to one where agents were switched off on purpose.
+      #
+      # NOTE: agent registration lives in one relay's memory, so a fleet behind a
+      # load balancer needs /ws and /agent to land on the same instance. A single
+      # relay — which is what this file describes — is unaffected.
+      RELAY_AGENT_VERIFY_URL: ${RELAY_AGENT_VERIFY_URL:-http://web:3000/api/agents/verify}
+      RELAY_AGENT_SECRET: ${RELAY_AGENT_SECRET:-}
       RUST_LOG: ${RUST_LOG:-webxterm_relay=info}
     ports:
       - "${RELAY_PORT:-8080}:8080"
