@@ -218,6 +218,28 @@ function explainMintFailure(status: number): string {
  * network, and says which with the status in it.
  */
 export async function relayUrl(host: string, port: number): Promise<string> {
+  return buildRelayUrl({ host, port });
+}
+
+/**
+ * The relay URL for a machine that cannot be dialled.
+ *
+ * Same shape, different destination: instead of naming an address for the relay
+ * to connect to, this names an agent that has already connected to the relay and
+ * is waiting. The token is minted by the same endpoint and is *not*
+ * interchangeable with the address kind — see token.rs.
+ *
+ * The port still travels, because the agent forwards to a port on its own
+ * loopback and a machine does not have to run sshd on 22. The agent refuses
+ * anything outside its own allowlist regardless of what is asked for here.
+ */
+export async function agentRelayUrl(agent: string, port: number): Promise<string> {
+  return buildRelayUrl({ agent, port });
+}
+
+async function buildRelayUrl(
+  destination: { host: string; port: number } | { agent: string; port: number },
+): Promise<string> {
   const base =
     process.env.NEXT_PUBLIC_RELAY_URL ??
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
@@ -227,7 +249,7 @@ export async function relayUrl(host: string, port: number): Promise<string> {
     res = await fetch("/api/relay-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ host, port }),
+      body: JSON.stringify(destination),
     });
   } catch (e) {
     throw new RelayTokenError(
@@ -254,6 +276,10 @@ export async function relayUrl(host: string, port: number): Promise<string> {
     );
   }
 
-  const params = new URLSearchParams({ host, port: String(port), token: body.token });
+  const params = new URLSearchParams(
+    "agent" in destination
+      ? { agent: destination.agent, port: String(destination.port), token: body.token }
+      : { host: destination.host, port: String(destination.port), token: body.token },
+  );
   return `${base}?${params}`;
 }

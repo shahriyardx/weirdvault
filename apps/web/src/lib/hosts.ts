@@ -31,6 +31,24 @@ export interface Host {
   /** Defaults to "key" — records written before this field existed are key hosts. */
   auth?: HostAuth;
   keyId?: string;
+  /**
+   * Reached through an agent rather than by dialling `hostname`.
+   *
+   * Set for a machine with no address the relay can connect to: something behind
+   * a home router, on hotel wifi, or on a network with no inbound rule. The
+   * daemon there holds a connection open and the relay pairs the two.
+   *
+   * `hostname` and `port` still mean something when this is set, and both are
+   * still used. `port` is the port on the agent's own loopback to forward to —
+   * a machine need not run sshd on 22 — and `hostname` is a label the user
+   * chose, kept because host-key pins are stored against it and because a host
+   * whose display name changed when it moved behind NAT would lose its pin.
+   *
+   * The agent id is a server-side identifier and lives here, in the encrypted
+   * vault, like everything else about a host. The server knows the agent exists;
+   * it does not know which of the user's hosts points at it.
+   */
+  agentId?: string;
   folder?: string;
   tags?: string[];
   createdAt: number;
@@ -97,7 +115,7 @@ export async function putHost(host: Host): Promise<void> {
  * "Save and connect" path passes.
  */
 export async function rememberHost(
-  fields: Pick<Host, "hostname" | "port" | "username" | "keyId" | "auth">,
+  fields: Pick<Host, "hostname" | "port" | "username" | "keyId" | "auth" | "agentId">,
   opts: { create?: boolean } = {},
 ): Promise<Host | null> {
   const existing = (await listHosts()).find(

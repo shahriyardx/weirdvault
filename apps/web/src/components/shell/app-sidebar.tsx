@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ClockCounterClockwiseIcon,
   CodeIcon,
+  DesktopTowerIcon,
   DevicesIcon,
   FilmReelIcon,
   FolderOpenIcon,
@@ -108,6 +109,7 @@ export function AppSidebar() {
     { href: "/dashboard", label: "Overview", icon: SquaresFourIcon, exact: true },
     { href: "/dashboard/files", label: "Files", icon: FolderOpenIcon },
     { href: "/dashboard/hosts", label: "Hosts", icon: HardDrivesIcon, badge: hosts.length },
+    { href: "/dashboard/machines", label: "Machines", icon: DesktopTowerIcon },
     { href: "/dashboard/keys", label: "Keys", icon: KeyIcon, badge: keys.length },
     { href: "/dashboard/snippets", label: "Snippets", icon: CodeIcon },
     { href: "/dashboard/recordings", label: "Recordings", icon: FilmReelIcon },

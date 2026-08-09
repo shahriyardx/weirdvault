@@ -48,6 +48,34 @@ export default function ConnectPage() {
   });
   const [usePassword, setUsePassword] = useState(false);
 
+  /**
+   * Enrolled machines, if any.
+   *
+   * Fetched rather than assumed: most deployments have none, and the whole
+   * destination picker below is hidden when the list comes back empty. A "reach
+   * it directly / through an agent" toggle on an account with no agents is a
+   * choice about a feature the user has not set up, offered at the moment they
+   * are trying to do something else.
+   */
+  const [machines, setMachines] = useState<{ id: string; label: string }[]>([]);
+  // "direct" rather than "" as the no-agent value: Radix treats an empty string
+  // as "nothing selected" and throws if an item claims it, so the sentinel has to
+  // be a real value that means the absence of one.
+  const DIRECT = "direct";
+  const [reach, setReach] = useState<string>(DIRECT);
+  const agentId = reach === DIRECT ? "" : reach;
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/agents");
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        agents: { id: string; label: string; revokedAt: string | null }[];
+      };
+      setMachines(body.agents.filter((a) => !a.revokedAt).map(({ id, label }) => ({ id, label })));
+    })();
+  }, []);
+
   async function submit(e: React.FormEvent, opts: { save?: boolean } = {}) {
     e.preventDefault();
     if (!activeKey) {
@@ -59,8 +87,11 @@ export default function ConnectPage() {
       await connect({
         hostname: form.hostname.trim(),
         // Blank means the default SSH port, which is what the placeholder says.
+        // Through an agent this is the port on *that machine's* loopback, which
+        // is the same number for the same reason.
         port: Number(form.port) || 22,
         username: form.username.trim(),
+        agentId: agentId || undefined,
         key: activeKey,
         password: usePassword ? form.password : undefined,
         save: opts.save,
@@ -89,13 +120,39 @@ export default function ConnectPage() {
             <CardTitle className="text-sm">Destination</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {machines.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="reach">Reach it</Label>
+                <Select value={reach} onValueChange={setReach}>
+                  <SelectTrigger id="reach" className="w-full">
+                    <SelectValue placeholder="Directly, by address" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DIRECT}>Directly, by address</SelectItem>
+                    {machines.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        Through {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {agentId && (
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    The hostname below becomes a label rather than an address — the
+                    connection goes to that machine&rsquo;s own loopback. Keep it stable:
+                    host key pins are stored against it.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
               <div className="space-y-1.5">
-                <Label htmlFor="hostname">Hostname</Label>
+                <Label htmlFor="hostname">{agentId ? "Name" : "Hostname"}</Label>
                 <Input
                   id="hostname"
                   name="remote-hostname"
-                  placeholder="server.example.com"
+                  placeholder={agentId ? "home-server" : "server.example.com"}
                   {...noAutofillText}
                   value={form.hostname}
                   onChange={(e) => setForm({ ...form, hostname: e.target.value })}

@@ -58,6 +58,15 @@ export interface SessionTarget {
   hostname: string;
   port: number;
   username: string;
+  /**
+   * Reached through an agent instead of by dialling `hostname`.
+   *
+   * Part of the target rather than the request because it survives on the
+   * entry: a reconnect, a label, an audit line and a host-key pin all read the
+   * target, and every one of them would be wrong if this were dropped after the
+   * first connection.
+   */
+  agentId?: string;
 }
 
 export interface SessionEntry {
@@ -265,6 +274,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         hostname: req.hostname,
         port: req.port,
         username: req.username,
+        agentId: req.agentId,
       };
 
       // The shell starts printing — banner, motd, first prompt — inside

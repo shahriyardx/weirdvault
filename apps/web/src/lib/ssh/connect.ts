@@ -13,13 +13,23 @@ import { authorizedKeysLine, makeSigner, type SshKey } from "@/lib/keys";
 import { rememberHost } from "@/lib/hosts";
 import { getAuditKey } from "@/lib/vault/session";
 
-import { connect as rawConnect, relayUrl } from "./wasm";
+import { agentRelayUrl, connect as rawConnect, relayUrl } from "./wasm";
 import type { HostKeyInfo, SshSession } from "./types";
 
 export interface ConnectOptions {
   hostname: string;
   port: number;
   username: string;
+  /**
+   * Reach the machine through its agent rather than by dialling `hostname`.
+   *
+   * Everything after the WebSocket is identical — the same SSH handshake, the
+   * same key, the same host-key pin against the same `hostname:port`. Only the
+   * URL differs, which is the property worth preserving: a host that moves
+   * behind NAT keeps its pin, and a compromised agent still cannot present a
+   * different host key without the mismatch being caught below.
+   */
+  agentId?: string;
   key?: SshKey;
   password?: string;
   cols?: number;
@@ -43,7 +53,9 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   let seen: HostKeyInfo | null = null;
 
   const session = await rawConnect({
-    relay: await relayUrl(hostname, port),
+    relay: opts.agentId
+      ? await agentRelayUrl(opts.agentId, port)
+      : await relayUrl(hostname, port),
     host: hostname,
     port,
     user: username,
@@ -104,6 +116,7 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
       port,
       username,
       keyId: opts.key?.id,
+      agentId: opts.agentId,
       // Record how this connection actually authenticated, so the saved host
       // asks for the same thing next time instead of guessing.
       auth: opts.key ? "key" : "password",
