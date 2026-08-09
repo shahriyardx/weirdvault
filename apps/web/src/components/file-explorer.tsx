@@ -61,7 +61,16 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import {
+  REMOTE_DRAG_TYPE,
+  beginRemoteDrag,
+  currentRemoteDrag,
+  endRemoteDrag,
+  type RemoteDrag,
+} from "@/lib/transfers/drag";
 import { downloadFile, supportsFileSystemAccess } from "@/lib/transfers/download";
+import { copyBetweenHosts } from "@/lib/transfers/remote";
 import {
   chooseStrategy,
   itemsFromDataTransfer,
@@ -87,6 +96,18 @@ interface Props {
   session: SshSession;
   onEdit: (path: string) => void;
   onOpenTerminalAt?: (dir: string) => void;
+  /**
+   * Identifies this pane among the ones on screen.
+   *
+   * Only needed so a drag can tell where it started: dropping a selection back
+   * into the pane it came from would be a copy of a directory into itself, and
+   * `tar -c` reading a tree that `tar -x` is writing into does not terminate.
+   */
+  paneId?: string;
+  /** Which session this pane is browsing, for the same reason. */
+  sessionId?: string;
+  /** Resolves the other pane's endpoint when something is dropped from it. */
+  endpointFor?: (sessionId: string) => { session: SshSession; sftp: SftpHandle } | null;
 }
 
 /**
@@ -122,6 +143,46 @@ type Ask =
   | { kind: "chmod"; entry: SftpEntry }
   | { kind: "mkdir" }
   | { kind: "delete"; entry: SftpEntry };
+
+/**
+ * What a drop on this pane would do.
+ *
+ * Decided on dragenter and held, because dragover cannot read the DataTransfer's
+ * contents — only its type names — and the indicator has to say which of the two
+ * very different things is about to happen.
+ */
+type DropIntent =
+  | { kind: "upload" }
+  | { kind: "remote"; from: string; entries: SftpEntry[] };
+
+/**
+ * Whether this pane should offer to accept the drag, and as what.
+ *
+ * Returns null for a drag that started in this same pane — dropping a directory
+ * into itself sets `tar -c` reading a tree that `tar -x` is writing into, which
+ * does not terminate — and for a drag carrying nothing this pane can use.
+ */
+function intentFor(dt: DataTransfer, paneId: string | undefined): DropIntent | null {
+  if (dt.types.includes(REMOTE_DRAG_TYPE)) {
+    const drag = currentRemoteDrag();
+    if (!drag || drag.paneId === paneId) return null;
+    return { kind: "remote", from: drag.cwd, entries: drag.entries };
+  }
+  // "Files" is what a drag from the desktop announces. Text dragged out of a
+  // document also lands here otherwise, and uploading a text selection as a file
+  // is nobody's intention.
+  return dt.types.includes("Files") ? { kind: "upload" } : null;
+}
+
+function describe(entries: SftpEntry[]): string {
+  if (entries.length === 1) return entries[0].name;
+  return `${entries.length} items`;
+}
+
+/** Joins a remote directory and a name. Absolute paths only reach here. */
+function joinRemote(dir: string, name: string): string {
+  return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
+}
 
 /** The wording for each question that takes a typed answer. */
 const ASK_FIELDS: Record<
@@ -163,16 +224,52 @@ async function readDir(
   return { cwd, entries: listing.entries };
 }
 
-export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props) {
+export function FileExplorer({
+  sftp,
+  session,
+  onEdit,
+  onOpenTerminalAt,
+  paneId,
+  sessionId,
+  endpointFor,
+}: Props) {
   const [cwd, setCwd] = useState<string>(".");
   const [entries, setEntries] = useState<SftpEntry[]>([]);
   const [showHidden, setShowHidden] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * What a drop here would do, or null when nothing is over the pane.
+   *
+   * Held rather than derived so the indicator can name the source — "Copy 3
+   * items from web-01" is a different promise from "Upload from this computer",
+   * and getting it wrong in either direction is how somebody uploads their
+   * Downloads folder to production.
+   */
+  const [dropIntent, setDropIntent] = useState<DropIntent | null>(null);
+  /**
+   * dragenter and dragleave fire for every child element the pointer crosses, so
+   * a naive handler clears the indicator the moment the cursor moves from the
+   * listing onto a row inside it. Counting enters and leaves is the standard fix.
+   */
+  const dragDepth = useRef(0);
+
+  /** Selected entry names. Names, not indices: a refresh reorders the list. */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  /**
+   * Where a shift-click measures from.
+   *
+   * State rather than a ref, even though nothing renders from it. Every write
+   * happens alongside a selection change that re-renders anyway, so the ref
+   * bought nothing — and a ref read from a function reachable during render is
+   * exactly the pattern that goes wrong when the function is later called from
+   * somewhere other than a click.
+   */
+  const [anchor, setAnchor] = useState<string | null>(null);
 
   /** The open dialog, and what has been typed into it so far. */
   const [ask, setAsk] = useState<Ask | null>(null);
@@ -197,6 +294,13 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
         const listing = await readDir(sftp, dir);
         setCwd(listing.cwd);
         setEntries(listing.entries);
+        // A selection is a set of names, which mean something else in another
+        // directory. Carrying it across a navigation would leave rows
+        // highlighted that were never chosen.
+        if (listing.cwd !== cwd) {
+          setSelected(new Set());
+          setAnchor(null);
+        }
       } catch (e) {
         setError(String((e as Error).message ?? e));
       } finally {
@@ -282,6 +386,66 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
     }
   }
 
+  /**
+   * Copy entries dragged from the other pane into this directory.
+   *
+   * Sequential rather than concurrent. Two copies over one SSH connection share
+   * its window and finish no sooner together than one after the other, and the
+   * progress of two interleaved transfers on one row is unreadable. Directories
+   * additionally hold a shell each, and four of those at once on a small VPS is
+   * a rude thing to do without being asked.
+   */
+  async function doRemoteCopy(drag: RemoteDrag) {
+    const source = endpointFor?.(drag.sessionId);
+    if (!source) {
+      setError("That session is no longer open, so there is nothing to copy from.");
+      return;
+    }
+
+    const label =
+      drag.entries.length === 1
+        ? drag.entries[0].name
+        : `${drag.entries.length} items`;
+    // The denominator is only honest for files; a directory's size is not known
+    // until tar has finished producing it.
+    const known = drag.entries.every((e) => !e.isDir)
+      ? drag.entries.reduce((n, e) => n + e.size, 0)
+      : 0;
+    const t = track("download", `${label} → here`, known);
+
+    let carried = 0;
+    try {
+      for (const entry of drag.entries) {
+        if (t.controller.signal.aborted) throw new Error("cancelled");
+        const before = carried;
+        await copyBetweenHosts(
+          source,
+          { session, sftp },
+          joinRemote(drag.cwd, entry.name),
+          cwd,
+          entry.isDir,
+          {
+            signal: t.controller.signal,
+            onProgress: (bytes) => patch(t.id, { done: before + bytes, detail: entry.name }),
+          },
+        );
+        carried = before + (entry.isDir ? 0 : entry.size);
+      }
+      patch(t.id, {
+        state: "complete",
+        done: known || carried,
+        detail: `copied via ${drag.entries.some((e) => e.isDir) ? "tar" : "sftp"}`,
+      });
+      await refresh();
+    } catch (e) {
+      const msg = String((e as Error).message ?? e);
+      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg });
+      // Part of a multi-item copy may have landed, so the listing is stale
+      // either way.
+      await refresh();
+    }
+  }
+
   async function mutate(fn: () => Promise<unknown>) {
     try {
       await fn();
@@ -289,6 +453,52 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
     } catch (e) {
       setError(String((e as Error).message ?? e));
     }
+  }
+
+  /* ------------------------------------------------------------ selection */
+
+  /**
+   * Click, ctrl/cmd-click and shift-click, behaving the way every file manager
+   * has since 1995 — this is not a place to be inventive.
+   */
+  function selectOn(e: React.MouseEvent, entry: SftpEntry, list: SftpEntry[]) {
+    const additive = e.ctrlKey || e.metaKey;
+    const ranged = e.shiftKey;
+
+    if (ranged && anchor) {
+      const from = list.findIndex((x) => x.name === anchor);
+      const to = list.findIndex((x) => x.name === entry.name);
+      if (from !== -1 && to !== -1) {
+        const [lo, hi] = from < to ? [from, to] : [to, from];
+        const range = list.slice(lo, hi + 1).map((x) => x.name);
+        // Extends rather than replaces when ctrl is also held, which is how you
+        // pick two separate runs.
+        setSelected((prev) => new Set(additive ? [...prev, ...range] : range));
+        return;
+      }
+    }
+
+    setAnchor(entry.name);
+    if (additive) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(entry.name)) next.add(entry.name);
+        return next;
+      });
+      return;
+    }
+    setSelected(new Set([entry.name]));
+  }
+
+  /**
+   * What a drag carries: the selection if the dragged row is part of it,
+   * otherwise just that row. Dragging an unselected file while three others are
+   * selected means the file — anything else moves data the user was not pointing
+   * at.
+   */
+  function dragPayload(entry: SftpEntry, list: SftpEntry[]): SftpEntry[] {
+    if (!selected.has(entry.name)) return [entry];
+    return list.filter((x) => selected.has(x.name));
   }
 
   /**
@@ -334,6 +544,8 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
   }
 
   const visible = showHidden ? entries : entries.filter((e) => !e.name.startsWith("."));
+  /** Transfers that are over, however they ended, and so can be cleared away. */
+  const finished = transfers.filter((t) => t.state !== "running");
 
   /**
    * What you can do to one entry, as data rather than as markup.
@@ -404,20 +616,64 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
 
   return (
     <div
-      className="flex h-full flex-col"
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragging(true);
+      className="relative flex h-full flex-col"
+      onDragEnter={(e) => {
+        dragDepth.current += 1;
+        const intent = intentFor(e.dataTransfer, paneId);
+        if (intent) setDropIntent(intent);
       }}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragging(false);
+      onDragOver={(e) => {
+        // Without preventDefault the browser refuses the drop and shows the
+        // "no entry" cursor, whatever the dragover handler decided.
+        if (!dropIntent) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={() => {
+        dragDepth.current -= 1;
+        if (dragDepth.current <= 0) {
+          dragDepth.current = 0;
+          setDropIntent(null);
+        }
       }}
       onDrop={async (e) => {
+        const intent = dropIntent;
+        dragDepth.current = 0;
+        setDropIntent(null);
+        if (!intent) return;
         e.preventDefault();
-        setDragging(false);
+
+        if (intent.kind === "remote") {
+          // Read now: the payload is cleared on dragend, which fires as soon as
+          // this handler yields.
+          const drag = currentRemoteDrag();
+          if (drag) void doRemoteCopy(drag);
+          return;
+        }
         void doUpload(await itemsFromDataTransfer(e.dataTransfer));
       }}
     >
+      {/* The drop target is the whole pane, so the highlight has to be too.
+          It used to be a background on the listing's content, which is as tall
+          as the rows it holds — so a directory with four files in it lit up a
+          strip near the top and left the rest of the pane dark, while dropping
+          anywhere in that dark area worked perfectly. An overlay, because
+          tinting the pane itself would tint the rows with it.
+
+          pointer-events-none is what keeps this from being a bug of its own: an
+          element under the cursor that swallows dragleave leaves the indicator
+          stuck on after the pointer has gone. */}
+      {dropIntent && (
+        <div className="border-primary bg-primary/10 pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed p-4">
+          <p className="bg-card text-primary border-border rounded-none border px-3 py-2 text-center text-[11px] shadow-lg">
+            {dropIntent.kind === "remote"
+              ? `Copy ${describe(dropIntent.entries)} from ${dropIntent.from}`
+              : "Upload from this computer"}
+            <span className="text-muted-foreground mt-0.5 block truncate">into {cwd}</span>
+          </p>
+        </div>
+      )}
+
       {/* path bar */}
       <div className="border-border flex items-center gap-0.5 border-b px-1.5 py-1.5">
         <IconAction label="Up a directory" onClick={() => void refresh(join(cwd, ".."))}>
@@ -430,6 +686,21 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
         <span className="text-muted-foreground min-w-0 flex-1 truncate px-1 text-[11px]">
           {busy ? "Loading…" : cwd}
         </span>
+
+        {selected.size > 0 && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground shrink-0 font-normal"
+            onClick={() => {
+              setSelected(new Set());
+              setAnchor(null);
+            }}
+          >
+            {selected.size} selected
+            <XIcon data-icon="inline-end" />
+          </Button>
+        )}
 
         <IconAction
           label={showHidden ? "Hide dotfiles" : "Show dotfiles"}
@@ -473,24 +744,50 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
 
       {/* listing */}
       <ScrollArea className="min-h-0 flex-1">
-        <div className={dragging ? "bg-primary/10" : undefined}>
-          {dragging && (
-            <p className="text-primary px-2 py-3 text-center text-[11px]">
-              Drop files or folders to upload to {cwd}
-            </p>
-          )}
+        <div>
           {visible.map((entry) => {
             const actions = actionsFor(entry);
+            const isSelected = selected.has(entry.name);
             return (
               <ContextMenu key={entry.name}>
                 <ContextMenuTrigger asChild>
                   <div
+                    // Rows are draggable whether or not a second pane is open.
+                    // A drag with nowhere to land is harmless, and gating it on
+                    // the split would mean the gesture appears and disappears.
+                    draggable
+                    onDragStart={(e) => {
+                      const payload = dragPayload(entry, visible);
+                      // Reflect the payload back into the selection, so what is
+                      // highlighted is what is being carried.
+                      setSelected(new Set(payload.map((x) => x.name)));
+                      beginRemoteDrag({
+                        paneId: paneId ?? "",
+                        sessionId: sessionId ?? "",
+                        cwd,
+                        entries: payload,
+                      });
+                      e.dataTransfer.effectAllowed = "copy";
+                      // The value is unused — the type's presence is the signal,
+                      // since dragover cannot read data. Something has to be set
+                      // or Firefox refuses to start the drag at all.
+                      e.dataTransfer.setData(REMOTE_DRAG_TYPE, String(payload.length));
+                      e.dataTransfer.setData(
+                        "text/plain",
+                        payload.map((x) => join(cwd, x.name)).join("\n"),
+                      );
+                    }}
+                    onDragEnd={endRemoteDrag}
+                    onClick={(e) => selectOn(e, entry, visible)}
                     onDoubleClick={() =>
                       entry.isDir
                         ? void refresh(join(cwd, entry.name))
                         : onEdit(join(cwd, entry.name))
                     }
-                    className="hover:bg-accent/60 group flex items-center gap-2 px-2 py-[3px] text-[12px] data-[state=open]:bg-accent/60"
+                    className={cn(
+                      "group flex items-center gap-2 px-2 py-[3px] text-[12px] data-[state=open]:bg-accent/60",
+                      isSelected ? "bg-primary/15" : "hover:bg-accent/60",
+                    )}
                   >
                     {entry.isDir ? (
                       <FolderIcon weight="fill" className="text-primary size-3.5 shrink-0" />
@@ -564,55 +861,107 @@ export function FileExplorer({ sftp, session, onEdit, onOpenTerminalAt }: Props)
           {visible.length === 0 && !busy && (
             <p className="text-muted-foreground px-2 py-3 text-[11px]">Empty directory.</p>
           )}
+
+          {/* Clicking past the last row clears the selection, the way every file
+              manager does. It needs real height to be clickable at all, and a
+              short listing leaves plenty. */}
+          {visible.length > 0 && (
+            <div
+              aria-hidden
+              className="min-h-16 flex-1"
+              onClick={() => {
+                setSelected(new Set());
+                setAnchor(null);
+              }}
+            />
+          )}
         </div>
       </ScrollArea>
 
       {/* transfer queue */}
       {transfers.length > 0 && (
-        <div className="border-border max-h-40 overflow-y-auto border-t">
-          {transfers.map((t) => (
-            <div key={t.id} className="px-2 py-1.5 text-[11px]">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{t.kind === "upload" ? "↑" : "↓"}</span>
-                <span className="min-w-0 flex-1 truncate">{t.label}</span>
-                {t.state === "running" ? (
+        <div className="border-border flex max-h-44 shrink-0 flex-col border-t">
+          {/* A finished transfer is a receipt, and receipts have to be
+              throwable. Without this the list only ever grew: copy the same
+              file twice and you had two identical "complete" rows with no way
+              to be rid of either, and the listing above lost height to them. */}
+          {finished.length > 0 && (
+            <div className="border-border flex shrink-0 items-center gap-2 border-b px-2 py-1">
+              <span className="text-muted-foreground text-[10px]">
+                {finished.length} finished
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground ml-auto font-normal"
+                onClick={() =>
+                  setTransfers((prev) => prev.filter((t) => t.state === "running"))
+                }
+              >
+                Clear finished
+              </Button>
+            </div>
+          )}
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {transfers.map((t) => (
+              <div key={t.id} className="px-2 py-1.5 text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">
+                    {t.kind === "upload" ? "↑" : "↓"}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                  {t.state !== "running" && (
+                    <span
+                      className={
+                        t.state === "complete"
+                          ? "text-success"
+                          : t.state === "failed"
+                            ? "text-destructive"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {t.state}
+                    </span>
+                  )}
+                  {/* One button, two meanings, and the label says which. Cancel
+                      on a live transfer aborts it and leaves the row behind
+                      saying so; on a finished one it removes the row. */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="hover:text-destructive size-5"
-                    aria-label="Cancel transfer"
+                    className="hover:text-destructive size-5 shrink-0"
+                    aria-label={
+                      t.state === "running"
+                        ? `Cancel ${t.label}`
+                        : `Dismiss ${t.label}`
+                    }
                     onClick={() => {
-                      t.controller.abort();
-                      patch(t.id, { state: "cancelled" });
+                      if (t.state === "running") {
+                        t.controller.abort();
+                        patch(t.id, { state: "cancelled" });
+                        return;
+                      }
+                      setTransfers((prev) => prev.filter((x) => x.id !== t.id));
                     }}
                   >
                     <XIcon />
                   </Button>
-                ) : (
-                  <span
-                    className={
-                      t.state === "complete"
-                        ? "text-success"
-                        : t.state === "failed"
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                    }
-                  >
-                    {t.state}
-                  </span>
+                </div>
+                {t.state === "running" && (
+                  <Progress
+                    value={t.total ? Math.min(100, (t.done / t.total) * 100) : 0}
+                    className="mt-1 h-[3px]"
+                  />
+                )}
+                {t.detail && (
+                  <p className="text-muted-foreground mt-0.5 truncate text-[10px]">
+                    {t.detail}
+                  </p>
                 )}
               </div>
-              {t.state === "running" && (
-                <Progress
-                  value={t.total ? Math.min(100, (t.done / t.total) * 100) : 0}
-                  className="mt-1 h-[3px]"
-                />
-              )}
-              {t.detail && (
-                <p className="text-muted-foreground mt-0.5 truncate text-[10px]">{t.detail}</p>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
