@@ -8,6 +8,62 @@
       "when": 1786217755355,
       "tag": "0000_next_piledriver",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786220121145,
+      "tag": "0001_wealthy_ben_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786226462922,
+      "tag": "0002_burly_phalanx",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786262646797,
+      "tag": "0003_exotic_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786264594657,
+      "tag": "0004_unusual_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786267646667,
+      "tag": "0005_parched_human_torch",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786271282103,
+      "tag": "0006_exotic_firebrand",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786272130481,
+      "tag": "0007_material_black_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786276989033,
+      "tag": "0008_glorious_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }
