@@ -9,6 +9,7 @@ import {
   looksLikeEnrollmentToken,
 } from "@/lib/agents/enrollment"
 import { fingerprintFor } from "@/lib/agents/verify"
+import { publicOrigin } from "@/lib/origin"
 import { enforce } from "@/lib/rate-limit"
 
 /**
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
   })
   if (limited) return limited
 
-  const releaseUrl = agentReleaseUrl(new URL(request.url).origin)
+  const releaseUrl = agentReleaseUrl(publicOrigin(request))
   const relayUrl = agentRelayUrl()
   if (!relayUrl) {
     return Response.json({ error: "this deployment has no relay configured" }, { status: 503 })

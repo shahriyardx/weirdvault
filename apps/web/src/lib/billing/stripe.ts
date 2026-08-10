@@ -1,4 +1,5 @@
 import Stripe from "stripe"
+import { publicOrigin } from "@/lib/origin"
 
 /**
  * The configured Stripe client, and the three environment variables it needs.
@@ -143,5 +144,5 @@ export function billingConfigured(): boolean {
 export function appOrigin(request: Request): string {
   const configured = process.env.BETTER_AUTH_URL
   if (configured) return configured.replace(/\/$/, "")
-  return new URL(request.url).origin
+  return publicOrigin(request)
 }

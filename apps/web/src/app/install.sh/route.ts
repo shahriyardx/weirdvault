@@ -18,11 +18,12 @@
  */
 
 import { agentReleaseUrl } from "@/lib/agents/enrollment"
+import { publicOrigin } from "@/lib/origin"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
-  const origin = new URL(request.url).origin
+  const origin = publicOrigin(request)
   // The same resolver the enrolment route hands to agents for self-update. Two
   // copies would drift, and the failure would be an agent updating itself from
   // somewhere the installer never used.
