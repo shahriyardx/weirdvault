@@ -8,7 +8,7 @@
  */
 
 import { reportAudit } from "@/lib/audit/client"
-import { getPin, HostKeyMismatchError, pin, touchPin } from "@/lib/hostkeys"
+import { getPin, HostKeyMismatchError, pin, pinKeyFor, touchPin } from "@/lib/hostkeys"
 import { authorizedKeysLine, makeSigner, type SshKey } from "@/lib/keys"
 import { rememberHost } from "@/lib/hosts"
 import { getAuditKey } from "@/lib/vault/session"
@@ -43,20 +43,6 @@ export interface ConnectOptions {
   onPinned?: (info: HostKeyInfo) => void
   /** Add this host to the saved list. Off by default. */
   save?: boolean
-}
-
-/**
- * What a host key is pinned against.
- *
- * For an ordinary host that is the address, because the address is what
- * identifies the machine. For an agent host there is no address — `hostname` is
- * a label the user typed and can rename at will — so the pin is keyed on the
- * agent instead. Keying it on the label would mean renaming a machine silently
- * discarded its pinned key and re-pinned whatever answered next, which is a
- * mismatch warning that never fires: exactly the case pinning exists to catch.
- */
-function pinKeyFor(opts: Pick<ConnectOptions, "hostname" | "agentId">): string {
-  return opts.agentId ? `agent:${opts.agentId}` : opts.hostname
 }
 
 export async function openSession(opts: ConnectOptions): Promise<SshSession> {
@@ -102,7 +88,7 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
         auditKey: getAuditKey(),
         metadata: { expected: known.fingerprint, presented: info.fingerprint },
       })
-      throw new HostKeyMismatchError(hostname, port, known, info)
+      throw new HostKeyMismatchError(hostname, pinKey, port, known, info)
     }
     throw err
   })

@@ -75,7 +75,7 @@ import {
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { deleteHost, listHosts, saveHost, type Host, type HostAuth } from "@/lib/hosts"
-import { listPins, type PinnedHostKey } from "@/lib/hostkeys"
+import { listPins, pinIdFor, type PinnedHostKey } from "@/lib/hostkeys"
 import { listStoredKeys, type StoredKey } from "@/lib/keys"
 import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt"
 import { useSshSession } from "@/lib/ssh/session-provider"
@@ -198,8 +198,12 @@ export default function HostsPage() {
     }
   }, [revision])
 
+  // pinIdFor, not a hand-built `hostname:port`. A host reached through an agent
+  // is pinned against the agent — its hostname is a label that can be renamed —
+  // so building the id here read "not pinned" on every machine-backed host, for
+  // ever, however many times it had connected.
   const pinFor = React.useCallback(
-    (host: Host) => pins.find((p) => p.id === `${host.hostname}:${host.port}`),
+    (host: Host) => pins.find((p) => p.id === pinIdFor(host)),
     [pins],
   )
 

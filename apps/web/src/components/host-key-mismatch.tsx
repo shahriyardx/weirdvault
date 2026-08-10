@@ -67,7 +67,7 @@ export function HostKeyMismatchWarning() {
             variant="destructive"
             disabled={confirmText !== "clear pin"}
             onClick={async () => {
-              await unpin(mismatch.host, mismatch.port)
+              await unpin(mismatch.pinKey, mismatch.port)
               dismissMismatch()
             }}
           >
