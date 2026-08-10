@@ -365,3 +365,57 @@ func otherIdentities(dir string) []string {
 	}
 	return names
 }
+
+/*
+runRemove takes one identity off this machine.
+
+The gap this fills: `stop <id>` leaves an identity that is not running, and
+revoking it in the dashboard sends a signed instruction the machine cannot
+receive *because* it is not running. So a stopped identity could be retired
+everywhere except on the disk it is sitting on, and the only remedy was `rm`.
+
+It deletes the key and nothing else. The account's row in the dashboard is a
+different fact in a different place, and this command cannot touch it — the
+agent holds no credential that would let it, by design. So it says so, every
+time, rather than leaving somebody believing they have finished.
+
+Deliberately not offered without an id. Every other verb here can mean "all of
+them" harmlessly; this one would mean deleting every account's key on a shared
+machine because somebody's shell history was one line off.
+*/
+func runRemove(args []string) error {
+	fs := flag.NewFlagSet("remove", flag.ExitOnError)
+	dir := fs.String("config-dir", DefaultConfigDir, "where identities live")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	name := fs.Arg(0)
+	if name == "" {
+		return fmt.Errorf("say which identity to remove:\n  weirdvault-agent remove <id>\n\n" +
+			"`weirdvault-agent list` prints them. There is no way to remove all of them at\n" +
+			"once, on purpose — on a shared machine that would be somebody else's key too")
+	}
+
+	row, err := resolveIdentity(*dir, name)
+	if err != nil {
+		return err
+	}
+
+	if err := os.Remove(row.path); err != nil && !os.IsNotExist(err) {
+		return sudoHint(fmt.Errorf("could not remove %s: %w", row.path, err), "remove "+row.name)
+	}
+	// Otherwise it outlives the identity it referred to and would silently
+	// suppress a later enrolment that happened to land on the same name.
+	_ = os.Remove(stoppedMarkerFor(row.path))
+
+	fmt.Printf("Removed %s (%s) from this machine.\n", row.name, row.agentID)
+	if readRuntimeState() != nil {
+		fmt.Println("The running agent drops it within a few seconds.")
+	}
+	fmt.Println()
+	fmt.Println("Its row in the dashboard is untouched — this machine cannot change that, and")
+	fmt.Println("until it is revoked there, that key would still be accepted if a copy of it")
+	fmt.Println("existed somewhere else. Revoke it at Dashboard → Machines.")
+	return nil
+}

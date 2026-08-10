@@ -95,6 +95,23 @@ interface Agent {
 /** Whether the relay answered the reachability question at all. */
 type PresenceStatus = "ok" | "unknown"
 
+/**
+ * What this machine calls the identity, on the machine.
+ *
+ * The agent names each identity after the first eight characters of its agent
+ * id — that is the file in /etc/weirdvault-agent, the row `weirdvault-agent
+ * list` prints, and the argument `stop <id>` takes. Without it on the card,
+ * somebody with two identities on one box has no way to tell which row the
+ * thing in front of them corresponds to.
+ *
+ * Derived rather than sent, because it is a pure function of the id and a
+ * second copy on the wire could disagree with the one the agent computed. It
+ * must stay in step with shortAgentID in apps/agent/enroll.go.
+ */
+function identityName(agentId: string): string {
+  return agentId.replace(/-/g, "").slice(0, 8)
+}
+
 const POLL_MS = 2000
 
 export default function MachinesPage() {
@@ -357,6 +374,10 @@ function AgentRow({
   // inert for the several seconds a round trip to somebody's home connection
   // takes.
   const [busyCommand, setBusyCommand] = useState<string | null>(null)
+  // Whether the revoke reached the machine. Starts true for a row that was
+  // already revoked when the page loaded, because nothing here knows what
+  // happened then and the safe assumption is that there is still work to do.
+  const [keyStillOnMachine, setKeyStillOnMachine] = useState(true)
   const revoked = Boolean(agent.revokedAt)
 
   const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null
@@ -387,7 +408,16 @@ function AgentRow({
       toast.error("Could not revoke that machine")
       return
     }
-    toast.success("Revoked. It cannot reconnect.")
+    const body = (await res.json().catch(() => ({}))) as { removedFromMachine?: boolean }
+    // Two different outcomes worth telling apart. Reaching the machine means the
+    // key is gone from it; not reaching it means the key is still sitting there,
+    // and the dialog below is the only place that says how to finish the job.
+    setKeyStillOnMachine(body.removedFromMachine !== true)
+    toast.success(
+      body.removedFromMachine
+        ? "Revoked, and the key is off that machine."
+        : "Revoked. It cannot reconnect.",
+    )
     // Before the refresh, not after: onChanged re-fetches and re-renders the
     // list, and opening the dialog first means it is already on screen when the
     // row turns into its revoked form rather than appearing a beat later.
@@ -488,6 +518,8 @@ function AgentRow({
                 </dd>
               </>
             )}
+            <dt className="text-muted-foreground tracking-wider uppercase">On the machine</dt>
+            <dd className="truncate font-mono">{identityName(agent.id)}</dd>
             <dt className="text-muted-foreground tracking-wider uppercase">Key</dt>
             <dd className="truncate font-mono">{agent.fingerprint}</dd>
             <dt className="text-muted-foreground tracking-wider uppercase">Seen</dt>
@@ -631,7 +663,12 @@ function AgentRow({
         </AlertDialogContent>
       </AlertDialog>
 
-      <RemovalDialog agent={agent} open={removalOpen} onOpenChange={setRemovalOpen} />
+      <RemovalDialog
+        agent={agent}
+        open={removalOpen}
+        onOpenChange={setRemovalOpen}
+        keyStillOnMachine={keyStillOnMachine}
+      />
 
       <UpgradeDialog
         agent={agent}
@@ -1002,10 +1039,13 @@ function RemovalDialog({
   agent,
   open,
   onOpenChange,
+  keyStillOnMachine,
 }: {
   agent: Agent
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** False when the revoke reached the machine and the key is already gone. */
+  keyStillOnMachine: boolean
 }) {
   // The agent self-reports its platform at enrolment. Nothing trusts it for
   // anything that matters; here it only picks which paragraph is true.
@@ -1025,6 +1065,35 @@ function RemovalDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {!keyStillOnMachine ? (
+            <Alert>
+              <CheckCircleIcon />
+              <AlertTitle>Already done</AlertTitle>
+              <AlertDescription>
+                That machine was connected when you revoked it, so it removed this identity and its
+                key by itself. Nothing below is necessary unless you also want the binary and the
+                service gone.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                That machine was not connected, so it could not be told. Its copy of the key is
+                still on disk — useless now, since this side refuses it, but still there. Remove
+                just this identity and leave any other account&rsquo;s alone:
+              </p>
+              <CommandBlock command={`sudo weirdvault-agent remove ${identityName(agent.id)}`} />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <span className="font-mono">{identityName(agent.id)}</span> is what{" "}
+                <span className="font-mono">weirdvault-agent list</span> calls it on that machine.
+              </p>
+            </>
+          )}
+
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            To remove the agent from that machine altogether — binary, service and every identity on
+            it:
+          </p>
           <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --uninstall`} />
 
           <p className="text-muted-foreground text-sm leading-relaxed">

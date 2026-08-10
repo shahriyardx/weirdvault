@@ -50,7 +50,7 @@ func runEnroll(args []string) error {
 	configPath := fs.String("config", "", "write the identity to exactly this path")
 	configDir := fs.String("config-dir", DefaultConfigDir, "write the identity into this directory")
 	port := fs.Int("ssh-port", 22, "the local sshd port to forward to")
-	force := fs.Bool("force", false, "enrol even if this account already has an identity here")
+	force := fs.Bool("force", false, "overwrite the file named by --config, if it exists")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -125,6 +125,18 @@ func runEnroll(args []string) error {
 		return fmt.Errorf("unreadable response from %s (%d): %s", base, resp.StatusCode, detail)
 	}
 	if resp.StatusCode != http.StatusOK {
+		// The server says only "enrollment refused" for a token that did not
+		// claim, and deliberately does not distinguish expired from spent from
+		// never-existed — telling that apart helps somebody guessing far more
+		// than it helps the person holding a token they just copied. So the
+		// advice belongs here, where the three possibilities are the same
+		// action: get another one.
+		if resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("that enrollment token was refused.\n\n" +
+				"Tokens are single-use and expire ten minutes after they are created, so this\n" +
+				"one has most likely been spent or timed out. Open Dashboard -> Machines ->\n" +
+				"Add a machine for a fresh command and run it straight away")
+		}
 		if out.Error != "" {
 			return fmt.Errorf("enrollment refused: %s", out.Error)
 		}
@@ -141,21 +153,6 @@ func runEnroll(args []string) error {
 	path := *configPath
 	if path == "" {
 		path = configPathFor(*configDir, shortAgentID(out.AgentID))
-	}
-
-	// The duplicate check that "does agent.json exist" used to be. It cannot be
-	// that any more — several accounts sharing this directory is the point — so
-	// it asks the question that actually matters: does *this account* already
-	// have an identity on this machine.
-	if !*force && out.AccountRef != "" {
-		if existing := identityForAccount(*configDir, out.AccountRef); existing != "" {
-			return fmt.Errorf(
-				"this account already has an identity on this machine (%s).\n\n"+
-					"Enrolling again would leave two agents for one account, both online, and the\n"+
-					"machine would appear twice in the dashboard. Pass --force if that is what you\n"+
-					"want, or remove the existing one:\n"+
-					"  weirdvault-agent stop %s", existing, existing)
-		}
 	}
 
 	cfg := &Config{
@@ -192,8 +189,8 @@ func runEnroll(args []string) error {
 shortAgentID is the name an identity gets on disk.
 
 Eight characters of a UUID, which is enough to be unique among the handful of
-accounts that share a machine and short enough to type. Collisions are checked
-by the caller writing the file, not assumed away — see uniqueIdentityPath.
+accounts that share a machine and short enough to type — it is what
+`weirdvault-agent list` prints and what `stop <id>` takes.
 */
 func shortAgentID(agentID string) string {
 	cleaned := strings.ReplaceAll(agentID, "-", "")
@@ -206,34 +203,40 @@ func shortAgentID(agentID string) string {
 	return cleaned
 }
 
-// identityForAccount finds this account's existing identity here, if any.
-//
-// Reads every config in the directory, which on a shared machine means reading
-// other accounts' files — it only ever compares an opaque reference, and the
-// process doing it already has to be able to read them to serve them.
-func identityForAccount(dir, ref string) string {
+/*
+accountRefsIn lists the accounts that already have an identity here.
+
+Opaque references only — salted hashes that mean something to the deployment
+that issued them and nothing to anybody reading this directory, which on a
+shared machine is everyone with a shell.
+
+Unreadable files are skipped rather than fatal. Missing one means the control
+plane cannot refuse a duplicate it would otherwise have caught, which is the
+same outcome as before this check existed; refusing to enrol because somebody
+else's identity is 0600 would be much worse.
+*/
+func accountRefsIn(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return ""
+		return nil
 	}
+
+	var refs []string
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		path := filepath.Join(dir, entry.Name())
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			continue
 		}
 		var cfg Config
-		if err := json.Unmarshal(raw, &cfg); err != nil {
+		if err := json.Unmarshal(raw, &cfg); err != nil || cfg.AccountRef == "" {
 			continue
 		}
-		if cfg.AccountRef != "" && cfg.AccountRef == ref {
-			return identityNameFor(path)
-		}
+		refs = append(refs, cfg.AccountRef)
 	}
-	return ""
+	return refs
 }
 
 // runStatus prints what this machine's identity is, without connecting.

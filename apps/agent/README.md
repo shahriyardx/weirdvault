@@ -202,6 +202,7 @@ reboot.
 | `upgrade [--check]` | Install the build this deployment publishes, now |
 | `list` | Every account with an identity here, and what each is doing |
 | `stop <id>` / `start <id>` | One identity, leaving the others alone |
+| `remove <id>` | Delete one identity from this machine |
 
 These wrap systemd on Linux and launchd on macOS. They exist because the
 alternative was knowing that a unit exists, knowing its name, and knowing that
@@ -299,6 +300,12 @@ touch one identity: `stop` leaves the config and marks it, `revoke` removes it.
 There is no `start` from the dashboard, and there will not be: the connection a
 start would arrive on is the thing that was stopped. Starting again needs a
 shell on the machine.
+
+`remove <id>` is the other half of that. A stopped identity cannot receive the
+revoke that would delete it, so revoking one in the dashboard retires the key
+everywhere except the disk it is sitting on — this deletes it there. It cannot
+touch the row in the dashboard and says so, because the agent holds no
+credential that would let it.
 
 An identity enrolled before this existed has no key to check against, refuses
 every command, and says so — the same shape of gap as one enrolled before

@@ -91,6 +91,8 @@ func main() {
 		err = runDisable(os.Args[2:])
 	case "list", "ps":
 		err = runList(os.Args[2:])
+	case "remove", "forget":
+		err = runRemove(os.Args[2:])
 	case "logs":
 		err = runLogs(os.Args[2:])
 	case "upgrade":
@@ -136,6 +138,7 @@ Running it, and whether it comes back:
   restart                    restart without changing boot behaviour
   enable | disable           change only whether it starts at boot
   list                       every agent on this machine, and what it is doing
+  remove <id>                delete one identity from this machine
   logs [-f] [-n N]           what the service has been saying
   upgrade [--check]          install the build this deployment publishes
 

@@ -109,6 +109,22 @@ export async function POST(request: Request) {
     )
   }
 
+  /*
+   * There is deliberately no "this machine is already enrolled" refusal.
+   *
+   * A machine can carry as many identities as people want to put on it: one per
+   * account is the shared-machine case, and several for one account is a person
+   * rebuilding, testing, or keeping a spare. Refusing any of that means an
+   * enrolment that fails for a reason the person disagrees with, and the only
+   * way to know which case it is, is to be that person.
+   *
+   * What made the refusal actively harmful was where it had to live. The
+   * machine cannot know which account a token belongs to until it presents it,
+   * so the check ran *after* this route had answered — spending the token and
+   * creating the row, then refusing. It manufactured the orphaned agent it
+   * existed to prevent.
+   */
+
   const hostname = cleanString(body.hostname) ?? "unknown"
   const os = cleanString(body.os, 32)
   const arch = cleanString(body.arch, 32)
