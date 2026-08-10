@@ -35,21 +35,6 @@ exists.
 
 ---
 
-## Count share copies against the storage ceiling on both paths
-
-**Now:** `POST /api/recordings/[id]/shares` sums `recording` **and**
-`recording_share` before allowing a new share. `POST /api/recordings` sums only
-`recording`. So the same gigabyte ceiling is enforced asymmetrically: a share is
-refused for space a recording would have been granted.
-
-**What to do instead:** one `storedBytesFor` covering both tables, in one module
-both routes import. The shares route already has the right version and says in
-its own header that the fix belongs in the other file.
-
-**Trigger:** trivial, and worth doing the next time either route is touched.
-
----
-
 ## Make `/pricing` and Stripe agree about the price
 
 **Now:** `PRO_PRICE_USD` in `lib/billing/tiers.ts` is what `/pricing` prints.
@@ -96,6 +81,16 @@ field.
 ---
 
 ## Done, kept here for the reasoning
+
+### The storage ceiling counts both tables again
+
+Shipped. `lib/recording/stored-bytes.ts` sums `recording` and `recording_share`
+together, and POST /api/recordings, POST /api/recordings/[id]/shares and the
+listing all import it. Before this the two routes carried their own sums and
+disagreed: a share was refused for space a recording of the same size would have
+been granted, and an account that only ever saved recordings could pass the
+ceiling and stay past it. Each route owning its own sum is what let them drift,
+so there is one.
 
 ### Recording storage moved to object storage
 

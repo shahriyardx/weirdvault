@@ -29,9 +29,9 @@ import {
  *  - **Creating**: object first, row second. A row pointing at an object that
  *    was never written is a recording in somebody's list that cannot be played.
  *    An object with no row is invisible and costs storage. The second is
- *    recoverable — `scripts/sweep-recordings.mjs` finds it — and the first is
- *    not, so the object goes first and a failed insert takes the object back
- *    out on the way past.
+ *    recoverable — the sweep in lib/maintenance/objects.ts finds it — and the
+ *    first is not, so the object goes first and a failed insert takes the object
+ *    back out on the way past.
  *  - **Deleting**: object first, row second, for the mirror of the same reason.
  *    And if the object cannot be deleted, the row is left alone and the caller
  *    is told, so that "delete this recording" never reports success while the

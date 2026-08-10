@@ -1,4 +1,4 @@
-import { and, desc, eq, sql, sum } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
@@ -19,6 +19,7 @@ import {
   RECORDING_REQUIRES_PRO,
 } from "@/lib/recording/limits"
 import { MAX_SHARE_TTL_MS, MAX_SHARE_VIEWS, newShareToken } from "@/lib/recording/share"
+import { storedRecordingBytes } from "@/lib/recording/stored-bytes"
 import { enforce } from "@/lib/rate-limit"
 import { shareKey } from "@/lib/storage/objects"
 
@@ -54,16 +55,13 @@ import { shareKey } from "@/lib/storage/objects"
  *
  * The storage ceiling. A share is a second copy of the bytes, so it counts
  * against MAX_ACCOUNT_RECORDING_BYTES the same as the original, and the sum
- * here spans both tables. The same race POST /api/recordings documents applies
- * and is accepted for the same reason: concurrent creates all read the same
- * total and can all be allowed, overshooting by what is in flight, and closing
- * it means locking the account's rows on every write.
- *
- * What is NOT solved: POST /api/recordings sums only the `recording` table, so
- * share copies are invisible to the ceiling on the save path. Until that sum
- * includes this table the ceiling is enforced asymmetrically — a share is
- * refused for space a recording would have been granted. Stated rather than
- * quietly worked around, because the fix belongs in that route.
+ * spans both tables. It is lib/recording/stored-bytes.ts, shared with POST
+ * /api/recordings — which used to sum only its own table, so the same ceiling
+ * refused a share for space a recording would have been granted. The same race
+ * POST /api/recordings documents applies and is accepted for the same reason:
+ * concurrent creates all read the same total and can all be allowed,
+ * overshooting by what is in flight, and closing it means locking the account's
+ * rows on every write.
  *
  * ── The plan gate
  *
@@ -111,25 +109,6 @@ async function ownsRecording(userId: string, recordingId: string): Promise<boole
     .where(and(eq(schema.recording.id, recordingId), eq(schema.recording.userId, userId)))
     .limit(1)
   return row !== undefined
-}
-
-/**
- * Ciphertext this account holds across both copies.
- *
- * Two statements rather than a union, because they are two independent sums
- * over two tables and Postgres returns each as a string (a bigint sum over an
- * integer column) or null for an account with no rows.
- */
-async function storedBytesFor(userId: string): Promise<number> {
-  const [recordings] = await db
-    .select({ bytes: sum(schema.recording.sizeBytes) })
-    .from(schema.recording)
-    .where(eq(schema.recording.userId, userId))
-  const [shares] = await db
-    .select({ bytes: sum(schema.recordingShare.sizeBytes) })
-    .from(schema.recordingShare)
-    .where(eq(schema.recordingShare.userId, userId))
-  return Number(recordings?.bytes ?? 0) + Number(shares?.bytes ?? 0)
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -268,7 +247,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ error: "not found" }, { status: 404 })
   }
 
-  const storedBytes = await storedBytesFor(user.id)
+  const storedBytes = await storedRecordingBytes(user.id)
   if (storedBytes + sizeBytes > MAX_ACCOUNT_RECORDING_BYTES) {
     return Response.json(
       {

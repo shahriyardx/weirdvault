@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sum } from "drizzle-orm"
+import { and, count, desc, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
@@ -17,6 +17,7 @@ import {
   MAX_BLOB_BYTES,
   RECORDING_REQUIRES_PRO,
 } from "@/lib/recording/limits"
+import { storedRecordingBytes } from "@/lib/recording/stored-bytes"
 import { enforce } from "@/lib/rate-limit"
 import { recordingKey } from "@/lib/storage/objects"
 
@@ -65,6 +66,14 @@ import { recordingKey } from "@/lib/storage/objects"
  * by the ceiling itself, and the cheap half of a request that just carried
  * several megabytes. `recording_user_time_idx` leads on user_id, so it reads one
  * account's rows rather than the table.
+ *
+ * The total spans recordings *and* share copies, through
+ * lib/recording/stored-bytes.ts. It used to sum only this table while the shares
+ * route summed both, so the same ceiling was enforced asymmetrically: a share
+ * was refused for space a recording of the same size would have been granted,
+ * and an account that only ever saved recordings could pass the limit and stay
+ * past it. One sum, imported by both routes and by the listing above, is what
+ * stops the two drifting again.
  *
  * ── The plan gate, and where it deliberately is not
  *
@@ -127,21 +136,6 @@ function pageSize(raw: string | null): number {
   return Math.min(n, MAX_PAGE)
 }
 
-/**
- * How much ciphertext this account is already holding.
- *
- * `sum` comes back as a string from Postgres (it is a bigint sum over an
- * integer column) and as null for an account with no rows, so both are folded
- * into a number here rather than at the two call sites.
- */
-async function storedBytesFor(userId: string): Promise<number> {
-  const [row] = await db
-    .select({ bytes: sum(schema.recording.sizeBytes) })
-    .from(schema.recording)
-    .where(eq(schema.recording.userId, userId))
-  return Number(row?.bytes ?? 0)
-}
-
 export async function GET(request: Request) {
   const user = await requireUser()
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
@@ -173,7 +167,7 @@ export async function GET(request: Request) {
   return Response.json({
     recordings: rows,
     total: totals?.total ?? rows.length,
-    storedBytes: await storedBytesFor(user.id),
+    storedBytes: await storedRecordingBytes(user.id),
     storageLimitBytes: MAX_ACCOUNT_RECORDING_BYTES,
   })
 }
@@ -278,15 +272,16 @@ export async function POST(request: Request) {
   // means a transaction locking the account's rows on every write, which is a
   // real cost on every save to prevent a bounded overshoot that the next save
   // refuses anyway.
-  const storedBytes = await storedBytesFor(user.id)
+  const storedBytes = await storedRecordingBytes(user.id)
   if (storedBytes + sizeBytes > MAX_ACCOUNT_RECORDING_BYTES) {
     return Response.json(
       {
         error:
-          `Your recordings already hold ${Math.round(storedBytes / 1_000_000)} MB of the ` +
-          `${MAX_ACCOUNT_RECORDING_BYTES / 1_000_000_000} GB this account can store, and this one ` +
-          "does not fit. Nothing was deleted to make room — delete some recordings you no longer " +
-          "need and save again. The recording is still in the tab that made it.",
+          `Your recordings and share links already hold ${Math.round(storedBytes / 1_000_000)} MB ` +
+          `of the ${MAX_ACCOUNT_RECORDING_BYTES / 1_000_000_000} GB this account can store, and ` +
+          "this one does not fit. Nothing was deleted to make room — delete a recording you no " +
+          "longer need, or revoke a share link, and save again. The recording is still in the " +
+          "tab that made it.",
       },
       { status: 413 },
     )
