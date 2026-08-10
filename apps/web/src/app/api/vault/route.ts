@@ -1,5 +1,5 @@
 import { headers } from "next/headers"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import { auth } from "@/lib/auth"
 import { db, schema } from "@/lib/db"
@@ -63,36 +63,58 @@ export async function PUT(request: Request) {
   }
 
   const ciphertext = Buffer.from(blob, "utf8")
+  const version = baseVersion + 1
 
-  const [existing] = await db
-    .select({ version: schema.vaultBlob.version })
-    .from(schema.vaultBlob)
-    .where(eq(schema.vaultBlob.userId, user.id))
-    .limit(1)
+  /**
+   * Optimistic concurrency, decided by the write rather than by a read before
+   * it.
+   *
+   * A stale writer must be told to re-read and merge instead of silently
+   * clobbering another device's changes, and that is what `baseVersion` is for.
+   * It used to be checked with a SELECT and then acted on by an unconditional
+   * UPDATE, which is the check-then-act shape and loses in exactly the case the
+   * check exists for: two devices holding version 4 both read 4, both find it
+   * matches, and both write version 5. One document survives, the other is gone,
+   * and neither device is told — the losing device recorded a successful sync
+   * and moved its local version on.
+   *
+   * So the version travels in the WHERE clause and `returning` reports whether
+   * a row matched. Postgres serialises the two UPDATEs on the row lock, the
+   * second re-evaluates against what the first left, and it matches nothing.
+   *
+   * The insert has the same shape for the same reason: `vault_blob_user_idx` is
+   * unique on user_id, so two first-ever pushes race and `onConflictDoNothing`
+   * makes the loser a no-op rather than a 500.
+   */
+  const written =
+    baseVersion === 0
+      ? await db
+          .insert(schema.vaultBlob)
+          .values({ id: crypto.randomUUID(), userId: user.id, ciphertext, version })
+          .onConflictDoNothing({ target: schema.vaultBlob.userId })
+          .returning({ version: schema.vaultBlob.version })
+      : await db
+          .update(schema.vaultBlob)
+          .set({ ciphertext, version, updatedAt: new Date() })
+          .where(
+            and(eq(schema.vaultBlob.userId, user.id), eq(schema.vaultBlob.version, baseVersion)),
+          )
+          .returning({ version: schema.vaultBlob.version })
 
-  // Optimistic concurrency: a stale writer is told to re-read and merge rather
-  // than silently clobbering another device's changes.
-  if (existing && existing.version !== baseVersion) {
+  if (written.length === 0) {
+    // Nothing matched, so somebody else is ahead. The current version is read
+    // here rather than guessed, because it is what the client needs in order to
+    // re-pull and merge — and by now it is a fact rather than a race.
+    const [current] = await db
+      .select({ version: schema.vaultBlob.version })
+      .from(schema.vaultBlob)
+      .where(eq(schema.vaultBlob.userId, user.id))
+      .limit(1)
+
     return Response.json(
-      { error: "version conflict", currentVersion: existing.version },
+      { error: "version conflict", currentVersion: current?.version ?? 0 },
       { status: 409 },
     )
-  }
-
-  const version = (existing?.version ?? 0) + 1
-
-  if (existing) {
-    await db
-      .update(schema.vaultBlob)
-      .set({ ciphertext, version, updatedAt: new Date() })
-      .where(eq(schema.vaultBlob.userId, user.id))
-  } else {
-    await db.insert(schema.vaultBlob).values({
-      id: crypto.randomUUID(),
-      userId: user.id,
-      ciphertext,
-      version,
-    })
   }
 
   return Response.json({ version })
