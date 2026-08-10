@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import { relayQuotaError } from "@/lib/usage";
+import { relayQuotaError } from "@/lib/usage"
 
-import type { ConnectConfig, ImportedKey, ParsedConfigHost, SshSession } from "./types";
+import type { ConnectConfig, ImportedKey, ParsedConfigHost, SshSession } from "./types"
 
 /**
  * Loads the Go SSH core.
@@ -12,8 +12,8 @@ import type { ConnectConfig, ImportedKey, ParsedConfigHost, SshSession } from ".
  * inline or transform it costs build time and gains nothing. It also means the
  * Service Worker can cache it by URL like any other static file.
  */
-let loading: Promise<void> | null = null;
-let ready = false;
+let loading: Promise<void> | null = null
+let ready = false
 
 /**
  * Download progress for the core.
@@ -26,62 +26,62 @@ let ready = false;
  * clamp it rather than trusting it to land on 100%.
  */
 export interface SshLoadProgress {
-  loaded: number;
-  total: number;
-  done: boolean;
+  loaded: number
+  total: number
+  done: boolean
 }
 
-const watchers = new Set<(p: SshLoadProgress) => void>();
-let lastProgress: SshLoadProgress = { loaded: 0, total: 0, done: false };
+const watchers = new Set<(p: SshLoadProgress) => void>()
+let lastProgress: SshLoadProgress = { loaded: 0, total: 0, done: false }
 
 function emit(p: SshLoadProgress) {
-  lastProgress = p;
-  for (const watcher of watchers) watcher(p);
+  lastProgress = p
+  for (const watcher of watchers) watcher(p)
 }
 
 export function loadSSH(onProgress?: (p: SshLoadProgress) => void): Promise<void> {
   if (typeof window === "undefined") {
-    return Promise.reject(new Error("SSH core is browser-only"));
+    return Promise.reject(new Error("SSH core is browser-only"))
   }
   if (onProgress) {
-    watchers.add(onProgress);
+    watchers.add(onProgress)
     // Fire once immediately: a caller that arrives after the core is already
     // in memory would otherwise sit on a progress bar that never moves.
-    onProgress(ready ? { ...lastProgress, done: true } : lastProgress);
+    onProgress(ready ? { ...lastProgress, done: true } : lastProgress)
   }
 
   loading ??= (async () => {
-    if (!window.Go) await injectScript("/wasm_exec.js");
-    const go = new window.Go!();
-    const response = await fetch("/ssh.wasm");
+    if (!window.Go) await injectScript("/wasm_exec.js")
+    const go = new window.Go!()
+    const response = await fetch("/ssh.wasm")
     if (!response.ok) {
-      throw new Error(`could not fetch ssh.wasm: ${response.status}`);
+      throw new Error(`could not fetch ssh.wasm: ${response.status}`)
     }
     const { instance } = await WebAssembly.instantiateStreaming(
       countBytes(response),
       go.importObject,
-    );
+    )
     // Never resolves: the Go runtime parks and waits for callbacks.
-    void go.run(instance);
+    void go.run(instance)
     // go.run() sets up globals synchronously before it parks, but yield once
     // so the export is definitely visible.
-    await new Promise((r) => setTimeout(r, 0));
-    if (!window.webxtermSSH) throw new Error("ssh.wasm did not export webxtermSSH");
-    ready = true;
-    emit({ ...lastProgress, done: true });
+    await new Promise((r) => setTimeout(r, 0))
+    if (!window.webxtermSSH) throw new Error("ssh.wasm did not export webxtermSSH")
+    ready = true
+    emit({ ...lastProgress, done: true })
   })().catch((error: unknown) => {
     // A failed load must not be cached forever. The usual cause is being
     // offline for the first click, and the usual fix is clicking again.
-    loading = null;
-    lastProgress = { loaded: 0, total: 0, done: false };
-    throw error;
-  });
+    loading = null
+    lastProgress = { loaded: 0, total: 0, done: false }
+    throw error
+  })
 
-  const pending = loading;
-  if (!onProgress) return pending;
+  const pending = loading
+  if (!onProgress) return pending
   return pending.finally(() => {
-    watchers.delete(onProgress);
-  });
+    watchers.delete(onProgress)
+  })
 }
 
 /**
@@ -92,37 +92,37 @@ export function loadSSH(onProgress?: (p: SshLoadProgress) => void): Promise<void
  * would trade the streaming compile for a progress bar, which is a bad deal.
  */
 function countBytes(response: Response): Response {
-  if (!response.body) return response;
-  const total = Number(response.headers.get("Content-Length") ?? 0);
-  let loaded = 0;
+  if (!response.body) return response
+  const total = Number(response.headers.get("Content-Length") ?? 0)
+  let loaded = 0
 
   const counted = response.body.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
-        loaded += chunk.byteLength;
-        emit({ loaded, total, done: false });
-        controller.enqueue(chunk);
+        loaded += chunk.byteLength
+        emit({ loaded, total, done: false })
+        controller.enqueue(chunk)
       },
     }),
-  );
+  )
   // The headers are copied because instantiateStreaming refuses anything that
   // is not Content-Type: application/wasm.
-  return new Response(counted, { headers: response.headers });
+  return new Response(counted, { headers: response.headers })
 }
 
 function injectScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const el = document.createElement("script");
-    el.src = src;
-    el.onload = () => resolve();
-    el.onerror = () => reject(new Error(`failed to load ${src}`));
-    document.head.appendChild(el);
-  });
+    const el = document.createElement("script")
+    el.src = src
+    el.onload = () => resolve()
+    el.onerror = () => reject(new Error(`failed to load ${src}`))
+    document.head.appendChild(el)
+  })
 }
 
 export async function connect(config: ConnectConfig): Promise<SshSession> {
-  await loadSSH();
-  return window.webxtermSSH!.connect(config);
+  await loadSSH()
+  return window.webxtermSSH!.connect(config)
 }
 
 /**
@@ -133,13 +133,13 @@ export async function connect(config: ConnectConfig): Promise<SshSession> {
  * own the "import non-extractably, then zero it" half of the contract.
  */
 export async function importKey(pem: string, passphrase?: string): Promise<ImportedKey> {
-  await loadSSH();
-  return window.webxtermSSH!.importKey(pem, passphrase);
+  await loadSSH()
+  return window.webxtermSSH!.importKey(pem, passphrase)
 }
 
 export async function parseSSHConfig(text: string): Promise<ParsedConfigHost[]> {
-  await loadSSH();
-  return window.webxtermSSH!.parseSSHConfig(text);
+  await loadSSH()
+  return window.webxtermSSH!.parseSSHConfig(text)
 }
 
 /**
@@ -153,12 +153,12 @@ export async function parseSSHConfig(text: string): Promise<ParsedConfigHost[]> 
  * got a reply.
  */
 export class RelayTokenError extends Error {
-  readonly status: number | null;
+  readonly status: number | null
 
   constructor(message: string, status: number | null) {
-    super(message);
-    this.name = "RelayTokenError";
-    this.status = status;
+    super(message)
+    this.name = "RelayTokenError"
+    this.status = status
   }
 }
 
@@ -170,20 +170,20 @@ function explainMintFailure(status: number): string {
       "The connection was not attempted, because our relay will not carry it " +
       "without a token. This is a server-side setting, not something wrong with " +
       "your host or your key."
-    );
+    )
   }
   if (status === 401 || status === 403) {
     return (
       `The server refused to mint a relay access token (${status}). This browser ` +
       "is most likely no longer signed in — sign in again and retry. The " +
       "connection was not attempted."
-    );
+    )
   }
   return (
     `The relay access token could not be minted: the server returned ${status}. ` +
     "Our relay verifies that token before it will carry anything, so the " +
     "connection was not attempted rather than started and left to fail opaquely."
-  );
+  )
 }
 
 /**
@@ -213,7 +213,7 @@ function explainMintFailure(status: number): string {
  * network, and says which with the status in it.
  */
 export async function relayUrl(host: string, port: number): Promise<string> {
-  return buildRelayUrl({ host, port });
+  return buildRelayUrl({ host, port })
 }
 
 /**
@@ -229,7 +229,7 @@ export async function relayUrl(host: string, port: number): Promise<string> {
  * anything outside its own allowlist regardless of what is asked for here.
  */
 export async function agentRelayUrl(agent: string, port: number): Promise<string> {
-  return buildRelayUrl({ agent, port });
+  return buildRelayUrl({ agent, port })
 }
 
 async function buildRelayUrl(
@@ -237,30 +237,30 @@ async function buildRelayUrl(
 ): Promise<string> {
   const base =
     process.env.NEXT_PUBLIC_RELAY_URL ??
-    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`
 
-  let res: Response;
+  let res: Response
   try {
     res = await fetch("/api/relay-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(destination),
-    });
+    })
   } catch (e) {
     throw new RelayTokenError(
       `The request for a relay access token never reached the server (${e instanceof Error ? e.message : String(e)}). ` +
         "You may be offline. The connection was not attempted.",
       null,
-    );
+    )
   }
 
   if (!res.ok) {
-    const quota = await relayQuotaError(res);
-    if (quota) throw quota;
-    throw new RelayTokenError(explainMintFailure(res.status), res.status);
+    const quota = await relayQuotaError(res)
+    if (quota) throw quota
+    throw new RelayTokenError(explainMintFailure(res.status), res.status)
   }
 
-  const body = (await res.json().catch(() => ({}))) as { token?: unknown };
+  const body = (await res.json().catch(() => ({}))) as { token?: unknown }
   if (typeof body.token !== "string" || body.token === "") {
     // A 200 with nothing usable in it is a bug on our side, and it has to be as
     // loud as a refusal: the relay would reject the connection just the same.
@@ -268,13 +268,13 @@ async function buildRelayUrl(
       "The server accepted the request for a relay access token but returned none. " +
         "The connection was not attempted.",
       res.status,
-    );
+    )
   }
 
   const params = new URLSearchParams(
     "agent" in destination
       ? { agent: destination.agent, port: String(destination.port), token: body.token }
       : { host: destination.host, port: String(destination.port), token: body.token },
-  );
-  return `${base}?${params}`;
+  )
+  return `${base}?${params}`
 }

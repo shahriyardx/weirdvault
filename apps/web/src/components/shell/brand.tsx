@@ -1,6 +1,6 @@
-import Link from "next/link";
+import Link from "next/link"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 /**
  * The wordmark, shared by every surface — marketing, auth, dashboard, and the
@@ -13,11 +13,11 @@ export function Brand({
   size = "md",
   labelClassName,
 }: {
-  className?: string;
-  href?: string;
-  size?: "sm" | "md";
+  className?: string
+  href?: string
+  size?: "sm" | "md"
   /** Lets a collapsed sidebar hide the wordmark and keep the glyph. */
-  labelClassName?: string;
+  labelClassName?: string
 }) {
   return (
     <Link
@@ -40,5 +40,5 @@ export function Brand({
       </span>
       <span className={labelClassName}>webxterm</span>
     </Link>
-  );
+  )
 }

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Account settings.
@@ -34,9 +34,9 @@
  * the button rather than in a toast afterwards.
  */
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react"
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowSquareOutIcon,
   ArrowsClockwiseIcon,
@@ -67,11 +67,11 @@ import {
   UploadSimpleIcon,
   UserIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { PageHeader } from "@/components/shell/page-shell";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PageHeader } from "@/components/shell/page-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,10 +82,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/alert-dialog"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardAction,
@@ -94,13 +94,13 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { totpAvailability, type TotpAvailability } from "@/app/dashboard/settings/actions";
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { totpAvailability, type TotpAvailability } from "@/app/dashboard/settings/actions"
 import {
   addPasskey,
   authClient,
@@ -117,17 +117,17 @@ import {
   useSession,
   type PasskeySummary,
   type TotpEnrolment,
-} from "@/lib/auth-client";
-import { encodeQr } from "@/lib/qr";
+} from "@/lib/auth-client"
+import { encodeQr } from "@/lib/qr"
 import {
   BillingActionError,
   loadBilling,
   openPortal,
   startCheckout,
   useBilling,
-} from "@/lib/billing/client";
-import { idbClear } from "@/lib/idb";
-import { MAX_ACCOUNT_RECORDING_BYTES } from "@/lib/recording/limits";
+} from "@/lib/billing/client"
+import { idbClear } from "@/lib/idb"
+import { MAX_ACCOUNT_RECORDING_BYTES } from "@/lib/recording/limits"
 import {
   bytesRemaining,
   fetchRelayUsage,
@@ -135,8 +135,8 @@ import {
   usagePercent,
   usageState,
   type RelayUsage,
-} from "@/lib/usage";
-import type { VaultEnvelope } from "@/lib/vault/crypto";
+} from "@/lib/usage"
+import type { VaultEnvelope } from "@/lib/vault/crypto"
 import {
   disableRecoveryCodes,
   enrolRecoveryCodes,
@@ -146,7 +146,7 @@ import {
   RecoveryLockedError,
   type EnrolmentProgress,
   type RecoveryStatus,
-} from "@/lib/vault/recovery";
+} from "@/lib/vault/recovery"
 import {
   changePasswordAndRekey,
   rekeyAfterRecovery,
@@ -154,14 +154,14 @@ import {
   type RekeyProgress,
   type RekeyResult,
   type RekeyStage,
-} from "@/lib/vault/rekey";
+} from "@/lib/vault/rekey"
 import {
   restoreVault,
   VaultDecryptionError,
   VaultFormatError,
   type RestoreCount,
   type RestoreResult,
-} from "@/lib/vault/restore";
+} from "@/lib/vault/restore"
 import {
   getRecoveredSecrets,
   getVaultKey,
@@ -169,7 +169,7 @@ import {
   requestUnlock,
   useRecoveredSecrets,
   useVaultUnlocked,
-} from "@/lib/vault/session";
+} from "@/lib/vault/session"
 
 export default function SettingsPage() {
   return (
@@ -190,56 +190,55 @@ export default function SettingsPage() {
         <SettingsTabs />
       </Suspense>
     </div>
-  );
+  )
 }
 
 function SettingsTabs() {
-  const { data: session, isPending } = useSession();
-  const user = session?.user;
+  const { data: session, isPending } = useSession()
+  const user = session?.user
 
-  const params = useSearchParams();
-  const requested = params.get("tab");
+  const params = useSearchParams()
+  const requested = params.get("tab")
   const [tab, setTab] = useState(
     requested === "security" || requested === "data" ? requested : "account",
-  );
-  const afterRecovery = params.get("rekey") === "1";
+  )
+  const afterRecovery = params.get("rekey") === "1"
 
   // A password change deletes the recovery envelopes server-side, so the count
   // rendered by the sibling section below becomes a false statement the moment
   // the change lands. Bumping this makes it re-read rather than keep claiming
   // codes that no longer exist.
-  const [rekeyedAt, setRekeyedAt] = useState(0);
+  const [rekeyedAt, setRekeyedAt] = useState(0)
 
   return (
-    <>
-      <Tabs value={tab} onValueChange={setTab} className="mt-6 gap-6">
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="account">
-            <UserIcon data-icon="inline-start" />
-            Account
-          </TabsTrigger>
-          <TabsTrigger value="security">
-            <LockKeyIcon data-icon="inline-start" />
-            Security
-          </TabsTrigger>
-          <TabsTrigger value="data">
-            <DatabaseIcon data-icon="inline-start" />
-            Data
-          </TabsTrigger>
-        </TabsList>
+    <Tabs value={tab} onValueChange={setTab} className="mt-6 gap-6">
+      <TabsList className="w-full sm:w-auto">
+        <TabsTrigger value="account">
+          <UserIcon data-icon="inline-start" />
+          Account
+        </TabsTrigger>
+        <TabsTrigger value="security">
+          <LockKeyIcon data-icon="inline-start" />
+          Security
+        </TabsTrigger>
+        <TabsTrigger value="data">
+          <DatabaseIcon data-icon="inline-start" />
+          Data
+        </TabsTrigger>
+      </TabsList>
 
-        <TabsContent value="account" className="space-y-6">
-          <AccountSection
-            name={user?.name ?? null}
-            email={user?.email ?? null}
-            createdAt={user?.createdAt ?? null}
-            loading={isPending}
-          />
-          <BillingSection />
-          <RelayTransferSection />
-        </TabsContent>
+      <TabsContent value="account" className="space-y-6">
+        <AccountSection
+          name={user?.name ?? null}
+          email={user?.email ?? null}
+          createdAt={user?.createdAt ?? null}
+          loading={isPending}
+        />
+        <BillingSection />
+        <RelayTransferSection />
+      </TabsContent>
 
-        {/*
+      {/*
           Grouped by what each control protects, because that grouping is the
           clearest way to state the thing users most often get wrong: a second
           factor guards the account and the session, and does nothing whatever
@@ -248,35 +247,34 @@ function SettingsTabs() {
           the wrong inference, and a paragraph further down the page would not
           undo it.
         */}
-        <TabsContent value="security" className="space-y-6">
-          <SecurityGroup
-            title="Your account"
-            summary="Who can sign in as you. None of these encrypt anything."
-          />
-          <TwoFactorSection email={user?.email ?? null} enabled={user?.twoFactorEnabled ?? false} />
-          <PasskeysSection />
-          <SessionsSection />
+      <TabsContent value="security" className="space-y-6">
+        <SecurityGroup
+          title="Your account"
+          summary="Who can sign in as you. None of these encrypt anything."
+        />
+        <TwoFactorSection email={user?.email ?? null} enabled={user?.twoFactorEnabled ?? false} />
+        <PasskeysSection />
+        <SessionsSection />
 
-          <SecurityGroup
-            title="Your vault"
-            summary="What can decrypt your hosts, keys and snippets. Irreversible."
-          />
-          <ChangePasswordSection
-            email={user?.email ?? null}
-            afterRecovery={afterRecovery}
-            onRekeyed={() => setRekeyedAt(Date.now())}
-          />
-          <RecoveryCodesSection email={user?.email ?? null} reloadOn={rekeyedAt} />
-        </TabsContent>
+        <SecurityGroup
+          title="Your vault"
+          summary="What can decrypt your hosts, keys and snippets. Irreversible."
+        />
+        <ChangePasswordSection
+          email={user?.email ?? null}
+          afterRecovery={afterRecovery}
+          onRekeyed={() => setRekeyedAt(Date.now())}
+        />
+        <RecoveryCodesSection email={user?.email ?? null} reloadOn={rekeyedAt} />
+      </TabsContent>
 
-        <TabsContent value="data" className="space-y-6">
-          <ExportSection />
-          <ImportSection />
-          <DeleteAccountSection email={user?.email ?? null} />
-        </TabsContent>
-      </Tabs>
-    </>
-  );
+      <TabsContent value="data" className="space-y-6">
+        <ExportSection />
+        <ImportSection />
+        <DeleteAccountSection email={user?.email ?? null} />
+      </TabsContent>
+    </Tabs>
+  )
 }
 
 /* -------------------------------------------------------------- account tab */
@@ -287,12 +285,12 @@ function AccountSection({
   createdAt,
   loading,
 }: {
-  name: string | null;
-  email: string | null;
-  createdAt: Date | string | null;
-  loading: boolean;
+  name: string | null
+  email: string | null
+  createdAt: Date | string | null
+  loading: boolean
 }) {
-  const display = name?.trim() || email || "No session";
+  const display = name?.trim() || email || "No session"
 
   return (
     <>
@@ -364,7 +362,7 @@ function AccountSection({
         </AlertDescription>
       </Alert>
     </>
-  );
+  )
 }
 
 /* -------------------------------------------------------------- billing */
@@ -405,11 +403,11 @@ function AccountSection({
  * so the lag is not disclosed only when it happens to flatter us.
  */
 function BillingSection() {
-  const { billing, loading, error } = useBilling();
-  const params = useSearchParams();
-  const justCheckedOut = params.get("checkout") === "complete";
-  const justReturnedFromPortal = params.get("portal") === "returned";
-  const [busy, setBusy] = useState<"checkout" | "portal" | null>(null);
+  const { billing, loading, error } = useBilling()
+  const params = useSearchParams()
+  const justCheckedOut = params.get("checkout") === "complete"
+  const justReturnedFromPortal = params.get("portal") === "returned"
+  const [busy, setBusy] = useState<"checkout" | "portal" | null>(null)
 
   // Returning from Stripe lands on this page with the same module cache the tab
   // left with, which would show the old plan. A forced re-read is the least this
@@ -421,18 +419,18 @@ function BillingSection() {
   // "Renews" to somebody who has cancelled. Warning about the first and not the
   // second would mean disclosing the lag only when it flatters us.
   useEffect(() => {
-    if (justCheckedOut || justReturnedFromPortal) void loadBilling(true);
-  }, [justCheckedOut, justReturnedFromPortal]);
+    if (justCheckedOut || justReturnedFromPortal) void loadBilling(true)
+  }, [justCheckedOut, justReturnedFromPortal])
 
   async function go(action: "checkout" | "portal") {
-    setBusy(action);
+    setBusy(action)
     try {
-      const url = action === "checkout" ? await startCheckout() : await openPortal();
+      const url = action === "checkout" ? await startCheckout() : await openPortal()
       // A full navigation rather than a router push: the destination is
       // stripe.com, which the Next router cannot route to.
-      window.location.assign(url);
+      window.location.assign(url)
     } catch (e) {
-      const kind = e instanceof BillingActionError ? e.kind : "failed";
+      const kind = e instanceof BillingActionError ? e.kind : "failed"
       toast.error(
         kind === "not-configured"
           ? "Billing is not configured on this deployment"
@@ -440,12 +438,12 @@ function BillingSection() {
             ? "Checkout did not start"
             : "The billing portal did not open",
         { description: message(e) },
-      );
-      setBusy(null);
+      )
+      setBusy(null)
     }
   }
 
-  const pro = billing?.tier === "pro";
+  const pro = billing?.tier === "pro"
 
   return (
     <Card>
@@ -635,7 +633,7 @@ function BillingSection() {
         )}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -650,27 +648,27 @@ function BillingSection() {
 function statusWords(status: string | null): string {
   switch (status) {
     case null:
-      return "None";
+      return "None"
     case "none":
-      return "None";
+      return "None"
     case "active":
-      return "Active";
+      return "Active"
     case "trialing":
-      return "Trial";
+      return "Trial"
     case "past_due":
-      return "Payment failed, retrying";
+      return "Payment failed, retrying"
     case "unpaid":
-      return "Unpaid, retrying";
+      return "Unpaid, retrying"
     case "canceled":
-      return "Cancelled";
+      return "Cancelled"
     case "incomplete":
-      return "Checkout not finished";
+      return "Checkout not finished"
     case "incomplete_expired":
-      return "Checkout expired";
+      return "Checkout expired"
     case "paused":
-      return "Paused";
+      return "Paused"
     default:
-      return status;
+      return status
   }
 }
 
@@ -701,32 +699,32 @@ function statusWords(status: string | null): string {
  * cost paid on every account to save one click on a few.
  */
 function RelayTransferSection() {
-  const [usage, setUsage] = useState<RelayUsage | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [readAt, setReadAt] = useState<number | null>(null);
-  const [reading, setReading] = useState(false);
+  const [usage, setUsage] = useState<RelayUsage | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [readAt, setReadAt] = useState<number | null>(null)
+  const [reading, setReading] = useState(false)
 
   const load = useCallback(async () => {
-    setReading(true);
+    setReading(true)
     try {
-      const next = await fetchRelayUsage();
-      setUsage(next);
-      setError(null);
+      const next = await fetchRelayUsage()
+      setUsage(next)
+      setError(null)
     } catch (e) {
-      setError(message(e));
+      setError(message(e))
     } finally {
-      setReadAt(Date.now());
-      setReading(false);
+      setReadAt(Date.now())
+      setReading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     void (async () => {
-      await load();
-    })();
-  }, [load]);
+      await load()
+    })()
+  }, [load])
 
-  const state = usage ? usageState(usage) : "ok";
+  const state = usage ? usageState(usage) : "ok"
 
   return (
     <Card>
@@ -872,7 +870,7 @@ function RelayTransferSection() {
         )}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -883,7 +881,7 @@ function Field({ label, value }: { label: string; value: string }) {
       </dt>
       <dd className="mt-0.5 truncate text-foreground">{value}</dd>
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- security tab */
@@ -902,11 +900,11 @@ function SecurityGroup({ title, summary }: { title: string; summary: string }) {
       <h2 className="text-sm font-medium text-foreground">{title}</h2>
       <p className="max-w-prose text-muted-foreground">{summary}</p>
     </div>
-  );
+  )
 }
 
 /** Matches sign-up. The server's own minimum is on the derived token, not this. */
-const MIN_PASSWORD_LENGTH = 10;
+const MIN_PASSWORD_LENGTH = 10
 
 /**
  * TOTP, and the sentence that has to be on this card.
@@ -931,98 +929,98 @@ const MIN_PASSWORD_LENGTH = 10;
  * session and no second factor anywhere in the picture.
  */
 function TwoFactorSection({ email, enabled }: { email: string | null; enabled: boolean }) {
-  const [availability, setAvailability] = useState<TotpAvailability | null>(null);
-  const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [enrolment, setEnrolment] = useState<TotpEnrolment | null>(null);
-  const [codes, setCodes] = useState<string[] | null>(null);
-  const [busy, setBusy] = useState<"begin" | "confirm" | "disable" | "reissue" | null>(null);
+  const [availability, setAvailability] = useState<TotpAvailability | null>(null)
+  const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
+  const [enrolment, setEnrolment] = useState<TotpEnrolment | null>(null)
+  const [codes, setCodes] = useState<string[] | null>(null)
+  const [busy, setBusy] = useState<"begin" | "confirm" | "disable" | "reissue" | null>(null)
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     void totpAvailability()
       .then((a) => {
-        if (!cancelled) setAvailability(a);
+        if (!cancelled) setAvailability(a)
       })
       // A lookup that failed is not a lookup that said yes. Leaving this null
       // keeps the controls hidden, which is the safe direction.
       .catch(() => {
-        if (!cancelled) setAvailability({ ready: false, missing: [] });
-      });
+        if (!cancelled) setAvailability({ ready: false, missing: [] })
+      })
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   async function begin(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || !password) return;
-    setBusy("begin");
+    e.preventDefault()
+    if (!email || !password) return
+    setBusy("begin")
     try {
-      setEnrolment(await beginTotpEnrolment(email, password));
-      setPassword("");
-      setCode("");
+      setEnrolment(await beginTotpEnrolment(email, password))
+      setPassword("")
+      setCode("")
     } catch (err) {
-      toast.error("Two-factor was not set up", { description: message(err) });
+      toast.error("Two-factor was not set up", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
   async function confirm(e: React.FormEvent) {
-    e.preventDefault();
-    if (!enrolment || !code) return;
-    setBusy("confirm");
+    e.preventDefault()
+    if (!enrolment || !code) return
+    setBusy("confirm")
     try {
-      await confirmTotpEnrolment(code);
+      await confirmTotpEnrolment(code)
       // Only now are the backup codes worth showing: before this the enrolment
       // could still have been abandoned, and a saved list for a factor that was
       // never enabled is a list somebody will trust later for nothing.
-      setCodes(enrolment.backupCodes);
-      setEnrolment(null);
-      setCode("");
+      setCodes(enrolment.backupCodes)
+      setEnrolment(null)
+      setCode("")
       toast.success("Authenticator app enabled", {
         description: "It will be asked for the next time you sign in with your password.",
-      });
+      })
     } catch (err) {
-      toast.error("That code was not accepted", { description: message(err) });
+      toast.error("That code was not accepted", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
   async function turnOff() {
-    if (!email || !password) return;
-    setBusy("disable");
+    if (!email || !password) return
+    setBusy("disable")
     try {
-      await disableTotp(email, password);
-      setPassword("");
-      setCodes(null);
+      await disableTotp(email, password)
+      setPassword("")
+      setCodes(null)
       toast.success("Authenticator app removed", {
         description: "Your password alone signs you in again, and the backup codes are gone.",
-      });
+      })
     } catch (err) {
-      toast.error("Two-factor was not turned off", { description: message(err) });
+      toast.error("Two-factor was not turned off", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
   async function reissue(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || !password) return;
-    setBusy("reissue");
+    e.preventDefault()
+    if (!email || !password) return
+    setBusy("reissue")
     try {
-      setCodes(await reissueBackupCodes(email, password));
-      setPassword("");
+      setCodes(await reissueBackupCodes(email, password))
+      setPassword("")
     } catch (err) {
-      toast.error("The backup codes were not replaced", { description: message(err) });
+      toast.error("The backup codes were not replaced", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
-  const blocked = availability !== null && !availability.ready;
+  const blocked = availability !== null && !availability.ready
 
   return (
     <Card>
@@ -1093,8 +1091,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
             code={code}
             enrolment={enrolment}
             onCancel={() => {
-              setEnrolment(null);
-              setCode("");
+              setEnrolment(null)
+              setCode("")
             }}
             onCodeChange={setCode}
             onSubmit={confirm}
@@ -1150,8 +1148,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
                     <AlertDialogAction
                       variant="destructive"
                       onClick={(e) => {
-                        e.preventDefault();
-                        void turnOff();
+                        e.preventDefault()
+                        void turnOff()
                       }}
                     >
                       Turn it off
@@ -1190,7 +1188,7 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
         )}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -1210,12 +1208,12 @@ function TotpEnrolmentPanel({
   onCodeChange,
   onSubmit,
 }: {
-  busy: boolean;
-  code: string;
-  enrolment: TotpEnrolment;
-  onCancel: () => void;
-  onCodeChange: (value: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  busy: boolean
+  code: string
+  enrolment: TotpEnrolment
+  onCancel: () => void
+  onCodeChange: (value: string) => void
+  onSubmit: (e: React.FormEvent) => void
 }) {
   return (
     <div className="space-y-4 border border-border bg-card p-3">
@@ -1246,7 +1244,7 @@ function TotpEnrolmentPanel({
                   toast.error("The clipboard was refused", {
                     description: "Select the secret and copy it by hand.",
                   }),
-                );
+                )
             }}
           >
             <CopyIcon data-icon="inline-start" />
@@ -1289,7 +1287,7 @@ function TotpEnrolmentPanel({
         </div>
       </form>
     </div>
-  );
+  )
 }
 
 /**
@@ -1307,11 +1305,11 @@ function TotpEnrolmentPanel({
 function TotpQrCode({ value }: { value: string }) {
   const code = (() => {
     try {
-      return encodeQr(value);
+      return encodeQr(value)
     } catch {
-      return null;
+      return null
     }
-  })();
+  })()
 
   if (!code) {
     return (
@@ -1321,11 +1319,11 @@ function TotpQrCode({ value }: { value: string }) {
           — it is the same factor.
         </p>
       </div>
-    );
+    )
   }
 
-  const quiet = 4;
-  const span = code.size + quiet * 2;
+  const quiet = 4
+  const span = code.size + quiet * 2
 
   return (
     <svg
@@ -1344,7 +1342,7 @@ function TotpQrCode({ value }: { value: string }) {
         ),
       )}
     </svg>
-  );
+  )
 }
 
 /**
@@ -1361,78 +1359,78 @@ function TotpQrCode({ value }: { value: string }) {
  * still works after the laptop is gone.
  */
 function PasskeysSection() {
-  const [passkeys, setPasskeys] = useState<PasskeySummary[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [passkeys, setPasskeys] = useState<PasskeySummary[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [name, setName] = useState("")
+  const [busy, setBusy] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      setPasskeys(await listPasskeys());
-      setLoadError(null);
+      setPasskeys(await listPasskeys())
+      setLoadError(null)
     } catch (e) {
       // An unreadable list is not an empty list. Saying "none registered" here
       // would be a claim about who can sign in to this account, made on nothing.
-      setLoadError(message(e));
+      setLoadError(message(e))
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     void (async () => {
-      await refresh();
-    })();
-  }, [refresh]);
+      await refresh()
+    })()
+  }, [refresh])
 
   async function register(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy("add");
+    e.preventDefault()
+    setBusy("add")
     try {
-      await addPasskey(name);
-      setName("");
-      await refresh();
+      await addPasskey(name)
+      setName("")
+      await refresh()
       toast.success("Passkey registered", {
         description:
           "It signs you in. It does not unlock your vault — your password still does that.",
-      });
+      })
     } catch (err) {
       // Closing the browser prompt is a decision, not a failure.
       if (!(err instanceof PasskeyCancelledError)) {
-        toast.error("The passkey was not registered", { description: message(err) });
+        toast.error("The passkey was not registered", { description: message(err) })
       }
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
   async function remove(id: string) {
-    setBusy(id);
+    setBusy(id)
     try {
-      await removePasskey(id);
-      await refresh();
+      await removePasskey(id)
+      await refresh()
       toast.success("Passkey removed", {
         description:
           "It will no longer sign you in. Whatever is stored on the device itself is the device's to delete.",
-      });
+      })
     } catch (err) {
-      toast.error("The passkey was not removed", { description: message(err) });
+      toast.error("The passkey was not removed", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
   async function rename(e: React.FormEvent) {
-    e.preventDefault();
-    if (!renaming) return;
-    setBusy(renaming.id);
+    e.preventDefault()
+    if (!renaming) return
+    setBusy(renaming.id)
     try {
-      await renamePasskey(renaming.id, renaming.name);
-      setRenaming(null);
-      await refresh();
+      await renamePasskey(renaming.id, renaming.name)
+      setRenaming(null)
+      await refresh()
     } catch (err) {
-      toast.error("The passkey was not renamed", { description: message(err) });
+      toast.error("The passkey was not renamed", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
@@ -1483,7 +1481,7 @@ function PasskeysSection() {
             {passkeys.map((p) => {
               // Narrowed once, here, so the draft name is a value rather than a
               // property of state that may have changed by the time a handler runs.
-              const editing = renaming?.id === p.id ? renaming : null;
+              const editing = renaming?.id === p.id ? renaming : null
               return (
                 <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
                   <div className="min-w-0 flex-1">
@@ -1575,8 +1573,8 @@ function PasskeysSection() {
                             <AlertDialogAction
                               variant="destructive"
                               onClick={(e) => {
-                                e.preventDefault();
-                                void remove(p.id);
+                                e.preventDefault()
+                                void remove(p.id)
                               }}
                             >
                               Remove it
@@ -1587,7 +1585,7 @@ function PasskeysSection() {
                     </div>
                   )}
                 </li>
-              );
+              )
             })}
           </ul>
         )}
@@ -1621,7 +1619,7 @@ function PasskeysSection() {
         </p>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -1647,54 +1645,54 @@ function ChangePasswordSection({
   afterRecovery,
   onRekeyed,
 }: {
-  email: string | null;
-  afterRecovery: boolean;
+  email: string | null
+  afterRecovery: boolean
   /** Fired on success so the recovery section stops describing deleted codes. */
-  onRekeyed: () => void;
+  onRekeyed: () => void
 }) {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [progress, setProgress] = useState<RekeyProgress | null>(null);
-  const [result, setResult] = useState<RekeyResult | null>(null);
+  const [current, setCurrent] = useState("")
+  const [next, setNext] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [progress, setProgress] = useState<RekeyProgress | null>(null)
+  const [result, setResult] = useState<RekeyResult | null>(null)
   // Kept separate from a toast: a stranded vault needs instructions that stay on
   // screen, and a toast that scrolls away is the wrong medium for them.
-  const [stranded, setStranded] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [stranded, setStranded] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Reactive rather than read once: rekey clears the recovered secrets on
   // success, and this section must stop offering the passwordless path the
   // moment they are gone.
-  const recovered = useRecoveredSecrets();
+  const recovered = useRecoveredSecrets()
   // Keyed on the secrets, not on the ?rekey=1 that put us here. The query string
   // is how the recover page asks for the right tab; whether the passwordless
   // re-key is possible is a fact about what this tab is holding, and navigating
   // away and back must not turn a working form into a field nobody can fill.
-  const viaRecovery = recovered;
+  const viaRecovery = recovered
 
-  const busy = progress !== null && progress.stage !== "done";
-  const mismatch = confirm.length > 0 && next !== confirm;
-  const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
+  const busy = progress !== null && progress.stage !== "done"
+  const mismatch = confirm.length > 0 && next !== confirm
+  const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH
   const ready =
     !!email &&
     (viaRecovery || current.length > 0) &&
     next.length >= MIN_PASSWORD_LENGTH &&
     next === confirm &&
     (viaRecovery || current !== next) &&
-    !busy;
+    !busy
 
   async function change(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || !ready) return;
-    setResult(null);
-    setError(null);
-    setStranded(null);
-    setProgress({ stage: "deriving", label: "Starting" });
+    e.preventDefault()
+    if (!email || !ready) return
+    setResult(null)
+    setError(null)
+    setStranded(null)
+    setProgress({ stage: "deriving", label: "Starting" })
     try {
       // getRecoveredSecrets rather than the boolean above: the hook drives the
       // rendering, the getter is what actually holds the material, and reading it
       // here keeps the window in which it is used as short as possible.
-      const oldSecrets = viaRecovery ? getRecoveredSecrets() : null;
+      const oldSecrets = viaRecovery ? getRecoveredSecrets() : null
       const outcome = oldSecrets
         ? await rekeyAfterRecovery({
             email,
@@ -1707,12 +1705,12 @@ function ChangePasswordSection({
             currentPassword: current,
             newPassword: next,
             onProgress: setProgress,
-          });
-      setResult(outcome);
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      onRekeyed();
+          })
+      setResult(outcome)
+      setCurrent("")
+      setNext("")
+      setConfirm("")
+      onRekeyed()
       toast.success(
         outcome.resumed
           ? "Finished a half-completed password change"
@@ -1720,15 +1718,15 @@ function ChangePasswordSection({
         {
           description: `${outcome.keysRewrapped} portable ${outcome.keysRewrapped === 1 ? "key was" : "keys were"} re-wrapped. Other sessions were signed out.`,
         },
-      );
+      )
     } catch (err) {
       if (err instanceof RekeyStrandedError) {
-        setStranded(err.message);
+        setStranded(err.message)
       } else {
-        setError(message(err));
+        setError(message(err))
       }
     } finally {
-      setProgress(null);
+      setProgress(null)
     }
   }
 
@@ -1860,13 +1858,13 @@ function ChangePasswordSection({
         {result && <RekeySummary result={result} />}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /** Narrates a multi-second operation that must not be interrupted. */
 function RekeyProgressPanel({ progress }: { progress: RekeyProgress }) {
-  const done = REKEY_STAGES.indexOf(progress.stage) + 1;
-  const pct = Math.round((done / REKEY_STAGES.length) * 100);
+  const done = REKEY_STAGES.indexOf(progress.stage) + 1
+  const pct = Math.round((done / REKEY_STAGES.length) * 100)
 
   return (
     <div className="space-y-2 border border-border bg-card p-3">
@@ -1877,7 +1875,7 @@ function RekeyProgressPanel({ progress }: { progress: RekeyProgress }) {
       <Progress value={pct} />
       <p className="text-muted-foreground">Leave this tab open.</p>
     </div>
-  );
+  )
 }
 
 const REKEY_STAGES: RekeyStage[] = [
@@ -1889,7 +1887,7 @@ const REKEY_STAGES: RekeyStage[] = [
   "changing",
   "installing",
   "done",
-];
+]
 
 /** Counts, not claims. Especially the count of keys that did not re-wrap. */
 function RekeySummary({ result }: { result: RekeyResult }) {
@@ -1924,39 +1922,39 @@ function RekeySummary({ result }: { result: RekeyResult }) {
         </li>
       </ul>
     </div>
-  );
+  )
 }
 
 /** Genuinely wired: Better Auth can revoke every session for this user. */
 function SessionsSection() {
-  const router = useRouter();
-  const [busy, setBusy] = useState<"one" | "all" | null>(null);
+  const router = useRouter()
+  const [busy, setBusy] = useState<"one" | "all" | null>(null)
 
   async function signOutHere() {
-    setBusy("one");
+    setBusy("one")
     try {
-      await signOut();
+      await signOut()
       // The vault key lives in memory only; drop it before leaving the page.
-      lock();
-      router.push("/sign-in");
+      lock()
+      router.push("/sign-in")
     } catch (e) {
-      toast.error("Sign out failed", { description: message(e) });
-      setBusy(null);
+      toast.error("Sign out failed", { description: message(e) })
+      setBusy(null)
     }
   }
 
   async function signOutEverywhere() {
-    setBusy("all");
+    setBusy("all")
     try {
-      const res = await authClient.revokeSessions();
-      if (res.error) throw new Error(res.error.message ?? "revoke failed");
-      await signOut();
-      lock();
-      toast.success("Every session revoked");
-      router.push("/sign-in");
+      const res = await authClient.revokeSessions()
+      if (res.error) throw new Error(res.error.message ?? "revoke failed")
+      await signOut()
+      lock()
+      toast.success("Every session revoked")
+      router.push("/sign-in")
     } catch (e) {
-      toast.error("Could not revoke sessions", { description: message(e) });
-      setBusy(null);
+      toast.error("Could not revoke sessions", { description: message(e) })
+      setBusy(null)
     }
   }
 
@@ -2011,7 +2009,7 @@ function SessionsSection() {
         </AlertDialog>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -2029,79 +2027,79 @@ function RecoveryCodesSection({
   email,
   reloadOn,
 }: {
-  email: string | null;
+  email: string | null
   /** Changes when something outside this card invalidated the enrolled set. */
-  reloadOn: number;
+  reloadOn: number
 }) {
-  const [status, setStatus] = useState<RecoveryStatus | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [password, setPassword] = useState("");
-  const [progress, setProgress] = useState<EnrolmentProgress | null>(null);
-  const [codes, setCodes] = useState<string[] | null>(null);
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [busy, setBusy] = useState<"enrol" | "disable" | null>(null);
+  const [status, setStatus] = useState<RecoveryStatus | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [password, setPassword] = useState("")
+  const [progress, setProgress] = useState<EnrolmentProgress | null>(null)
+  const [codes, setCodes] = useState<string[] | null>(null)
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [busy, setBusy] = useState<"enrol" | "disable" | null>(null)
 
   async function refresh() {
     try {
-      setStatus(await getRecoveryStatus());
-      setLoadError(null);
+      setStatus(await getRecoveryStatus())
+      setLoadError(null)
     } catch (e) {
       // A count we could not read is not a count of zero. Saying "none enrolled"
       // here would be a claim about someone's account recovery, made on no
       // evidence.
-      setLoadError(message(e));
+      setLoadError(message(e))
     }
   }
 
   useEffect(() => {
     void (async () => {
-      await refresh();
-    })();
+      await refresh()
+    })()
     // Re-read on mount, and whenever something outside this card invalidated
     // the set — today that is only a password change.
-  }, [reloadOn]);
+  }, [reloadOn])
 
   async function enrol(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || password.length === 0) return;
-    setBusy("enrol");
-    setCodes(null);
-    setAcknowledged(false);
-    setProgress({ done: 0, total: RECOVERY_CODE_COUNT });
+    e.preventDefault()
+    if (!email || password.length === 0) return
+    setBusy("enrol")
+    setCodes(null)
+    setAcknowledged(false)
+    setProgress({ done: 0, total: RECOVERY_CODE_COUNT })
     try {
-      const generated = await enrolRecoveryCodes(email, password, setProgress);
-      setCodes(generated);
-      setPassword("");
-      await refresh();
+      const generated = await enrolRecoveryCodes(email, password, setProgress)
+      setCodes(generated)
+      setPassword("")
+      await refresh()
     } catch (err) {
       // A locked vault is a question, not a failure: the check that makes
       // enrolment trustworthy needs the session's vault key to compare against.
-      if (err instanceof RecoveryLockedError) requestUnlock();
-      toast.error("No recovery codes were generated", { description: message(err) });
+      if (err instanceof RecoveryLockedError) requestUnlock()
+      toast.error("No recovery codes were generated", { description: message(err) })
     } finally {
-      setBusy(null);
-      setProgress(null);
+      setBusy(null)
+      setProgress(null)
     }
   }
 
   async function disable() {
-    setBusy("disable");
+    setBusy("disable")
     try {
-      await disableRecoveryCodes();
-      setCodes(null);
-      await refresh();
+      await disableRecoveryCodes()
+      setCodes(null)
+      await refresh()
       toast.success("Recovery codes removed", {
         description:
           "None of them will open this account any more. Without a password there is now no way back in.",
-      });
+      })
     } catch (err) {
-      toast.error("Recovery codes were not removed", { description: message(err) });
+      toast.error("Recovery codes were not removed", { description: message(err) })
     } finally {
-      setBusy(null);
+      setBusy(null)
     }
   }
 
-  const enrolled = status?.enrolled === true && status.remaining > 0;
+  const enrolled = status?.enrolled === true && status.remaining > 0
 
   return (
     <Card>
@@ -2145,8 +2143,8 @@ function RecoveryCodesSection({
           <GeneratedCodes
             codes={codes}
             onAcknowledge={() => {
-              setAcknowledged(true);
-              setCodes(null);
+              setAcknowledged(true)
+              setCodes(null)
             }}
           />
         ) : (
@@ -2241,8 +2239,8 @@ function RecoveryCodesSection({
                         <AlertDialogAction
                           variant="destructive"
                           onClick={(e) => {
-                            e.preventDefault();
-                            void disable();
+                            e.preventDefault()
+                            void disable()
                           }}
                         >
                           Delete all codes
@@ -2275,7 +2273,7 @@ function RecoveryCodesSection({
         </CardFooter>
       )}
     </Card>
-  );
+  )
 }
 
 /**
@@ -2301,17 +2299,17 @@ function GeneratedCodes({
   fileNote = "Each code works once. Anyone holding one can sign in and read your vault.",
   warning = "Shown once. Save them before you leave this page.",
 }: {
-  codes: string[];
-  onAcknowledge: () => void;
+  codes: string[]
+  onAcknowledge: () => void
   /** How one code is printed. Recovery codes are grouped; backup codes are not. */
-  format?: (code: string) => string;
-  filename?: string;
-  fileTitle?: string;
+  format?: (code: string) => string
+  filename?: string
+  fileTitle?: string
   /** The line in the downloaded file that says what these codes actually do. */
-  fileNote?: string;
-  warning?: string;
+  fileNote?: string
+  warning?: string
 }) {
-  const text = codes.map(format).join("\n");
+  const text = codes.map(format).join("\n")
 
   return (
     <div className="space-y-3 border border-warning/40 bg-card p-3">
@@ -2342,7 +2340,7 @@ function GeneratedCodes({
                 toast.error("The clipboard was refused", {
                   description: "Select the codes and copy them by hand.",
                 }),
-              );
+              )
           }}
         >
           <CopyIcon data-icon="inline-start" />
@@ -2366,45 +2364,41 @@ function GeneratedCodes({
         </Button>
       </div>
     </div>
-  );
+  )
 }
 
 /* ----------------------------------------------------------------- data tab */
 
 /** Real: /api/vault hands back the stored ciphertext, which is what we save. */
 function ExportSection() {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false)
 
   async function exportVault() {
-    setBusy(true);
+    setBusy(true)
     try {
-      const res = await fetch("/api/vault", { cache: "no-store" });
-      if (res.status === 401) throw new Error("Session expired. Sign in again.");
-      if (!res.ok) throw new Error(`The server returned ${res.status}.`);
+      const res = await fetch("/api/vault", { cache: "no-store" })
+      if (res.status === 401) throw new Error("Session expired. Sign in again.")
+      if (!res.ok) throw new Error(`The server returned ${res.status}.`)
 
-      const payload = (await res.json()) as { version: number; blob: string | null };
+      const payload = (await res.json()) as { version: number; blob: string | null }
       if (!payload.blob) {
         toast.info("Nothing to export yet", {
           description:
             "No vault has been pushed from this account. Connect to a host or generate a key, then sync.",
-        });
-        return;
+        })
+        return
       }
 
-      const stamp = new Date().toISOString().slice(0, 10);
-      download(
-        `webxterm-vault-v${payload.version}-${stamp}.json`,
-        payload.blob,
-        "application/json",
-      );
+      const stamp = new Date().toISOString().slice(0, 10)
+      download(`webxterm-vault-v${payload.version}-${stamp}.json`, payload.blob, "application/json")
       toast.success(`Exported vault version ${payload.version}`, {
         description:
           "The file is the same ciphertext the server holds. Only your password can open it.",
-      });
+      })
     } catch (e) {
-      toast.error("Export failed", { description: message(e) });
+      toast.error("Export failed", { description: message(e) })
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
@@ -2432,7 +2426,7 @@ function ExportSection() {
         <span className="text-muted-foreground">Useless without your password.</span>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -2449,33 +2443,33 @@ function ExportSection() {
  * Generous by two orders of magnitude and still a ceiling: a vault of a thousand
  * hosts and a hundred wrapped keys is well under a megabyte of base64.
  */
-const MAX_VAULT_FILE_BYTES = 16_000_000;
+const MAX_VAULT_FILE_BYTES = 16_000_000
 
-const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
+const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
 
 function ImportSection() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const unlocked = useVaultUnlocked();
+  const inputRef = useRef<HTMLInputElement>(null)
+  const unlocked = useVaultUnlocked()
   const [inspected, setInspected] = useState<
     | { ok: true; envelope: VaultEnvelope; bytes: number; name: string }
     | { ok: false; reason: string }
     | null
-  >(null);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<RestoreResult | null>(null);
+  >(null)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<RestoreResult | null>(null)
   // The two failures read very differently to a user. A file that never opened
   // — wrong key, or a format this build does not know — was rejected before
   // anything local was read, so "nothing here changed" is a promise that can be
   // kept. Anything thrown later may have stopped part-way through writing
   // records, and saying otherwise would be a guess dressed as a reassurance.
   const [failure, setFailure] = useState<{
-    kind: "untouched" | "partial";
-    text: string;
-  } | null>(null);
+    kind: "untouched" | "partial"
+    text: string
+  } | null>(null)
 
   async function inspect(file: File) {
-    setResult(null);
-    setFailure(null);
+    setResult(null)
+    setFailure(null)
 
     // Before the read, not after. `accept` on the input is a picker hint and
     // nothing more, and this dialog invites file-picking — a disk image or a
@@ -2488,13 +2482,13 @@ function ImportSection() {
       setInspected({
         ok: false,
         reason: `${file.name} is ${megabytes(file.size)}. A vault export is base64 of one encrypted blob and is far smaller than that, so this is not one.`,
-      });
-      return;
+      })
+      return
     }
 
     try {
-      const text = await file.text();
-      const parsed: unknown = JSON.parse(text);
+      const text = await file.text()
+      const parsed: unknown = JSON.parse(text)
       if (!isEnvelope(parsed)) {
         setInspected({
           ok: false,
@@ -2504,59 +2498,59 @@ function ImportSection() {
           reason: looksLikeEnvelope(parsed)
             ? `This is a vault export in format v${String((parsed as { v: unknown }).v)}, which this build cannot read. It was written by a newer version of webxterm.`
             : "This is not a webxterm vault export. Expected a JSON object with v, iv and ct fields.",
-        });
-        return;
+        })
+        return
       }
       setInspected({
         ok: true,
         envelope: parsed,
         bytes: parsed.ct.length,
         name: file.name,
-      });
+      })
     } catch {
-      setInspected({ ok: false, reason: "The file is not valid JSON." });
+      setInspected({ ok: false, reason: "The file is not valid JSON." })
     }
   }
 
   async function restore() {
-    if (!inspected?.ok) return;
-    const vaultKey = getVaultKey();
+    if (!inspected?.ok) return
+    const vaultKey = getVaultKey()
     if (!vaultKey) {
       // The key is memory-only, so a reload leaves you signed in but locked.
       // Asking for it beats failing with "no usable key".
-      requestUnlock();
-      return;
+      requestUnlock()
+      return
     }
 
-    setBusy(true);
-    setResult(null);
-    setFailure(null);
+    setBusy(true)
+    setResult(null)
+    setFailure(null)
     try {
-      const outcome = await restoreVault(inspected.envelope, vaultKey);
-      setResult(outcome);
+      const outcome = await restoreVault(inspected.envelope, vaultKey)
+      setResult(outcome)
       const added =
-        outcome.hosts.added + outcome.keys.added + outcome.hostKeys.added + outcome.snippets.added;
+        outcome.hosts.added + outcome.keys.added + outcome.hostKeys.added + outcome.snippets.added
       const updated =
         outcome.hosts.updated +
         outcome.keys.updated +
         outcome.hostKeys.updated +
-        outcome.snippets.updated;
+        outcome.snippets.updated
       if (added === 0 && updated === 0) {
-        toast.info("Nothing in that file was newer than what is already here");
+        toast.info("Nothing in that file was newer than what is already here")
       } else {
-        toast.success(`Merged ${added} new and ${updated} updated records`);
+        toast.success(`Merged ${added} new and ${updated} updated records`)
       }
     } catch (e) {
       // A wrong key is the expected failure, not a bug: name that cause rather
       // than reporting a generic "restore failed".
-      const untouched = e instanceof VaultDecryptionError || e instanceof VaultFormatError;
+      const untouched = e instanceof VaultDecryptionError || e instanceof VaultFormatError
       setFailure(
         untouched
           ? { kind: "untouched", text: (e as Error).message }
           : { kind: "partial", text: message(e) },
-      );
+      )
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
@@ -2580,9 +2574,9 @@ function ImportSection() {
           accept="application/json,.json"
           className="sr-only"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void inspect(file);
-            e.target.value = "";
+            const file = e.target.files?.[0]
+            if (file) void inspect(file)
+            e.target.value = ""
           }}
         />
         <div className="flex flex-wrap items-center gap-2">
@@ -2638,7 +2632,7 @@ function ImportSection() {
         {result && <RestoreSummary result={result} />}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /** What the merge did, stated as counts rather than as a claim of success. */
@@ -2648,8 +2642,8 @@ function RestoreSummary({ result }: { result: RestoreResult }) {
     { label: "Portable keys", count: result.keys },
     { label: "Pinned host keys", count: result.hostKeys },
     { label: "Snippets", count: result.snippets },
-  ];
-  const blocked = rows.reduce((n, r) => n + r.count.blockedByDelete, 0);
+  ]
+  const blocked = rows.reduce((n, r) => n + r.count.blockedByDelete, 0)
 
   return (
     <div className="space-y-3 border border-border bg-card p-3">
@@ -2708,7 +2702,7 @@ function RestoreSummary({ result }: { result: RestoreResult }) {
         </p>
       )}
     </div>
-  );
+  )
 }
 
 /**
@@ -2732,52 +2726,52 @@ function RestoreSummary({ result }: { result: RestoreResult }) {
  * and the refusal rather than the old warning to go and cancel first.
  */
 function DeleteAccountSection({ email }: { email: string | null }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState("")
+  const [password, setPassword] = useState("")
+  const [busy, setBusy] = useState(false)
 
-  const target = email ?? "";
-  const matches = target.length > 0 && typed.trim().toLowerCase() === target.toLowerCase();
-  const ready = matches && password.length > 0 && !busy;
+  const target = email ?? ""
+  const matches = target.length > 0 && typed.trim().toLowerCase() === target.toLowerCase()
+  const ready = matches && password.length > 0 && !busy
 
   async function deleteAccount() {
-    if (!email || !ready) return;
-    setBusy(true);
+    if (!email || !ready) return
+    setBusy(true)
     try {
-      await deleteAccountWithVault(email, password);
+      await deleteAccountWithVault(email, password)
 
       // Order matters: the key material goes first, because everything after
       // this can fail without leaving a usable vault key in a tab whose account
       // no longer exists.
-      lock();
-      setPassword("");
+      lock()
+      setPassword("")
 
       // Local stores outlive the account otherwise. Best-effort: a failure here
       // is reported, never swallowed, because the alternative is telling
       // someone their data is gone while it sits in this browser.
-      let cleared = true;
+      let cleared = true
       try {
         await Promise.all([
           idbClear("hosts"),
           idbClear("keys"),
           idbClear("hostkeys"),
           idbClear("vault"),
-        ]);
+        ])
       } catch {
-        cleared = false;
+        cleared = false
       }
 
       toast.success("Account deleted", {
         description: cleared
           ? "This browser's local copies were cleared too. Other browsers keep theirs until their site data is cleared."
           : "The account is gone, but this browser's local stores could not be cleared. Clear the site data for this origin.",
-      });
-      router.push("/");
+      })
+      router.push("/")
     } catch (e) {
-      toast.error("The account was not deleted", { description: message(e) });
-      setBusy(false);
+      toast.error("The account was not deleted", { description: message(e) })
+      setBusy(false)
     }
   }
 
@@ -2798,11 +2792,11 @@ function DeleteAccountSection({ email }: { email: string | null }) {
         <AlertDialog
           open={open}
           onOpenChange={(next) => {
-            if (busy) return;
-            setOpen(next);
+            if (busy) return
+            setOpen(next)
             if (!next) {
-              setTyped("");
-              setPassword("");
+              setTyped("")
+              setPassword("")
             }
           }}
         >
@@ -2871,8 +2865,8 @@ function DeleteAccountSection({ email }: { email: string | null }) {
                 // The dialog must not close on click: the request has to finish
                 // first, and a wrong password has to be reportable.
                 onClick={(e) => {
-                  e.preventDefault();
-                  void deleteAccount();
+                  e.preventDefault()
+                  void deleteAccount()
                 }}
               >
                 {busy ? (
@@ -2887,7 +2881,7 @@ function DeleteAccountSection({ email }: { email: string | null }) {
         </AlertDialog>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* ----------------------------------------------------------------- pieces */
@@ -2898,7 +2892,7 @@ function NotImplemented({ children }: { children: React.ReactNode }) {
       <InfoIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
       <span className="min-w-0">{children}</span>
     </p>
-  );
+  )
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -2909,40 +2903,40 @@ function NotImplemented({ children }: { children: React.ReactNode }) {
  * only AES-GCM can give it.
  */
 function isEnvelope(value: unknown): value is VaultEnvelope {
-  return looksLikeEnvelope(value) && (value as { v: unknown }).v === 1;
+  return looksLikeEnvelope(value) && (value as { v: unknown }).v === 1
 }
 
 /** An envelope of some version — enough to tell "wrong file" from "wrong build". */
 function looksLikeEnvelope(value: unknown): boolean {
-  if (typeof value !== "object" || value === null) return false;
-  const env = value as Record<string, unknown>;
-  return typeof env.v === "number" && typeof env.iv === "string" && typeof env.ct === "string";
+  if (typeof value !== "object" || value === null) return false
+  const env = value as Record<string, unknown>
+  return typeof env.v === "number" && typeof env.iv === "string" && typeof env.ct === "string"
 }
 
 function download(filename: string, contents: string, type: string) {
-  const url = URL.createObjectURL(new Blob([contents], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(new Blob([contents], { type }))
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).slice(0, 2);
-  const letters = parts.map((p) => p[0] ?? "").join("");
-  return (letters || name.slice(0, 2) || "??").toUpperCase();
+  const parts = name.trim().split(/\s+/).slice(0, 2)
+  const letters = parts.map((p) => p[0] ?? "").join("")
+  return (letters || name.slice(0, 2) || "??").toUpperCase()
 }
 
 const DATE_FMT = new Intl.DateTimeFormat("en", {
   year: "numeric",
   month: "short",
   day: "numeric",
-});
+})
 
 function formatDate(at: Date | string): string {
-  const ms = at instanceof Date ? at.getTime() : Date.parse(at);
-  return Number.isFinite(ms) ? DATE_FMT.format(ms) : "unknown";
+  const ms = at instanceof Date ? at.getTime() : Date.parse(at)
+  return Number.isFinite(ms) ? DATE_FMT.format(ms) : "unknown"
 }
 
 /**
@@ -2958,11 +2952,11 @@ const UTC_DATE_FMT = new Intl.DateTimeFormat("en", {
   month: "short",
   day: "numeric",
   timeZone: "UTC",
-});
+})
 
 function formatUtcDate(at: string): string {
-  const ms = Date.parse(at);
-  return Number.isFinite(ms) ? UTC_DATE_FMT.format(ms) : "unknown";
+  const ms = Date.parse(at)
+  return Number.isFinite(ms) ? UTC_DATE_FMT.format(ms) : "unknown"
 }
 
 /** Local, because it names a moment that happened rather than a boundary. */
@@ -2971,11 +2965,11 @@ const DATE_TIME_FMT = new Intl.DateTimeFormat("en", {
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit",
-});
+})
 
 function formatDateTime(at: string): string {
-  const ms = Date.parse(at);
-  return Number.isFinite(ms) ? DATE_TIME_FMT.format(ms) : "unknown";
+  const ms = Date.parse(at)
+  return Number.isFinite(ms) ? DATE_TIME_FMT.format(ms) : "unknown"
 }
 
 /**
@@ -2983,15 +2977,15 @@ function formatDateTime(at: string): string {
  * is a moment in this session — so the date would be noise, and the point of it
  * is to be comparable at a glance with the timestamp beside it.
  */
-const CLOCK_FMT = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
+const CLOCK_FMT = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" })
 
 function formatClock(ms: number): string {
-  return CLOCK_FMT.format(ms);
+  return CLOCK_FMT.format(ms)
 }
 
 function message(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) {
-    return String((e as { message?: unknown }).message ?? "Unknown error");
+    return String((e as { message?: unknown }).message ?? "Unknown error")
   }
-  return String(e ?? "Unknown error");
+  return String(e ?? "Unknown error")
 }

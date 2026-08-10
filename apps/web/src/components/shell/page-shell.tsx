@@ -1,6 +1,6 @@
-import { SiteFooter } from "@/components/shell/site-footer";
-import { SiteHeader } from "@/components/shell/site-header";
-import { cn } from "@/lib/utils";
+import { SiteFooter } from "@/components/shell/site-footer"
+import { SiteHeader } from "@/components/shell/site-header"
+import { cn } from "@/lib/utils"
 
 /**
  * The one shell.
@@ -16,11 +16,11 @@ export function PageShell({
   className,
   bleed = false,
 }: {
-  children: React.ReactNode;
-  authed?: boolean;
-  className?: string;
+  children: React.ReactNode
+  authed?: boolean
+  className?: string
   /** Skip the centred container — for full-width surfaces like the dashboard. */
-  bleed?: boolean;
+  bleed?: boolean
 }) {
   return (
     <div className="flex min-h-svh flex-col">
@@ -30,7 +30,7 @@ export function PageShell({
       </main>
       <SiteFooter />
     </div>
-  );
+  )
 }
 
 /** Consistent page heading for both public pages and dashboard sections. */
@@ -40,10 +40,10 @@ export function PageHeader({
   description,
   actions,
 }: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  actions?: React.ReactNode;
+  eyebrow?: string
+  title: string
+  description?: string
+  actions?: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-3 border-b border-border py-8 sm:flex-row sm:items-end">
@@ -62,5 +62,5 @@ export function PageHeader({
       </div>
       {actions && <div className="flex shrink-0 gap-2 sm:ml-auto">{actions}</div>}
     </div>
-  );
+  )
 }

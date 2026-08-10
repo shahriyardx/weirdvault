@@ -19,7 +19,7 @@
  * running sshd and is reported plainly when it turns out to be wrong.
  */
 
-import type { SftpHandle, SshSession, TransferResult } from "@/lib/ssh/types";
+import type { SftpHandle, SshSession, TransferResult } from "@/lib/ssh/types"
 
 /**
  * How many chunks may sit between the reader and the writer.
@@ -30,7 +30,7 @@ import type { SftpHandle, SshSession, TransferResult } from "@/lib/ssh/types";
  * source fill memory. Eight chunks is a few hundred kilobytes at the sizes the
  * SFTP layer emits.
  */
-const HIGH_WATER_CHUNKS = 8;
+const HIGH_WATER_CHUNKS = 8
 
 /**
  * Turns a push-based producer into a pull-based consumer, with backpressure.
@@ -45,38 +45,38 @@ const HIGH_WATER_CHUNKS = 8;
  * Exactly one reader and one writer. Two of either would need a real channel.
  */
 class ChunkBridge {
-  private queue: Uint8Array[] = [];
-  private ended = false;
-  private failure: unknown = null;
-  private wakeReader: (() => void) | null = null;
-  private wakeWriter: (() => void) | null = null;
+  private queue: Uint8Array[] = []
+  private ended = false
+  private failure: unknown = null
+  private wakeReader: (() => void) | null = null
+  private wakeWriter: (() => void) | null = null
 
   private wake() {
-    this.wakeReader?.();
-    this.wakeReader = null;
-    this.wakeWriter?.();
-    this.wakeWriter = null;
+    this.wakeReader?.()
+    this.wakeReader = null
+    this.wakeWriter?.()
+    this.wakeWriter = null
   }
 
   /** Called by the download sink. Resolves once there is room for more. */
   async push(chunk: Uint8Array): Promise<void> {
-    if (this.failure) throw this.failure;
-    this.queue.push(chunk);
-    this.wakeReader?.();
-    this.wakeReader = null;
+    if (this.failure) throw this.failure
+    this.queue.push(chunk)
+    this.wakeReader?.()
+    this.wakeReader = null
 
     while (this.queue.length >= HIGH_WATER_CHUNKS && !this.failure && !this.ended) {
       await new Promise<void>((resolve) => {
-        this.wakeWriter = resolve;
-      });
+        this.wakeWriter = resolve
+      })
     }
-    if (this.failure) throw this.failure;
+    if (this.failure) throw this.failure
   }
 
   /** The source is exhausted. The reader drains what is left, then sees null. */
   end() {
-    this.ended = true;
-    this.wake();
+    this.ended = true
+    this.wake()
   }
 
   /**
@@ -85,40 +85,40 @@ class ChunkBridge {
    * queue nobody will drain, hangs the whole copy silently.
    */
   fail(error: unknown) {
-    this.failure = error ?? new Error("transfer failed");
-    this.wake();
+    this.failure = error ?? new Error("transfer failed")
+    this.wake()
   }
 
   /** Called by the upload source. Null ends the stream. */
   async next(): Promise<Uint8Array | null> {
     for (;;) {
-      if (this.failure) throw this.failure;
-      const chunk = this.queue.shift();
+      if (this.failure) throw this.failure
+      const chunk = this.queue.shift()
       if (chunk) {
-        this.wakeWriter?.();
-        this.wakeWriter = null;
-        return chunk;
+        this.wakeWriter?.()
+        this.wakeWriter = null
+        return chunk
       }
-      if (this.ended) return null;
+      if (this.ended) return null
       await new Promise<void>((resolve) => {
-        this.wakeReader = resolve;
-      });
+        this.wakeReader = resolve
+      })
     }
   }
 }
 
 export interface RemoteCopyEndpoint {
-  session: SshSession;
-  sftp: SftpHandle;
+  session: SshSession
+  sftp: SftpHandle
 }
 
 export interface RemoteCopyOptions {
-  signal?: AbortSignal;
+  signal?: AbortSignal
   /** Total bytes moved so far. There is no denominator for a directory. */
-  onProgress?: (bytes: number) => void;
+  onProgress?: (bytes: number) => void
 }
 
-export type RemoteCopyStrategy = "sftp" | "tar";
+export type RemoteCopyStrategy = "sftp" | "tar"
 
 /**
  * Copies one entry from `from` to a directory on `to`.
@@ -135,58 +135,58 @@ export async function copyBetweenHosts(
   isDir: boolean,
   opts: RemoteCopyOptions = {},
 ): Promise<{ result: TransferResult; strategy: RemoteCopyStrategy }> {
-  const bridge = new ChunkBridge();
-  let moved = 0;
+  const bridge = new ChunkBridge()
+  let moved = 0
 
-  const abort = () => bridge.fail(new Error("cancelled"));
-  opts.signal?.addEventListener("abort", abort, { once: true });
-  if (opts.signal?.aborted) abort();
+  const abort = () => bridge.fail(new Error("cancelled"))
+  opts.signal?.addEventListener("abort", abort, { once: true })
+  if (opts.signal?.aborted) abort()
 
   const sink = async (chunk: Uint8Array) => {
-    moved += chunk.byteLength;
-    opts.onProgress?.(moved);
-    await bridge.push(chunk);
-  };
+    moved += chunk.byteLength
+    opts.onProgress?.(moved)
+    await bridge.push(chunk)
+  }
 
   // `tar -cf - -C <dir> <base>` names its entries after the basename, and the
   // extract side runs in the destination directory, so the tree lands at
   // <destinationDir>/<base> without either side being told the final path.
   const read = isDir
     ? from.session.downloadTar(sourcePath, sink)
-    : from.sftp.download(sourcePath, sink);
+    : from.sftp.download(sourcePath, sink)
 
-  const base = basename(sourcePath);
+  const base = basename(sourcePath)
   const write = isDir
     ? to.session.uploadTar(destinationDir, () => bridge.next())
-    : to.sftp.upload(joinPath(destinationDir, base), () => bridge.next());
+    : to.sftp.upload(joinPath(destinationDir, base), () => bridge.next())
 
   // Each half tells the bridge when it is finished or has failed, so the other
   // half is never left waiting on a peer that has already given up.
   const reading = read.then(
     () => bridge.end(),
     (error: unknown) => {
-      bridge.fail(error);
-      throw error;
+      bridge.fail(error)
+      throw error
     },
-  );
+  )
   const writing = write.catch((error: unknown) => {
-    bridge.fail(error);
-    throw error;
-  });
+    bridge.fail(error)
+    throw error
+  })
 
   try {
     // allSettled rather than all: the rejection that matters is whichever failed
     // first, and `all` would surface the follow-on "cancelled" from the other
     // half just as readily. Reported below in a fixed order instead.
-    const [readOutcome, writeOutcome] = await Promise.allSettled([reading, writing]);
-    if (readOutcome.status === "rejected") throw asError(readOutcome.reason, from, isDir);
-    if (writeOutcome.status === "rejected") throw asError(writeOutcome.reason, to, isDir);
+    const [readOutcome, writeOutcome] = await Promise.allSettled([reading, writing])
+    if (readOutcome.status === "rejected") throw asError(readOutcome.reason, from, isDir)
+    if (writeOutcome.status === "rejected") throw asError(writeOutcome.reason, to, isDir)
     return {
       strategy: isDir ? "tar" : "sftp",
       result: writeOutcome.value,
-    };
+    }
   } finally {
-    opts.signal?.removeEventListener("abort", abort);
+    opts.signal?.removeEventListener("abort", abort)
   }
 }
 
@@ -195,20 +195,20 @@ export async function copyBetweenHosts(
  * reads as a mystery failure on a copy that would have worked as a file.
  */
 function asError(reason: unknown, _end: RemoteCopyEndpoint, isDir: boolean): Error {
-  const message = reason instanceof Error ? reason.message : String(reason);
+  const message = reason instanceof Error ? reason.message : String(reason)
   if (isDir && /not found|no such file|127/i.test(message)) {
     return new Error(
       `${message} — copying a directory between hosts uses tar on both ends, and one of them does not appear to have it.`,
-    );
+    )
   }
-  return reason instanceof Error ? reason : new Error(message);
+  return reason instanceof Error ? reason : new Error(message)
 }
 
 function basename(path: string): string {
-  const trimmed = path.replace(/\/+$/, "");
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed;
+  const trimmed = path.replace(/\/+$/, "")
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed
 }
 
 function joinPath(dir: string, name: string): string {
-  return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
+  return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`
 }

@@ -1,10 +1,10 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
-import { headers } from "next/headers";
+import { and, desc, eq, isNull } from "drizzle-orm"
+import { headers } from "next/headers"
 
-import { clientAddress } from "@/lib/audit/address";
-import { ipPrefix } from "@/lib/audit/events";
-import { auth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
+import { clientAddress } from "@/lib/audit/address"
+import { ipPrefix } from "@/lib/audit/events"
+import { auth } from "@/lib/auth"
+import { db, schema } from "@/lib/db"
 
 /**
  * Device registry.
@@ -43,11 +43,11 @@ import { db, schema } from "@/lib/db";
  */
 
 async function requireSession() {
-  return (await auth.api.getSession({ headers: await headers() })) ?? null;
+  return (await auth.api.getSession({ headers: await headers() })) ?? null
 }
 
 async function requireUser() {
-  return (await requireSession())?.user ?? null;
+  return (await requireSession())?.user ?? null
 }
 
 /**
@@ -60,7 +60,7 @@ async function requireUser() {
  */
 async function bindSessionToDevice(sessionId: string, deviceId: string): Promise<void> {
   try {
-    await db.update(schema.session).set({ deviceId }).where(eq(schema.session.id, sessionId));
+    await db.update(schema.session).set({ deviceId }).where(eq(schema.session.id, sessionId))
   } catch {
     /* see above */
   }
@@ -68,12 +68,12 @@ async function bindSessionToDevice(sessionId: string, deviceId: string): Promise
 
 /** Null unless a trusted proxy is configured — see lib/audit/address.ts. */
 async function clientIpPrefix(): Promise<string | null> {
-  return ipPrefix(clientAddress(await headers()));
+  return ipPrefix(clientAddress(await headers()))
 }
 
 export async function GET() {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   const rows = await db
     .select({
@@ -91,54 +91,54 @@ export async function GET() {
     })
     .from(schema.device)
     .where(eq(schema.device.userId, user.id))
-    .orderBy(desc(schema.device.lastSeenAt));
+    .orderBy(desc(schema.device.lastSeenAt))
 
-  return Response.json({ devices: rows });
+  return Response.json({ devices: rows })
 }
 
 export async function POST(request: Request) {
-  const session = await requireSession();
-  const user = session?.user;
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await requireSession()
+  const user = session?.user
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown>
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { id, label, platform, signingKey } = body;
+  const { id, label, platform, signingKey } = body
   if (typeof id !== "string" || typeof label !== "string" || typeof signingKey !== "string") {
-    return Response.json({ error: "id, label and signingKey required" }, { status: 400 });
+    return Response.json({ error: "id, label and signingKey required" }, { status: 400 })
   }
   if (label.length > 80 || signingKey.length > 128) {
-    return Response.json({ error: "field too long" }, { status: 400 });
+    return Response.json({ error: "field too long" }, { status: 400 })
   }
 
-  const prefix = await clientIpPrefix();
+  const prefix = await clientIpPrefix()
 
   const [existing] = await db
     .select()
     .from(schema.device)
     .where(and(eq(schema.device.userId, user.id), eq(schema.device.signingKey, signingKey)))
-    .limit(1);
+    .limit(1)
 
   if (existing) {
     // A revoked device may not quietly come back by re-registering; that would
     // make revocation meaningless.
     if (existing.revokedAt) {
-      return Response.json({ error: "device revoked" }, { status: 403 });
+      return Response.json({ error: "device revoked" }, { status: 403 })
     }
 
     await db
       .update(schema.device)
       .set({ lastSeenAt: new Date(), lastSeenIpPrefix: prefix })
-      .where(eq(schema.device.id, existing.id));
+      .where(eq(schema.device.id, existing.id))
 
-    await bindSessionToDevice(session.session.id, existing.id);
+    await bindSessionToDevice(session.session.id, existing.id)
 
-    return Response.json({ id: existing.id });
+    return Response.json({ id: existing.id })
   }
 
   await db.insert(schema.device).values({
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
     platform: typeof platform === "string" ? platform : null,
     signingKey,
     lastSeenIpPrefix: prefix,
-  });
+  })
 
   await db.insert(schema.auditEvent).values({
     id: crypto.randomUUID(),
@@ -158,19 +158,19 @@ export async function POST(request: Request) {
     source: "server",
     ipPrefix: prefix,
     metadata: typeof platform === "string" ? { platform } : {},
-  });
+  })
 
-  await bindSessionToDevice(session.session.id, id);
+  await bindSessionToDevice(session.session.id, id)
 
-  return Response.json({ id }, { status: 201 });
+  return Response.json({ id }, { status: 201 })
 }
 
 export async function DELETE(request: Request) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const id = new URL(request.url).searchParams.get("id");
-  if (!id) return Response.json({ error: "id required" }, { status: 400 });
+  const id = new URL(request.url).searchParams.get("id")
+  if (!id) return Response.json({ error: "id required" }, { status: 400 })
 
   const result = await db
     .update(schema.device)
@@ -182,10 +182,10 @@ export async function DELETE(request: Request) {
         isNull(schema.device.revokedAt),
       ),
     )
-    .returning({ id: schema.device.id });
+    .returning({ id: schema.device.id })
 
   if (result.length === 0) {
-    return Response.json({ error: "not found or already revoked" }, { status: 404 });
+    return Response.json({ error: "not found or already revoked" }, { status: 404 })
   }
 
   // Revoking the device must also end its sessions, or "revoked" only means
@@ -200,7 +200,7 @@ export async function DELETE(request: Request) {
   // is gone. The UI says so rather than promising an instant cut-off.
   await db
     .delete(schema.session)
-    .where(and(eq(schema.session.userId, user.id), eq(schema.session.deviceId, id)));
+    .where(and(eq(schema.session.userId, user.id), eq(schema.session.deviceId, id)))
 
   await db.insert(schema.auditEvent).values({
     id: crypto.randomUUID(),
@@ -209,7 +209,7 @@ export async function DELETE(request: Request) {
     source: "server",
     ipPrefix: await clientIpPrefix(),
     metadata: { revokedDeviceId: id },
-  });
+  })
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true })
 }

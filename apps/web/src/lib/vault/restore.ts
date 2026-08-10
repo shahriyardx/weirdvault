@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Restoring an exported vault.
@@ -37,12 +37,12 @@
  * what carries the restored records to the account's other devices.
  */
 
-import { listHosts, putHost } from "@/lib/hosts";
-import { listPins, putPin } from "@/lib/hostkeys";
-import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys";
-import { listSnippets, putSnippet } from "@/lib/snippets";
+import { listHosts, putHost } from "@/lib/hosts"
+import { listPins, putPin } from "@/lib/hostkeys"
+import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys"
+import { listSnippets, putSnippet } from "@/lib/snippets"
 
-import { decryptVault, fromB64, type VaultEnvelope } from "./crypto";
+import { decryptVault, fromB64, type VaultEnvelope } from "./crypto"
 import {
   hostStamp,
   mergeVault,
@@ -50,8 +50,8 @@ import {
   type SyncedKey,
   type SyncResult,
   type VaultDocument,
-} from "./sync";
-import { getTombstones, setTombstones } from "./tombstones";
+} from "./sync"
+import { getTombstones, setTombstones } from "./tombstones"
 
 /**
  * A file this build has no reader for. Distinct from a decryption failure
@@ -63,8 +63,8 @@ export class VaultFormatError extends Error {
   constructor(version: unknown) {
     super(
       `This file declares vault format v${String(version)}, which this build cannot read. It was written by a newer version of webxterm.`,
-    );
-    this.name = "VaultFormatError";
+    )
+    this.name = "VaultFormatError"
   }
 }
 
@@ -81,36 +81,36 @@ export class VaultDecryptionError extends Error {
     super(
       "This file did not decrypt with the vault key currently unlocked. It is an export from a different account, or from a different password.",
       options,
-    );
-    this.name = "VaultDecryptionError";
+    )
+    this.name = "VaultDecryptionError"
   }
 }
 
 /** What a restore did to one kind of record. Counts, not claims. */
 export interface RestoreCount {
   /** How many records of this kind the file contained. */
-  inFile: number;
+  inFile: number
   /** Of those, how many did not exist on this device at all. */
-  added: number;
+  added: number
   /** How many existed here but were older than the copy in the file. */
-  updated: number;
+  updated: number
   /** How many stayed deleted because a tombstone here outranked them. */
-  blockedByDelete: number;
+  blockedByDelete: number
 }
 
 export interface RestoreResult {
-  hosts: RestoreCount;
-  keys: RestoreCount;
-  hostKeys: RestoreCount;
-  snippets: RestoreCount;
+  hosts: RestoreCount
+  keys: RestoreCount
+  hostKeys: RestoreCount
+  snippets: RestoreCount
   /**
    * Outcome of the push that follows the merge, or null if it failed. Null does
    * not mean the restore did nothing: the merge is already on this device and
    * will go up on the next successful sync.
    */
-  sync: SyncResult | null;
+  sync: SyncResult | null
   /** Why the push failed, when it did. */
-  syncError?: string;
+  syncError?: string
 }
 
 /* ------------------------------------------------------------- decoding --- */
@@ -120,12 +120,12 @@ export interface RestoreResult {
  * `.buffer` is safe; the cast only tells TypeScript what the runtime already
  * guarantees (it is never a SharedArrayBuffer).
  */
-const toBuffer = (s: string): ArrayBuffer => fromB64(s).buffer as ArrayBuffer;
+const toBuffer = (s: string): ArrayBuffer => fromB64(s).buffer as ArrayBuffer
 
 function toB64(b: ArrayBuffer): string {
-  let s = "";
-  for (const byte of new Uint8Array(b)) s += String.fromCharCode(byte);
-  return btoa(s);
+  let s = ""
+  for (const byte of new Uint8Array(b)) s += String.fromCharCode(byte)
+  return btoa(s)
 }
 
 /**
@@ -134,7 +134,7 @@ function toB64(b: ArrayBuffer): string {
  * is nothing to put in a document — which is the property that mode exists for.
  */
 function toSyncedKey(rec: StoredKey): SyncedKey | null {
-  if (rec.mode !== "portable" || !rec.wrapped) return null;
+  if (rec.mode !== "portable" || !rec.wrapped) return null
   return {
     id: rec.id,
     label: rec.label,
@@ -145,7 +145,7 @@ function toSyncedKey(rec: StoredKey): SyncedKey | null {
       ciphertext: toB64(rec.wrapped.ciphertext),
     },
     createdAt: rec.createdAt,
-  };
+  }
 }
 
 /** Mirror of sync.ts's fromSyncedKey, which is private to that module. */
@@ -160,7 +160,7 @@ function fromSyncedKey(k: SyncedKey): StoredKey {
       ciphertext: toBuffer(k.wrapped.ciphertext),
     },
     createdAt: k.createdAt,
-  };
+  }
 }
 
 /**
@@ -177,7 +177,7 @@ function normalise(doc: Partial<VaultDocument> | null | undefined): VaultDocumen
     snippets: doc?.snippets ?? [],
     tombstones: doc?.tombstones ?? {},
     updatedAt: doc?.updatedAt ?? 0,
-  };
+  }
 }
 
 /* ----------------------------------------------------------- local state --- */
@@ -190,7 +190,7 @@ async function localDocument(): Promise<VaultDocument> {
     listPins(),
     listSnippets(),
     getTombstones(),
-  ]);
+  ])
 
   return {
     hosts,
@@ -199,18 +199,18 @@ async function localDocument(): Promise<VaultDocument> {
     snippets,
     tombstones,
     updatedAt: Date.now(),
-  };
+  }
 }
 
 /** Mirrors sync.ts's applyLocally. Upserts only; deletes are tombstone-driven. */
 async function applyLocally(doc: VaultDocument): Promise<void> {
   // putHost, not saveHost: the merge already decided which copy wins, and
   // saveHost would restamp it as an edit made here and now.
-  for (const host of doc.hosts) await putHost(host);
-  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key));
-  for (const pin of doc.hostKeys) await putPin(pin);
-  for (const snippet of doc.snippets) await putSnippet(snippet);
-  await setTombstones(doc.tombstones);
+  for (const host of doc.hosts) await putHost(host)
+  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key))
+  for (const pin of doc.hostKeys) await putPin(pin)
+  for (const snippet of doc.snippets) await putSnippet(snippet)
+  await setTombstones(doc.tombstones)
 }
 
 /* -------------------------------------------------------------- counting --- */
@@ -221,27 +221,27 @@ function countAgainst<T extends { id: string }>(
   merged: T[],
   stamp: (item: T) => number,
 ): RestoreCount {
-  const localById = new Map(local.map((i) => [i.id, i]));
-  const mergedById = new Map(merged.map((i) => [i.id, i]));
+  const localById = new Map(local.map((i) => [i.id, i]))
+  const mergedById = new Map(merged.map((i) => [i.id, i]))
 
-  let added = 0;
-  let updated = 0;
-  let blockedByDelete = 0;
+  let added = 0
+  let updated = 0
+  let blockedByDelete = 0
 
   for (const item of imported) {
-    const winner = mergedById.get(item.id);
+    const winner = mergedById.get(item.id)
     // Absent from the merge means a tombstone newer than this record removed
     // it — the deliberate-delete-beats-old-backup case.
     if (!winner) {
-      blockedByDelete++;
-      continue;
+      blockedByDelete++
+      continue
     }
-    const here = localById.get(item.id);
-    if (!here) added++;
-    else if (stamp(winner) > stamp(here)) updated++;
+    const here = localById.get(item.id)
+    if (!here) added++
+    else if (stamp(winner) > stamp(here)) updated++
   }
 
-  return { inFile: imported.length, added, updated, blockedByDelete };
+  return { inFile: imported.length, added, updated, blockedByDelete }
 }
 
 /* --------------------------------------------------------------- restore --- */
@@ -262,18 +262,18 @@ export async function restoreVault(
   // version by throwing, and folding that into VaultDecryptionError would tell
   // someone their password was wrong when the real answer is that the file is
   // from a newer build. Two different problems, two different messages.
-  if (envelope.v !== 1) throw new VaultFormatError((envelope as { v: unknown }).v);
+  if (envelope.v !== 1) throw new VaultFormatError((envelope as { v: unknown }).v)
 
-  let imported: VaultDocument;
+  let imported: VaultDocument
   try {
-    imported = normalise(await decryptVault<Partial<VaultDocument>>(vaultKey, envelope));
+    imported = normalise(await decryptVault<Partial<VaultDocument>>(vaultKey, envelope))
   } catch (cause) {
-    throw new VaultDecryptionError({ cause });
+    throw new VaultDecryptionError({ cause })
   }
 
-  const local = await localDocument();
-  const merged = mergeVault(local, imported);
-  await applyLocally(merged);
+  const local = await localDocument()
+  const merged = mergeVault(local, imported)
+  await applyLocally(merged)
 
   // Stamps must match the ones mergeVault resolves on, or the counts would
   // describe a different merge than the one that happened.
@@ -283,13 +283,13 @@ export async function restoreVault(
     hostKeys: countAgainst(local.hostKeys, imported.hostKeys, merged.hostKeys, (k) => k.pinnedAt),
     snippets: countAgainst(local.snippets, imported.snippets, merged.snippets, (s) => s.updatedAt),
     sync: null,
-  };
-
-  try {
-    result.sync = await syncVault(vaultKey);
-  } catch (e) {
-    result.syncError = e instanceof Error ? e.message : String(e);
   }
 
-  return result;
+  try {
+    result.sync = await syncVault(vaultKey)
+  } catch (e) {
+    result.syncError = e instanceof Error ? e.message : String(e)
+  }
+
+  return result
 }

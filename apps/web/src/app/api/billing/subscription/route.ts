@@ -1,16 +1,16 @@
-import { headers } from "next/headers";
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { AUDIT_RETENTION_DAYS, AUDIT_RETENTION_LABEL } from "@/lib/audit/retention";
-import { billingConfigured } from "@/lib/billing/stripe";
-import { billingStateFor } from "@/lib/billing/subscription";
+import { auth } from "@/lib/auth"
+import { AUDIT_RETENTION_DAYS, AUDIT_RETENTION_LABEL } from "@/lib/audit/retention"
+import { billingConfigured } from "@/lib/billing/stripe"
+import { billingStateFor } from "@/lib/billing/subscription"
 import {
   PRO_PRICE_LABEL,
   PRO_PRICE_UNIT,
   SESSION_RECORDING,
   TIER_LABELS,
   relayAllowanceForTier,
-} from "@/lib/billing/tiers";
+} from "@/lib/billing/tiers"
 
 /**
  * What plan this account is on, as the browser is allowed to know it.
@@ -36,10 +36,10 @@ import {
  */
 
 export async function GET() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const state = await billingStateFor(session.user.id);
+  const state = await billingStateFor(session.user.id)
 
   return Response.json({
     tier: state.tier,
@@ -76,5 +76,5 @@ export async function GET() {
       auditRetentionLabel: AUDIT_RETENTION_LABEL[state.tier],
       sessionRecording: SESSION_RECORDING[state.tier],
     },
-  });
+  })
 }

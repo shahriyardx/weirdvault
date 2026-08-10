@@ -59,7 +59,7 @@
  * deriveSecrets, so the two cannot drift.
  */
 
-import { argon2id } from "hash-wasm";
+import { argon2id } from "hash-wasm"
 
 /** OWASP-recommended Argon2id parameters, tuned to stay tolerable on mobile. */
 export const ARGON2_PARAMS = {
@@ -67,13 +67,13 @@ export const ARGON2_PARAMS = {
   iterations: 3,
   memorySize: 65536, // 64 MiB
   hashLength: 32,
-} as const;
+} as const
 
-const AUTH_INFO = "webxterm/auth/v1";
-const VAULT_INFO = "webxterm/vault/v1";
-const AUDIT_INFO = "webxterm/audit/v1";
+const AUTH_INFO = "webxterm/auth/v1"
+const VAULT_INFO = "webxterm/vault/v1"
+const AUDIT_INFO = "webxterm/audit/v1"
 
-const enc = new TextEncoder();
+const enc = new TextEncoder()
 
 /**
  * Per-user salt.
@@ -89,14 +89,14 @@ const enc = new TextEncoder();
  * emails, so it cannot be used as an account-existence oracle.
  */
 async function saltFor(email: string): Promise<Uint8Array> {
-  const material = enc.encode(`webxterm/salt/v1:${email.trim().toLowerCase()}`);
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", material));
+  const material = enc.encode(`webxterm/salt/v1:${email.trim().toLowerCase()}`)
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", material))
 }
 
 async function hkdf(master: Uint8Array, info: string, bytes = 32): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey("raw", master as BufferSource, "HKDF", false, [
     "deriveBits",
-  ]);
+  ])
   const bits = await crypto.subtle.deriveBits(
     {
       name: "HKDF",
@@ -106,15 +106,15 @@ async function hkdf(master: Uint8Array, info: string, bytes = 32): Promise<Uint8
     },
     key,
     bytes * 8,
-  );
-  return new Uint8Array(bits);
+  )
+  return new Uint8Array(bits)
 }
 
 export interface DerivedSecrets {
   /** Sent to the server in place of a password. Useless for decryption. */
-  authToken: string;
+  authToken: string
   /** Stays on the device. Unwraps everything in the vault. */
-  vaultKey: CryptoKey;
+  vaultKey: CryptoKey
   /**
    * Blinds hostnames before they reach the audit log. Stays on the device.
    *
@@ -124,7 +124,7 @@ export interface DerivedSecrets {
    * transient view of the same fact. HMAC under this key gives the server a
    * stable opaque handle it can group a timeline by, and nothing more.
    */
-  auditKey: CryptoKey;
+  auditKey: CryptoKey
 }
 
 /**
@@ -134,33 +134,33 @@ export interface DerivedSecrets {
  * existing ones byte-identical — no vault re-encryption, no migration.
  */
 async function deriveBranches(email: string, password: string): Promise<RawSecretBytes> {
-  const salt = await saltFor(email);
+  const salt = await saltFor(email)
 
   const master = await argon2id({
     password,
     salt,
     ...ARGON2_PARAMS,
     outputType: "binary",
-  });
+  })
 
   const [authToken, vaultKey, auditKey] = await Promise.all([
     hkdf(master, AUTH_INFO),
     hkdf(master, VAULT_INFO),
     hkdf(master, AUDIT_INFO),
-  ]);
+  ])
 
-  master.fill(0);
-  return { authToken, vaultKey, auditKey };
+  master.fill(0)
+  return { authToken, vaultKey, auditKey }
 }
 
 export async function deriveSecrets(email: string, password: string): Promise<DerivedSecrets> {
-  const raw = await deriveBranches(email, password);
+  const raw = await deriveBranches(email, password)
   try {
-    return await importRawSecretBytes(raw);
+    return await importRawSecretBytes(raw)
   } finally {
     // Wipe what we can. JS gives no guarantees here, but leaving copies around
     // deliberately would be worse.
-    zeroRawSecretBytes(raw);
+    zeroRawSecretBytes(raw)
   }
 }
 
@@ -177,18 +177,18 @@ export async function deriveSecrets(email: string, password: string): Promise<De
  * bytes, so importRawSecretBytes reproduces the string exactly.
  */
 export interface RawSecretBytes {
-  authToken: Uint8Array;
-  vaultKey: Uint8Array;
-  auditKey: Uint8Array;
+  authToken: Uint8Array
+  vaultKey: Uint8Array
+  auditKey: Uint8Array
 }
 
-export const SECRET_BRANCH_BYTES = 32;
+export const SECRET_BRANCH_BYTES = 32
 
 /** Best-effort erasure of a raw branch set. Call it; JS will not do it for you. */
 export function zeroRawSecretBytes(raw: RawSecretBytes): void {
-  raw.authToken.fill(0);
-  raw.vaultKey.fill(0);
-  raw.auditKey.fill(0);
+  raw.authToken.fill(0)
+  raw.vaultKey.fill(0)
+  raw.auditKey.fill(0)
 }
 
 /**
@@ -210,11 +210,11 @@ export async function withRawSecretBytes_DANGEROUS<T>(
   password: string,
   consume: (raw: RawSecretBytes) => Promise<T>,
 ): Promise<T> {
-  const raw = await deriveBranches(email, password);
+  const raw = await deriveBranches(email, password)
   try {
-    return await consume(raw);
+    return await consume(raw)
   } finally {
-    zeroRawSecretBytes(raw);
+    zeroRawSecretBytes(raw)
   }
 }
 
@@ -239,20 +239,20 @@ export async function importRawSecretBytes(raw: RawSecretBytes): Promise<Derived
     "AES-GCM",
     false,
     ["encrypt", "decrypt"],
-  );
+  )
   const auditKey = await crypto.subtle.importKey(
     "raw",
     raw.auditKey as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
-  );
+  )
 
-  return { authToken: b64(raw.authToken), vaultKey, auditKey };
+  return { authToken: b64(raw.authToken), vaultKey, auditKey }
 }
 
 function b64(b: Uint8Array): string {
-  let s = "";
-  for (const byte of b) s += String.fromCharCode(byte);
-  return btoa(s);
+  let s = ""
+  for (const byte of b) s += String.fromCharCode(byte)
+  return btoa(s)
 }

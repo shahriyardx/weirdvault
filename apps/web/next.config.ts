@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   // Emits a self-contained server bundle with only the node_modules it
@@ -24,6 +24,6 @@ const nextConfig: NextConfig = {
      */
     sri: { algorithm: "sha384" },
   },
-};
+}
 
-export default nextConfig;
+export default nextConfig

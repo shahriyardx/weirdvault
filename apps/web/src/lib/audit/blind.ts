@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Host blinding for the audit log.
@@ -19,13 +19,13 @@
  * the relay already observes each connection as it happens.
  */
 
-const DOMAIN = "webxterm/audit/host/v1";
-const REF_BYTES = 16;
+const DOMAIN = "webxterm/audit/host/v1"
+const REF_BYTES = 16
 
 function b64url(bytes: Uint8Array): string {
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  let s = ""
+  for (const b of bytes) s += String.fromCharCode(b)
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
 /**
@@ -34,11 +34,11 @@ function b64url(bytes: Uint8Array): string {
 export async function blindHost(auditKey: CryptoKey, host: string, port: number): Promise<string> {
   // Normalise so the same server always produces the same ref regardless of
   // how the user typed it.
-  const canonical = `${DOMAIN}|${host.trim().toLowerCase()}|${port}`;
+  const canonical = `${DOMAIN}|${host.trim().toLowerCase()}|${port}`
   const mac = new Uint8Array(
     await crypto.subtle.sign("HMAC", auditKey, new TextEncoder().encode(canonical)),
-  );
-  return b64url(mac.slice(0, REF_BYTES));
+  )
+  return b64url(mac.slice(0, REF_BYTES))
 }
 
 /**
@@ -50,11 +50,11 @@ export async function buildRefIndex(
   auditKey: CryptoKey,
   hosts: { hostname: string; port: number; label: string }[],
 ): Promise<Map<string, string>> {
-  const index = new Map<string, string>();
+  const index = new Map<string, string>()
   await Promise.all(
     hosts.map(async (h) => {
-      index.set(await blindHost(auditKey, h.hostname, h.port), h.label);
+      index.set(await blindHost(auditKey, h.hostname, h.port), h.label)
     }),
-  );
-  return index;
+  )
+  return index
 }

@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto"
 
-import { runMaintenance } from "@/lib/maintenance";
+import { runMaintenance } from "@/lib/maintenance"
 
 /**
  * The scheduled cleanup: audit rows past their retention window, abandoned
@@ -58,7 +58,7 @@ import { runMaintenance } from "@/lib/maintenance";
  */
 
 /** Node APIs and a database; never static, never cached. */
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"
 
 /**
  * Long enough for a real sweep, short enough that a stuck run is noticed.
@@ -66,20 +66,20 @@ export const dynamic = "force-dynamic";
  * — and it matters on platforms that cap a function's duration, where a run cut
  * short has still made real progress because every job commits as it goes.
  */
-export const maxDuration = 300;
+export const maxDuration = 300
 
 function authorised(request: Request): boolean {
-  const expected = process.env.CRON_SECRET ?? "";
-  if (!expected) return false;
+  const expected = process.env.CRON_SECRET ?? ""
+  if (!expected) return false
 
-  const header = request.headers.get("authorization") ?? "";
-  const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const header = request.headers.get("authorization") ?? ""
+  const presented = header.startsWith("Bearer ") ? header.slice(7) : ""
 
   // Compared as bytes at equal length, so it cannot be timed. The length check
   // is unavoidable and leaks only the length.
-  const a = Buffer.from(presented);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  const a = Buffer.from(presented)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 export async function POST(request: Request) {
@@ -93,26 +93,26 @@ export async function POST(request: Request) {
           "compose.prod.yaml ships one.",
       },
       { status: 503 },
-    );
+    )
   }
 
   if (!authorised(request)) {
     // No detail. The only caller that should reach this is a scheduler with the
     // wrong secret, and telling anyone else what is missing helps only them.
-    return Response.json({ error: "unauthorized" }, { status: 401 });
+    return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 
   // `?dryRun=1` counts what each job would do and changes nothing — the first
   // thing worth doing after wiring up a scheduler is seeing what it is about to
   // delete on real data.
-  const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
-  const report = await runMaintenance(dryRun);
+  const dryRun = new URL(request.url).searchParams.get("dryRun") === "1"
+  const report = await runMaintenance(dryRun)
 
   for (const job of report.jobs) {
     console.info(
       `maintenance: ${job.job} — ${job.summary}${job.truncated ? " (truncated; more remains)" : ""}`,
-    );
+    )
   }
 
-  return Response.json(report, { status: report.ok ? 200 : 500 });
+  return Response.json(report, { status: report.ok ? 200 : 500 })
 }

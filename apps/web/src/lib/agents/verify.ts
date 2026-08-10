@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto";
+import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto"
 
 /**
  * Proving an agent is the machine it claims to be.
@@ -24,7 +24,7 @@ import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto
  * test below that pins it against a fixture the Go implementation produced.
  */
 export function verifyingMessage(agentId: string, nonce: string): Buffer {
-  return Buffer.from(`webxterm-agent-v1\n${agentId}\n${nonce}`, "utf8");
+  return Buffer.from(`webxterm-agent-v1\n${agentId}\n${nonce}`, "utf8")
 }
 
 /**
@@ -35,10 +35,10 @@ export function verifyingMessage(agentId: string, nonce: string): Buffer {
  * bit string — so the whole structure is this constant followed by the key.
  * Building it by hand avoids a dependency for twelve bytes that cannot vary.
  */
-const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex")
 
-const ED25519_PUBLIC_KEY_BYTES = 32;
-const ED25519_SIGNATURE_BYTES = 64;
+const ED25519_PUBLIC_KEY_BYTES = 32
+const ED25519_SIGNATURE_BYTES = 64
 
 /**
  * The fingerprint shown to the user, in the format SSH uses for host keys.
@@ -51,8 +51,8 @@ const ED25519_SIGNATURE_BYTES = 64;
  * Must match `fingerprint` in apps/agent/main.go.
  */
 export function fingerprintFor(publicKeyBase64: string): string {
-  const raw = Buffer.from(publicKeyBase64, "base64");
-  return `SHA256:${createHash("sha256").update(raw).digest("base64").replace(/=+$/, "")}`;
+  const raw = Buffer.from(publicKeyBase64, "base64")
+  return `SHA256:${createHash("sha256").update(raw).digest("base64").replace(/=+$/, "")}`
 }
 
 /**
@@ -64,31 +64,31 @@ export function fingerprintFor(publicKeyBase64: string): string {
  * tell malformed from merely wrong by watching status codes.
  */
 export function verifyAgentSignature(args: {
-  publicKeyBase64: string;
-  agentId: string;
-  nonce: string;
-  signatureBase64: string;
+  publicKeyBase64: string
+  agentId: string
+  nonce: string
+  signatureBase64: string
 }): boolean {
   try {
-    const publicKey = Buffer.from(args.publicKeyBase64, "base64");
-    const signature = Buffer.from(args.signatureBase64, "base64");
+    const publicKey = Buffer.from(args.publicKeyBase64, "base64")
+    const signature = Buffer.from(args.signatureBase64, "base64")
 
     // Checked explicitly because base64 decoding is forgiving: a truncated or
     // padded blob decodes to the wrong length rather than failing, and handing
     // that to createPublicKey produces an exception several frames away from
     // the actual problem.
-    if (publicKey.length !== ED25519_PUBLIC_KEY_BYTES) return false;
-    if (signature.length !== ED25519_SIGNATURE_BYTES) return false;
+    if (publicKey.length !== ED25519_PUBLIC_KEY_BYTES) return false
+    if (signature.length !== ED25519_SIGNATURE_BYTES) return false
 
     const key = createPublicKey({
       key: Buffer.concat([ED25519_SPKI_PREFIX, publicKey]),
       format: "der",
       type: "spki",
-    });
+    })
 
     // Ed25519 signs the message directly; the algorithm argument must be null.
-    return cryptoVerify(null, verifyingMessage(args.agentId, args.nonce), key, signature);
+    return cryptoVerify(null, verifyingMessage(args.agentId, args.nonce), key, signature)
   } catch {
-    return false;
+    return false
   }
 }

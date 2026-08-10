@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * The browser's half of billing: the plan this tab has been told about, and the
@@ -34,61 +34,61 @@
  * evidence, and the server would have allowed it.
  */
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react"
 
 /** The plan, exactly as /api/billing/subscription describes it. */
 export interface BillingSnapshot {
-  tier: "free" | "pro";
+  tier: "free" | "pro"
   /** "Free" or "Pro", for rendering. */
-  label: string;
+  label: string
   /** Stripe's status string, or null for an account that has never subscribed. */
-  status: string | null;
+  status: string | null
   /** ISO timestamp, or null. Renewal date, or lapse date when cancelling. */
-  currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-  hasCustomer: boolean;
+  currentPeriodEnd: string | null
+  cancelAtPeriodEnd: boolean
+  hasCustomer: boolean
   /** The server could not read the subscription table and assumed access. */
-  degraded: boolean;
+  degraded: boolean
   /** False on a deployment with no Stripe keys. Nothing can be bought there. */
-  billingConfigured: boolean;
-  price: { label: string; unit: string };
+  billingConfigured: boolean
+  price: { label: string; unit: string }
   limits: {
-    relayAllowanceBytes: number;
-    auditRetentionDays: number;
-    auditRetentionLabel: string;
-    sessionRecording: boolean;
-  };
+    relayAllowanceBytes: number
+    auditRetentionDays: number
+    auditRetentionLabel: string
+    sessionRecording: boolean
+  }
 }
 
 /** What a consumer sees: the plan, whether it is still loading, and why not. */
 export interface BillingView {
-  billing: BillingSnapshot | null;
-  loading: boolean;
+  billing: BillingSnapshot | null
+  loading: boolean
   /** Set when the read failed. The plan below is then the last one that worked, or null. */
-  error: string | null;
+  error: string | null
 }
 
 /* ------------------------------------------------------------------- store */
 
-let view: BillingView = { billing: null, loading: false, error: null };
-const listeners = new Set<() => void>();
-let inFlight: Promise<BillingSnapshot | null> | null = null;
+let view: BillingView = { billing: null, loading: false, error: null }
+const listeners = new Set<() => void>()
+let inFlight: Promise<BillingSnapshot | null> | null = null
 
 function publish(next: BillingView) {
-  view = next;
-  for (const fn of listeners) fn();
+  view = next
+  for (const fn of listeners) fn()
 }
 
 function subscribe(fn: () => void) {
-  listeners.add(fn);
+  listeners.add(fn)
   return () => {
-    listeners.delete(fn);
-  };
+    listeners.delete(fn)
+  }
 }
 
 /** The last plan this tab was told, or null if it has not been told one. */
 export function getBilling(): BillingSnapshot | null {
-  return view.billing;
+  return view.billing
 }
 
 /**
@@ -99,7 +99,7 @@ export function getBilling(): BillingSnapshot | null {
  * on no information would take a paid feature away from somebody who has paid.
  */
 export function canRecordNow(): boolean {
-  return view.billing === null ? true : view.billing.limits.sessionRecording;
+  return view.billing === null ? true : view.billing.limits.sessionRecording
 }
 
 /* ------------------------------------------------------------------ fetches */
@@ -113,24 +113,24 @@ export function canRecordNow(): boolean {
  * matters most.
  */
 export async function loadBilling(force = false): Promise<BillingSnapshot | null> {
-  if (!force && view.billing) return view.billing;
-  if (inFlight) return inFlight;
+  if (!force && view.billing) return view.billing
+  if (inFlight) return inFlight
 
-  publish({ ...view, loading: true, error: null });
+  publish({ ...view, loading: true, error: null })
 
   inFlight = (async () => {
     try {
-      const res = await fetch("/api/billing/subscription", { cache: "no-store" });
+      const res = await fetch("/api/billing/subscription", { cache: "no-store" })
       if (res.status === 401) {
         // Not an error worth showing on a page that is about to redirect to
         // sign-in anyway; the plan is simply not knowable while signed out.
-        publish({ billing: null, loading: false, error: null });
-        return null;
+        publish({ billing: null, loading: false, error: null })
+        return null
       }
-      if (!res.ok) throw new Error(`The server returned ${res.status}.`);
-      const snapshot = (await res.json()) as BillingSnapshot;
-      publish({ billing: snapshot, loading: false, error: null });
-      return snapshot;
+      if (!res.ok) throw new Error(`The server returned ${res.status}.`)
+      const snapshot = (await res.json()) as BillingSnapshot
+      publish({ billing: snapshot, loading: false, error: null })
+      return snapshot
     } catch (e) {
       // The previous plan is kept rather than cleared. A dropped request is not
       // evidence that somebody's subscription ended.
@@ -138,14 +138,14 @@ export async function loadBilling(force = false): Promise<BillingSnapshot | null
         ...view,
         loading: false,
         error: e instanceof Error ? e.message : "The plan could not be read.",
-      });
-      return view.billing;
+      })
+      return view.billing
     } finally {
-      inFlight = null;
+      inFlight = null
     }
-  })();
+  })()
 
-  return inFlight;
+  return inFlight
 }
 
 /** The plan, read once on mount. Re-read with `loadBilling(true)`. */
@@ -156,16 +156,16 @@ export function useBilling(): BillingView {
     // Server render: the plan comes from an authenticated fetch this browser
     // makes, so there is nothing to render on the server but "not known yet".
     () => SERVER_VIEW,
-  );
+  )
 
   useEffect(() => {
-    void loadBilling();
-  }, []);
+    void loadBilling()
+  }, [])
 
-  return snapshot;
+  return snapshot
 }
 
-const SERVER_VIEW: BillingView = { billing: null, loading: true, error: null };
+const SERVER_VIEW: BillingView = { billing: null, loading: true, error: null }
 
 /* ------------------------------------------------------------------ actions */
 
@@ -175,15 +175,15 @@ const SERVER_VIEW: BillingView = { billing: null, loading: true, error: null };
  * a supported configuration rather than a broken one, and telling somebody their
  * payment failed would be wrong on both counts.
  */
-export type BillingActionFailure = "not-configured" | "unauthorized" | "conflict" | "failed";
+export type BillingActionFailure = "not-configured" | "unauthorized" | "conflict" | "failed"
 
 export class BillingActionError extends Error {
-  readonly kind: BillingActionFailure;
+  readonly kind: BillingActionFailure
 
   constructor(kind: BillingActionFailure, message: string) {
-    super(message);
-    this.name = "BillingActionError";
-    this.kind = kind;
+    super(message)
+    this.name = "BillingActionError"
+    this.kind = kind
   }
 }
 
@@ -196,50 +196,50 @@ export class BillingActionError extends Error {
  * and the price from the environment.
  */
 export async function startCheckout(): Promise<string> {
-  return post("/api/billing/checkout");
+  return post("/api/billing/checkout")
 }
 
 /** Opens the Stripe billing portal for this user. Same contract as above. */
 export async function openPortal(): Promise<string> {
-  return post("/api/billing/portal");
+  return post("/api/billing/portal")
 }
 
 async function post(url: string): Promise<string> {
-  let res: Response;
+  let res: Response
   try {
-    res = await fetch(url, { method: "POST", cache: "no-store" });
+    res = await fetch(url, { method: "POST", cache: "no-store" })
   } catch {
     throw new BillingActionError(
       "failed",
       "The request never reached the server. Nothing was charged.",
-    );
+    )
   }
 
   const body = (await res.json().catch(() => ({}))) as {
-    url?: unknown;
-    error?: unknown;
-    code?: unknown;
-  };
-  const detail = typeof body.error === "string" ? body.error : null;
+    url?: unknown
+    error?: unknown
+    code?: unknown
+  }
+  const detail = typeof body.error === "string" ? body.error : null
 
   if (res.ok) {
     if (typeof body.url !== "string" || body.url === "") {
-      throw new BillingActionError("failed", "Stripe did not return a page to send you to.");
+      throw new BillingActionError("failed", "Stripe did not return a page to send you to.")
     }
-    return body.url;
+    return body.url
   }
 
   if (res.status === 401) {
-    throw new BillingActionError("unauthorized", "This browser is no longer signed in.");
+    throw new BillingActionError("unauthorized", "This browser is no longer signed in.")
   }
   if (body.code === "billing-not-configured" || res.status === 503) {
     throw new BillingActionError(
       "not-configured",
       detail ?? "Billing is not configured on this deployment.",
-    );
+    )
   }
   if (res.status === 409 || res.status === 404) {
-    throw new BillingActionError("conflict", detail ?? `The server returned ${res.status}.`);
+    throw new BillingActionError("conflict", detail ?? `The server returned ${res.status}.`)
   }
-  throw new BillingActionError("failed", detail ?? `The server returned ${res.status}.`);
+  throw new BillingActionError("failed", detail ?? `The server returned ${res.status}.`)
 }

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * The vault-password bootstrap: where a GitHub account gets a key.
@@ -26,19 +26,19 @@
  * promising otherwise would be the lie this codebase is built not to tell.
  */
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 import {
   ArrowRightIcon,
   KeyIcon,
   SpinnerGapIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { setVaultPasswordCredential } from "@/app/(auth)/actions";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { setVaultPasswordCredential } from "@/app/(auth)/actions"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -46,12 +46,12 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { hasVaultPassword, registerDeviceAfterOAuth, useSession } from "@/lib/auth-client";
-import { deriveSecrets } from "@/lib/vault/kdf";
-import { setVaultKey } from "@/lib/vault/session";
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { hasVaultPassword, registerDeviceAfterOAuth, useSession } from "@/lib/auth-client"
+import { deriveSecrets } from "@/lib/vault/kdf"
+import { setVaultKey } from "@/lib/vault/session"
 
 /**
  * What this tab has worked out about the account it is signed into.
@@ -60,27 +60,27 @@ import { setVaultKey } from "@/lib/vault/session";
  * the person waiting they are one pause and there is nothing useful to say
  * between them.
  */
-type Gate = "checking" | "signed-out" | "needed" | "already-set";
+type Gate = "checking" | "signed-out" | "needed" | "already-set"
 
-const MIN_PASSWORD_LENGTH = 10;
+const MIN_PASSWORD_LENGTH = 10
 
 export default function SetVaultPasswordPage() {
-  const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const router = useRouter()
+  const { data: session, isPending } = useSession()
 
   /** null while the lookup is in flight; the answer once it lands. */
-  const [credential, setCredential] = useState<boolean | null>(null);
-  const [gateError, setGateError] = useState<string | null>(null);
+  const [credential, setCredential] = useState<boolean | null>(null)
+  const [gateError, setGateError] = useState<string | null>(null)
 
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Keyed on the user id rather than the session object: useSession hands back
   // a fresh object on every render, and depending on it would re-run the
   // lookup — and the device registration — on every keystroke in the form.
-  const userId = session?.user.id;
+  const userId = session?.user.id
 
   /**
    * Ask the server which sign-in methods this account has.
@@ -92,30 +92,30 @@ export default function SetVaultPasswordPage() {
    * OAuth callback is a full page navigation with none of our code in it.
    */
   useEffect(() => {
-    if (isPending || !userId) return;
+    if (isPending || !userId) return
 
-    let cancelled = false;
+    let cancelled = false
     void (async () => {
       try {
-        const already = await hasVaultPassword();
-        if (cancelled) return;
-        registerDeviceAfterOAuth();
-        setCredential(already);
-        if (already) router.replace("/dashboard");
+        const already = await hasVaultPassword()
+        if (cancelled) return
+        registerDeviceAfterOAuth()
+        setCredential(already)
+        if (already) router.replace("/dashboard")
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled) return
         // Not routed anywhere on failure. Sending a signed-in user to the
         // dashboard on a lookup error would be a guess in the direction that
         // breaks quietly; the layout guard would bounce them straight back and
         // the two would trade the user between them.
-        setGateError(String((err as Error).message ?? err));
+        setGateError(String((err as Error).message ?? err))
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [isPending, userId, router]);
+      cancelled = true
+    }
+  }, [isPending, userId, router])
 
   /**
    * Derived rather than stored, so there is one rule instead of a state machine
@@ -129,29 +129,28 @@ export default function SetVaultPasswordPage() {
         ? "checking"
         : credential
           ? "already-set"
-          : "needed";
+          : "needed"
 
-  const email = session?.user.email ?? "";
-  const ready =
-    password.length >= MIN_PASSWORD_LENGTH && confirm.length > 0 && password === confirm;
+  const email = session?.user.email ?? ""
+  const ready = password.length >= MIN_PASSWORD_LENGTH && confirm.length > 0 && password === confirm
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!ready || !email) return;
-    setBusy(true);
-    setError(null);
+    e.preventDefault()
+    if (!ready || !email) return
+    setBusy(true)
+    setError(null)
 
     try {
       // The one place this account's key material comes into existence.
       // Argon2id runs in this tab; the vault and audit branches never leave it,
       // and the auth branch is the only thing the action below sends.
-      const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password);
+      const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password)
 
-      const result = await setVaultPasswordCredential(authToken);
+      const result = await setVaultPasswordCredential(authToken)
 
       if (result.status === "error") {
-        setError(result.message);
-        return;
+        setError(result.message)
+        return
       }
 
       if (result.status === "already-set") {
@@ -162,19 +161,19 @@ export default function SetVaultPasswordPage() {
         setError(
           "This account already has a vault password — it was set somewhere else while this page was open. " +
             "Nothing was changed here. Reload and unlock with that password.",
-        );
-        return;
+        )
+        return
       }
 
       // Only now, and only in memory. lib/vault/session.ts keeps these for the
       // life of the tab and nowhere else, so a reload will ask for the password
       // again — the same as every other account.
-      setVaultKey(vaultKey, auditKey);
-      router.replace("/dashboard");
+      setVaultKey(vaultKey, auditKey)
+      router.replace("/dashboard")
     } catch (err) {
-      setError(String((err as Error).message ?? err));
+      setError(String((err as Error).message ?? err))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
@@ -198,7 +197,7 @@ export default function SetVaultPasswordPage() {
           </Alert>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   if (gate === "checking" || gate === "already-set") {
@@ -216,7 +215,7 @@ export default function SetVaultPasswordPage() {
           </CardDescription>
         </CardHeader>
       </Card>
-    );
+    )
   }
 
   if (gate === "signed-out") {
@@ -241,7 +240,7 @@ export default function SetVaultPasswordPage() {
           </p>
         </CardFooter>
       </Card>
-    );
+    )
   }
 
   /* ------------------------------------------------------------- the form */
@@ -367,5 +366,5 @@ export default function SetVaultPasswordPage() {
         </p>
       </CardFooter>
     </Card>
-  );
+  )
 }

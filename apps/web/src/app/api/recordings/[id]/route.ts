@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
-import { headers } from "next/headers";
+import { and, eq } from "drizzle-orm"
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
-import { BodyError, destroyBody, readBody, statusForBodyError } from "@/lib/recording/blobs";
+import { auth } from "@/lib/auth"
+import { db, schema } from "@/lib/db"
+import { BodyError, destroyBody, readBody, statusForBodyError } from "@/lib/recording/blobs"
 
 /**
  * One recording: fetch the blob, or delete it.
@@ -42,16 +42,16 @@ import { BodyError, destroyBody, readBody, statusForBodyError } from "@/lib/reco
 
 async function requireUser() {
   // Next.js 16: headers() is async-only.
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user ?? null;
+  const session = await auth.api.getSession({ headers: await headers() })
+  return session?.user ?? null
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   // Next.js 16: route params are async.
-  const { id } = await params;
+  const { id } = await params
 
   const [row] = await db
     .select({
@@ -65,9 +65,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })
     .from(schema.recording)
     .where(and(eq(schema.recording.id, id), eq(schema.recording.userId, user.id)))
-    .limit(1);
+    .limit(1)
 
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
+  if (!row) return Response.json({ error: "not found" }, { status: 404 })
 
   // The bytes may be in the row or in a bucket, and this route serves them the
   // same either way — deliberately. The alternative was a redirect to a
@@ -76,12 +76,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   // up holding it, in browser history, in a Referer header, in a proxy log. The
   // authorization surface this file is arranged around is the WHERE clause
   // above, and it stays the only one. See docs/TODO.md and lib/storage/objects.ts.
-  let blob: Buffer | null;
+  let blob: Buffer | null
   try {
-    blob = await readBody(row);
+    blob = await readBody(row)
   } catch (e) {
-    if (!(e instanceof BodyError)) throw e;
-    return Response.json({ error: e.message }, { status: statusForBodyError(e) });
+    if (!(e instanceof BodyError)) throw e
+    return Response.json({ error: e.message }, { status: statusForBodyError(e) })
   }
 
   // A row with no bytes at all. Nothing produces one today — a recording is
@@ -92,7 +92,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return Response.json(
       { error: "This recording has no stored data. Nothing was lost that this row can recover." },
       { status: 410 },
-    );
+    )
   }
 
   return Response.json({
@@ -104,14 +104,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     durationMs: row.durationMs,
     sizeBytes: row.sizeBytes,
     targetRef: row.targetRef,
-  });
+  })
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const { id } = await params;
+  const { id } = await params
 
   // Scoped by owner, as everything in this file is, and read before anything is
   // destroyed because the object keys are only knowable from the rows.
@@ -122,9 +122,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     })
     .from(schema.recording)
     .where(and(eq(schema.recording.id, id), eq(schema.recording.userId, user.id)))
-    .limit(1);
+    .limit(1)
 
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
+  if (!row) return Response.json({ error: "not found" }, { status: 404 })
 
   // The shares go too, and their bytes are a separate copy under a separate
   // key. `recording_share` cascades from the row below, so if these are not
@@ -140,7 +140,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .from(schema.recordingShare)
     .where(
       and(eq(schema.recordingShare.recordingId, id), eq(schema.recordingShare.userId, user.id)),
-    );
+    )
 
   // Bytes first, row second. If the bucket refuses, the row is left exactly as
   // it was and the caller is told — reporting a successful delete while the
@@ -148,9 +148,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   // produce, because there would be nothing left afterwards that knows the
   // object was ever anybody's.
   try {
-    for (const body of [row, ...shares]) await destroyBody(body);
+    for (const body of [row, ...shares]) await destroyBody(body)
   } catch (e) {
-    if (!(e instanceof BodyError)) throw e;
+    if (!(e instanceof BodyError)) throw e
     return Response.json(
       {
         error:
@@ -159,7 +159,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
           " Your recording is exactly as it was. Try again.",
       },
       { status: statusForBodyError(e) },
-    );
+    )
   }
 
   // `returning` is what distinguishes "deleted" from "there was nothing of
@@ -169,9 +169,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const deleted = await db
     .delete(schema.recording)
     .where(and(eq(schema.recording.id, id), eq(schema.recording.userId, user.id)))
-    .returning({ id: schema.recording.id });
+    .returning({ id: schema.recording.id })
 
-  if (deleted.length === 0) return Response.json({ error: "not found" }, { status: 404 });
+  if (deleted.length === 0) return Response.json({ error: "not found" }, { status: 404 })
 
   // `recording_share` references this row with onDelete: cascade, and that is a
   // live effect of this handler rather than a dormant property of the schema:
@@ -181,5 +181,5 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   // dialog on /dashboard/recordings says so before this is called, because a
   // delete that quietly breaks a circulated link is not a delete the user
   // consented to.
-  return Response.json({ ok: true });
+  return Response.json({ ok: true })
 }

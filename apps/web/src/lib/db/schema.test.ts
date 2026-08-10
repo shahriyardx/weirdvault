@@ -24,20 +24,20 @@
  * If a second SQL-side comparison is ever written, its column belongs here too.
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test"
 
-import { recordingShare } from "./schema";
+import { recordingShare } from "./schema"
 
 describe("recording_share timestamps", () => {
   test("expires_at is timestamptz, because SQL compares it against now()", () => {
-    expect(recordingShare.expiresAt.getSQLType()).toBe("timestamp with time zone");
-  });
+    expect(recordingShare.expiresAt.getSQLType()).toBe("timestamp with time zone")
+  })
 
   test("the other two are timestamptz as well, so the row reads as one clock", () => {
     // Not enforcement, only display: the owner's dialog shows when a link was
     // made and when it was cut off. A row whose expiry is an instant and whose
     // creation is local wall clock would put two different clocks in one panel.
-    expect(recordingShare.createdAt.getSQLType()).toBe("timestamp with time zone");
-    expect(recordingShare.revokedAt.getSQLType()).toBe("timestamp with time zone");
-  });
-});
+    expect(recordingShare.createdAt.getSQLType()).toBe("timestamp with time zone")
+    expect(recordingShare.revokedAt.getSQLType()).toBe("timestamp with time zone")
+  })
+})

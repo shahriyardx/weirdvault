@@ -1,20 +1,20 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Terminal } from "@xterm/xterm";
-import { ArrowCounterClockwiseIcon, PauseIcon, PlayIcon } from "@phosphor-icons/react/dist/ssr";
-import "@xterm/xterm/css/xterm.css";
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Terminal } from "@xterm/xterm"
+import { ArrowCounterClockwiseIcon, PauseIcon, PlayIcon } from "@phosphor-icons/react/dist/ssr"
+import "@xterm/xterm/css/xterm.css"
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { castEnd, eventsUpTo, frameAt, type Cast } from "@/lib/recording/format";
-import { terminalTheme } from "@/lib/terminal-theme";
+} from "@/components/ui/select"
+import { castEnd, eventsUpTo, frameAt, type Cast } from "@/lib/recording/format"
+import { terminalTheme } from "@/lib/terminal-theme"
 
 /**
  * Replaying a recording.
@@ -48,7 +48,7 @@ import { terminalTheme } from "@/lib/terminal-theme";
  * nothing is being missed while you are not looking.
  */
 
-const SPEEDS = [0.5, 1, 2, 4] as const;
+const SPEEDS = [0.5, 1, 2, 4] as const
 
 /**
  * How far the replay may be scaled up.
@@ -58,16 +58,16 @@ const SPEEDS = [0.5, 1, 2, 4] as const;
  * the grid — nothing is lost either way, it is only a question of what looks
  * like a terminal.
  */
-const MAX_SCALE = 2.5;
+const MAX_SCALE = 2.5
 
 /** The share of the window height the replay may take, leaving room for controls. */
-const VIEWPORT_SHARE = 0.62;
+const VIEWPORT_SHARE = 0.62
 
 /** Below this, a short window should scroll rather than shrink the replay to nothing. */
-const MIN_BOX_HEIGHT = 240;
+const MIN_BOX_HEIGHT = 240
 
 /** Matches the `p-2` on the box the replay sits in. */
-const BOX_PADDING = 8;
+const BOX_PADDING = 8
 
 /** The keys a range input responds to; everything else is navigation. */
 const SCRUB_KEYS = new Set([
@@ -79,28 +79,28 @@ const SCRUB_KEYS = new Set([
   "End",
   "PageUp",
   "PageDown",
-]);
+])
 
 export function RecordingPlayer({ cast }: { cast: Cast }) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const screenRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
+  const outerRef = useRef<HTMLDivElement>(null)
+  const screenRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
 
-  const end = castEnd(cast);
+  const end = castEnd(cast)
 
   // The true playhead lives in a ref because the animation loop reads and
   // writes it every frame; the state copy exists only to move the seek bar, and
   // is updated at a rate a person can see rather than sixty times a second.
-  const playheadRef = useRef(0);
-  const indexRef = useRef(0);
-  const speedRef = useRef<number>(1);
+  const playheadRef = useRef(0)
+  const indexRef = useRef(0)
+  const speedRef = useRef<number>(1)
 
-  const [playhead, setPlayhead] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState<number>(1);
-  const [scrub, setScrub] = useState<number | null>(null);
-  const [scale, setScale] = useState(1);
-  const [boxHeight, setBoxHeight] = useState<number | null>(null);
+  const [playhead, setPlayhead] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [speed, setSpeed] = useState<number>(1)
+  const [scrub, setScrub] = useState<number | null>(null)
+  const [scale, setScale] = useState(1)
+  const [boxHeight, setBoxHeight] = useState<number | null>(null)
 
   /* --------------------------------------------------------- the emulator */
 
@@ -113,9 +113,9 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
    * id), so `cast` does not change under a live instance and this runs once.
    */
   useEffect(() => {
-    const outer = outerRef.current;
-    const screen = screenRef.current;
-    if (!outer || !screen) return;
+    const outer = outerRef.current
+    const screen = screenRef.current
+    if (!outer || !screen) return
 
     const term = new Terminal({
       cols: cast.header.cols,
@@ -129,25 +129,25 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
       disableStdin: true,
       scrollback: 0,
       theme: terminalTheme,
-    });
-    term.open(screen);
-    termRef.current = term;
+    })
+    term.open(screen)
+    termRef.current = term
 
     // Show the first frame rather than an empty box. Anything stamped at zero
     // belongs on screen before the clock has run at all.
-    const first = frameAt(cast, 0);
-    term.resize(first.cols, first.rows);
-    if (first.data.length > 0) term.write(first.data);
-    indexRef.current = first.next;
-    playheadRef.current = 0;
+    const first = frameAt(cast, 0)
+    term.resize(first.cols, first.rows)
+    if (first.data.length > 0) term.write(first.data)
+    indexRef.current = first.next
+    playheadRef.current = 0
 
     // offsetWidth/offsetHeight rather than getBoundingClientRect: they ignore
     // the transform this measurement is about to decide, and measuring a scaled
     // element to compute its scale converges on zero.
     const measure = () => {
-      const naturalWidth = screen.offsetWidth;
-      const naturalHeight = screen.offsetHeight;
-      if (naturalWidth === 0 || naturalHeight === 0) return;
+      const naturalWidth = screen.offsetWidth
+      const naturalHeight = screen.offsetHeight
+      if (naturalWidth === 0 || naturalHeight === 0) return
 
       // Scaling up as well as down. This used to be `Math.min(1, …)`, which
       // meant an 80×24 recording — the common case, and the smallest — rendered
@@ -158,123 +158,123 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
       //
       // Height is a constraint too, and was not before. Without it a 60-row
       // recording widened to fit and then ran off the bottom of the viewport.
-      const room = Math.max(MIN_BOX_HEIGHT, window.innerHeight * VIEWPORT_SHARE);
+      const room = Math.max(MIN_BOX_HEIGHT, window.innerHeight * VIEWPORT_SHARE)
       // clientWidth includes the padding, so fitting to it overflows the content
       // box by exactly the padding — invisible while the scale was capped at 1
       // and the grid rarely filled the box, and a clipped right-hand column now
       // that it does.
-      const available = Math.max(1, outer.clientWidth - BOX_PADDING * 2);
-      const next = Math.min(available / naturalWidth, room / naturalHeight, MAX_SCALE);
-      setScale(next);
-      setBoxHeight(naturalHeight * next);
-    };
+      const available = Math.max(1, outer.clientWidth - BOX_PADDING * 2)
+      const next = Math.min(available / naturalWidth, room / naturalHeight, MAX_SCALE)
+      setScale(next)
+      setBoxHeight(naturalHeight * next)
+    }
 
     // xterm needs a frame to lay the grid out, so the first measurement waits
     // for one instead of reading zeros.
-    const raf = requestAnimationFrame(measure);
-    const observer = new ResizeObserver(measure);
-    observer.observe(outer);
+    const raf = requestAnimationFrame(measure)
+    const observer = new ResizeObserver(measure)
+    observer.observe(outer)
     // The screen is observed too: a resize event inside the recording changes
     // the grid, and with it how much room the replay needs.
-    observer.observe(screen);
+    observer.observe(screen)
     // And the window, because the height budget above is a share of the
     // viewport: shortening the window without narrowing it changes the answer
     // and moves neither observed box.
-    window.addEventListener("resize", measure);
+    window.addEventListener("resize", measure)
 
     return () => {
-      cancelAnimationFrame(raf);
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-      termRef.current = null;
-      term.dispose();
-    };
-  }, [cast]);
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+      window.removeEventListener("resize", measure)
+      termRef.current = null
+      term.dispose()
+    }
+  }, [cast])
 
   /* -------------------------------------------------------------- seeking */
 
   const seek = useCallback(
     (to: number) => {
-      const term = termRef.current;
-      if (!term) return;
-      const target = Math.max(0, Math.min(end, to));
-      const frame = frameAt(cast, target);
+      const term = termRef.current
+      if (!term) return
+      const target = Math.max(0, Math.min(end, to))
+      const frame = frameAt(cast, target)
 
-      term.reset();
-      term.resize(frame.cols, frame.rows);
-      if (frame.data.length > 0) term.write(frame.data);
+      term.reset()
+      term.resize(frame.cols, frame.rows)
+      if (frame.data.length > 0) term.write(frame.data)
 
-      indexRef.current = frame.next;
-      playheadRef.current = target;
-      setPlayhead(target);
+      indexRef.current = frame.next
+      playheadRef.current = target
+      setPlayhead(target)
     },
     [cast, end],
-  );
+  )
 
   /* ------------------------------------------------------------- playback */
 
   useEffect(() => {
-    if (!playing) return;
-    const term = termRef.current;
-    if (!term) return;
+    if (!playing) return
+    const term = termRef.current
+    if (!term) return
 
-    let frame = 0;
-    let last = performance.now();
-    let lastShown = 0;
+    let frame = 0
+    let last = performance.now()
+    let lastShown = 0
 
     const step = (now: number) => {
-      const advance = (now - last) * speedRef.current;
-      last = now;
-      playheadRef.current = Math.min(end, playheadRef.current + advance);
+      const advance = (now - last) * speedRef.current
+      last = now
+      playheadRef.current = Math.min(end, playheadRef.current + advance)
 
-      const { events, next } = eventsUpTo(cast, indexRef.current, playheadRef.current);
+      const { events, next } = eventsUpTo(cast, indexRef.current, playheadRef.current)
       for (const event of events) {
-        if (event.kind === "output") term.write(event.bytes);
-        else term.resize(event.cols, event.rows);
+        if (event.kind === "output") term.write(event.bytes)
+        else term.resize(event.cols, event.rows)
       }
-      indexRef.current = next;
+      indexRef.current = next
 
       if (now - lastShown > 100) {
-        lastShown = now;
-        setPlayhead(playheadRef.current);
+        lastShown = now
+        setPlayhead(playheadRef.current)
       }
 
       if (playheadRef.current >= end) {
-        setPlayhead(end);
-        setPlaying(false);
-        return;
+        setPlayhead(end)
+        setPlaying(false)
+        return
       }
-      frame = requestAnimationFrame(step);
-    };
+      frame = requestAnimationFrame(step)
+    }
 
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [playing, cast, end]);
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
+  }, [playing, cast, end])
 
   /* --------------------------------------------------------------- scrub */
 
   // Dragging the bar pauses, so the thumb does not fight the clock, and the seek
   // is committed on release: a 4 MB transcript is replayed on every seek, and
   // doing that on every pixel of a drag would lock the tab up.
-  const resumeAfterScrub = useRef(false);
+  const resumeAfterScrub = useRef(false)
 
   function beginScrub() {
-    if (scrub !== null) return;
-    resumeAfterScrub.current = playing;
-    setPlaying(false);
-    setScrub(playheadRef.current);
+    if (scrub !== null) return
+    resumeAfterScrub.current = playing
+    setPlaying(false)
+    setScrub(playheadRef.current)
   }
 
   function commitScrub() {
-    if (scrub === null) return;
-    seek(scrub);
-    setScrub(null);
-    if (resumeAfterScrub.current) setPlaying(true);
-    resumeAfterScrub.current = false;
+    if (scrub === null) return
+    seek(scrub)
+    setScrub(null)
+    if (resumeAfterScrub.current) setPlaying(true)
+    resumeAfterScrub.current = false
   }
 
-  const atEnd = playhead >= end && !playing;
-  const shown = scrub ?? playhead;
+  const atEnd = playhead >= end && !playing
+  const shown = scrub ?? playhead
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -296,8 +296,8 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
           size="sm"
           variant="secondary"
           onClick={() => {
-            if (atEnd) seek(0);
-            setPlaying((p) => !p);
+            if (atEnd) seek(0)
+            setPlaying((p) => !p)
           }}
           aria-label={playing ? "Pause" : "Play"}
         >
@@ -311,8 +311,8 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
           variant="ghost"
           aria-label="Back to the start"
           onClick={() => {
-            setPlaying(false);
-            seek(0);
+            setPlaying(false)
+            seek(0)
           }}
         >
           <ArrowCounterClockwiseIcon />
@@ -330,12 +330,12 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
           // control would otherwise pause playback and replay the transcript
           // from the top to land back where it already was.
           onKeyDown={(e) => {
-            if (SCRUB_KEYS.has(e.key)) beginScrub();
+            if (SCRUB_KEYS.has(e.key)) beginScrub()
           }}
           onChange={(e) => setScrub(Number(e.target.value))}
           onPointerUp={commitScrub}
           onKeyUp={(e) => {
-            if (SCRUB_KEYS.has(e.key)) commitScrub();
+            if (SCRUB_KEYS.has(e.key)) commitScrub()
           }}
           onBlur={commitScrub}
           className="h-1 min-w-32 flex-1 cursor-pointer accent-primary"
@@ -348,9 +348,9 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
         <Select
           value={String(speed)}
           onValueChange={(v) => {
-            const next = Number(v);
-            speedRef.current = next;
-            setSpeed(next);
+            const next = Number(v)
+            speedRef.current = next
+            setSpeed(next)
           }}
         >
           <SelectTrigger size="sm" aria-label="Playback speed" className="w-20">
@@ -372,7 +372,7 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
         anywhere.
       </p>
     </div>
-  );
+  )
 }
 
 /**
@@ -381,19 +381,17 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
  * cells in one font and draw glyphs in another.
  */
 function monoFontStack(): string {
-  const fallback = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-  if (typeof window === "undefined") return fallback;
-  const resolved = getComputedStyle(document.documentElement)
-    .getPropertyValue("--font-mono")
-    .trim();
-  return resolved ? `${resolved}, ${fallback}` : fallback;
+  const fallback = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  if (typeof window === "undefined") return fallback
+  const resolved = getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim()
+  return resolved ? `${resolved}, ${fallback}` : fallback
 }
 
 function clock(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  if (minutes < 60) return `${minutes}:${String(seconds).padStart(2, "0")}`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const total = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  if (minutes < 60) return `${minutes}:${String(seconds).padStart(2, "0")}`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
 }

@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import type { Metadata } from "next"
+import Link from "next/link"
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -7,11 +7,11 @@ import {
   MinusIcon,
   SparkleIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { PageHeader, PageShell } from "@/components/shell/page-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/shell/page-shell"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -19,7 +19,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -28,18 +28,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { AUDIT_RETENTION_LABEL } from "@/lib/audit/retention";
+} from "@/components/ui/table"
+import { AUDIT_RETENTION_LABEL } from "@/lib/audit/retention"
 import {
   PRO_PRICE_LABEL,
   PRO_PRICE_UNIT,
   RELAY_ALLOWANCE_BYTES,
   SESSION_RECORDING,
-} from "@/lib/billing/tiers";
-import { MAX_ACCOUNT_RECORDING_BYTES, MAX_CAPTURE_BYTES } from "@/lib/recording/limits";
-import { MAX_SHARE_TTL_MS } from "@/lib/recording/share";
-import { formatBytes } from "@/lib/usage";
-import { cn } from "@/lib/utils";
+} from "@/lib/billing/tiers"
+import { MAX_ACCOUNT_RECORDING_BYTES, MAX_CAPTURE_BYTES } from "@/lib/recording/limits"
+import { MAX_SHARE_TTL_MS } from "@/lib/recording/share"
+import { formatBytes } from "@/lib/usage"
+import { cn } from "@/lib/utils"
 
 /**
  * Every enforced number here is imported, not retyped.
@@ -57,14 +57,14 @@ import { cn } from "@/lib/utils";
  * declaration. If the price in the Stripe dashboard changes, that constant has
  * to change with it; no test can catch the mismatch.
  */
-const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free);
-const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro);
-const FREE_HISTORY = AUDIT_RETENTION_LABEL.free;
-const PRO_HISTORY = AUDIT_RETENTION_LABEL.pro;
-const CAPTURE_CAP = formatBytes(MAX_CAPTURE_BYTES);
-const RECORDING_STORAGE = formatBytes(MAX_ACCOUNT_RECORDING_BYTES);
+const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free)
+const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro)
+const FREE_HISTORY = AUDIT_RETENTION_LABEL.free
+const PRO_HISTORY = AUDIT_RETENTION_LABEL.pro
+const CAPTURE_CAP = formatBytes(MAX_CAPTURE_BYTES)
+const RECORDING_STORAGE = formatBytes(MAX_ACCOUNT_RECORDING_BYTES)
 /** The longest a share link may live, from the module the share route refuses at. */
-const SHARE_TTL = `${Math.round(MAX_SHARE_TTL_MS / 86_400_000)} days`;
+const SHARE_TTL = `${Math.round(MAX_SHARE_TTL_MS / 86_400_000)} days`
 
 /**
  * Whether recording is on for each tier, read from the record the gate reads.
@@ -73,8 +73,8 @@ const SHARE_TTL = `${Math.round(MAX_SHARE_TTL_MS / 86_400_000)} days`;
  * would change this page rather than leaving it advertising a wall that is no
  * longer there. The comparison table indexes it directly.
  */
-const FREE_RECORDING = SESSION_RECORDING.free;
-const PRO_RECORDING = SESSION_RECORDING.pro;
+const FREE_RECORDING = SESSION_RECORDING.free
+const PRO_RECORDING = SESSION_RECORDING.pro
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -82,7 +82,7 @@ export const metadata: Metadata = {
     `Free is the whole client, with encrypted sync, unlimited hosts and unlimited devices. ` +
     `Pro is ${PRO_PRICE_LABEL} ${PRO_PRICE_UNIT}, flat, one subscription per account: session ` +
     `recording, ${PRO_TRANSFER} of relay transfer and ${PRO_HISTORY} of activity history.`,
-};
+}
 
 /* ------------------------------------------------------------------ tiers */
 
@@ -126,20 +126,20 @@ export const metadata: Metadata = {
  * a heading that cannot be read as one.
  */
 type Tier = {
-  id: string;
-  name: string;
-  price: string;
-  unit?: string;
-  icon: React.ReactNode;
-  tagline: string;
+  id: string
+  name: string
+  price: string
+  unit?: string
+  icon: React.ReactNode
+  tagline: string
   /** Shipped and usable today. Nothing aspirational belongs in this list. */
-  features: string[];
+  features: string[]
   /**
    * Enforced today, and refused or deleted when reached. Kept apart from
    * `features` and rendered under its own heading: a limit buried in a tick
    * list is a limit the reader discovers as an unexplained failure.
    */
-  limits?: string[];
+  limits?: string[]
   /**
    * What this plan does not get, named explicitly.
    *
@@ -150,13 +150,13 @@ type Tier = {
    * unbuilt any more, and a heading that said "not built yet" over a feature
    * that runs on the tier next door would be the wrong claim entirely.
    */
-  excluded?: string[];
+  excluded?: string[]
   /** Null when there is nothing to buy and no honest action to offer. */
-  cta: { label: string; href: string } | null;
-  variant: "default" | "outline";
+  cta: { label: string; href: string } | null
+  variant: "default" | "outline"
   /** Free is the recommendation, because Free is the entire product. */
-  recommended?: boolean;
-};
+  recommended?: boolean
+}
 
 /**
  * The client, which is identical on both tiers.
@@ -178,7 +178,7 @@ const CLIENT_FEATURES = [
   "Host keys pinned on first use, verified on reconnect",
   "Snippets, an activity log, and device revocation",
   "Recovery codes, and an encrypted vault export that restores by merging",
-];
+]
 
 /**
  * The limits that bite on Free.
@@ -193,7 +193,7 @@ const FREE_LIMITS = [
     "open keep running — nothing is cut mid-transfer. Run your own relay and " +
     "the limit does not apply at all.",
   `${FREE_HISTORY} of activity history. Older events are deleted, not hidden.`,
-];
+]
 
 /**
  * The limits that bite on Pro.
@@ -221,7 +221,7 @@ const PRO_LIMITS = [
     "never-expires option, because once a link has been forwarded its expiry " +
     "and its view limit are the only controls left. A share is also a second " +
     "encrypted copy of the recording, so it counts against the same storage.",
-];
+]
 
 const TIERS: Tier[] = [
   {
@@ -263,7 +263,7 @@ const TIERS: Tier[] = [
     cta: { label: "Create an account to subscribe", href: "/sign-up" },
     variant: "outline",
   },
-];
+]
 
 /* ------------------------------------------------------------ comparison */
 
@@ -275,9 +275,9 @@ const TIERS: Tier[] = [
  * ship — so the state is gone rather than kept around for a case that no longer
  * exists. If something is ever specified and not built, it comes back.
  */
-type Cell = boolean | string;
+type Cell = boolean | string
 
-const COLUMNS = ["Free", "Pro"] as const;
+const COLUMNS = ["Free", "Pro"] as const
 
 const COMPARISON: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
   {
@@ -346,7 +346,7 @@ const COMPARISON: { group: string; rows: { label: string; cells: Cell[] }[] }[] 
       },
     ],
   },
-];
+]
 
 /* ------------------------------------------------------------------- faq */
 
@@ -465,7 +465,7 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
       </>
     ),
   },
-];
+]
 
 /* ------------------------------------------------------------------ page */
 
@@ -599,7 +599,7 @@ export default function PricingPage() {
         </div>
       </section>
     </PageShell>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- fragments */
@@ -696,7 +696,7 @@ function TierCard({ tier }: { tier: Tier }) {
         )}
       </CardFooter>
     </Card>
-  );
+  )
 }
 
 /**
@@ -707,7 +707,7 @@ function TierCard({ tier }: { tier: Tier }) {
 function ComparisonGroup({
   section,
 }: {
-  section: { group: string; rows: { label: string; cells: Cell[] }[] };
+  section: { group: string; rows: { label: string; cells: Cell[] }[] }
 }) {
   return (
     <>
@@ -730,12 +730,12 @@ function ComparisonGroup({
         </TableRow>
       ))}
     </>
-  );
+  )
 }
 
 function CellValue({ value, column, row }: { value: Cell; column: string; row: string }) {
   if (typeof value === "string") {
-    return <span className="text-muted-foreground">{value}</span>;
+    return <span className="text-muted-foreground">{value}</span>
   }
   return (
     <span className="inline-flex items-center justify-center">
@@ -748,5 +748,5 @@ function CellValue({ value, column, row }: { value: Cell; column: string; row: s
         {row} {value ? "included in" : "not included in"} {column}
       </span>
     </span>
-  );
+  )
 }

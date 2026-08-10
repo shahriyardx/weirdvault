@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Machines with no public address.
@@ -18,9 +18,9 @@
  * adopt.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowsClockwiseIcon,
   CheckCircleIcon,
@@ -32,12 +32,12 @@ import {
   TerminalWindowIcon,
   TrashIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
-import { PageHeader } from "@/components/shell/page-shell";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt"
+import { PageHeader } from "@/components/shell/page-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,9 +48,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -58,25 +58,25 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { listHosts, type Host } from "@/lib/hosts";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import { useConnectHost } from "@/lib/ssh/use-connect-host";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
+import { listHosts, type Host } from "@/lib/hosts"
+import { useSshSession } from "@/lib/ssh/session-provider"
+import { useConnectHost } from "@/lib/ssh/use-connect-host"
 
 interface Agent {
-  id: string;
-  label: string;
-  fingerprint: string;
-  hostname: string | null;
-  os: string | null;
-  arch: string | null;
-  agentVersion: string | null;
-  lastSeenAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
+  id: string
+  label: string
+  fingerprint: string
+  hostname: string | null
+  os: string | null
+  arch: string | null
+  agentVersion: string | null
+  lastSeenAt: string | null
+  revokedAt: string | null
+  createdAt: string
 }
 
 /**
@@ -89,12 +89,12 @@ interface Agent {
  * and never came back" from "connected", and nothing finer than that. The
  * honest answer to "is it online right now" comes from trying to connect.
  */
-const SEEN_RECENTLY_MS = 7 * 24 * 60 * 60 * 1000;
+const SEEN_RECENTLY_MS = 7 * 24 * 60 * 60 * 1000
 
-const POLL_MS = 2000;
+const POLL_MS = 2000
 
 export default function MachinesPage() {
-  const [agents, setAgents] = useState<Agent[] | null>(null);
+  const [agents, setAgents] = useState<Agent[] | null>(null)
   /**
    * When the list was fetched.
    *
@@ -104,8 +104,8 @@ export default function MachinesPage() {
    * that re-renders whenever a dialog opens, capable of changing a badge for no
    * reason the user did anything to cause.
    */
-  const [loadedAt, setLoadedAt] = useState(0);
-  const [enrolling, setEnrolling] = useState(false);
+  const [loadedAt, setLoadedAt] = useState(0)
+  const [enrolling, setEnrolling] = useState(false)
 
   /**
    * Saved hosts, so a machine that has been connected to before does not send
@@ -116,36 +116,36 @@ export default function MachinesPage() {
    * ask. Once it has been asked, the answer lives in the vault as an ordinary
    * host record, and there is nothing left to ask for.
    */
-  const [hosts, setHosts] = useState<Host[]>([]);
-  const router = useRouter();
-  const prompt = useCredentialPrompt();
-  const { keys: usableKeys } = useSshSession();
+  const [hosts, setHosts] = useState<Host[]>([])
+  const router = useRouter()
+  const prompt = useCredentialPrompt()
+  const { keys: usableKeys } = useSshSession()
   const { connectToHost, connecting } = useConnectHost({
     askFor: prompt.askFor,
     onConnected: () => router.push("/dashboard/terminal"),
-  });
+  })
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/agents");
+    const res = await fetch("/api/agents")
     if (!res.ok) {
-      toast.error("Could not load your machines");
-      setAgents([]);
-      return;
+      toast.error("Could not load your machines")
+      setAgents([])
+      return
     }
-    const body = (await res.json()) as { agents: Agent[] };
-    setAgents(body.agents);
-    setLoadedAt(Date.now());
-  }, []);
+    const body = (await res.json()) as { agents: Agent[] }
+    setAgents(body.agents)
+    setLoadedAt(Date.now())
+  }, [])
 
   useEffect(() => {
     void (async () => {
-      await load();
-      setHosts(await listHosts());
-    })();
-  }, [load]);
+      await load()
+      setHosts(await listHosts())
+    })()
+  }, [load])
 
-  const live = agents?.filter((a) => !a.revokedAt) ?? [];
-  const revoked = agents?.filter((a) => a.revokedAt) ?? [];
+  const live = agents?.filter((a) => !a.revokedAt) ?? []
+  const revoked = agents?.filter((a) => a.revokedAt) ?? []
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 pb-16">
@@ -213,13 +213,13 @@ export default function MachinesPage() {
       {enrolling && (
         <EnrollDialog
           onClose={() => {
-            setEnrolling(false);
-            void load();
+            setEnrolling(false)
+            void load()
           }}
         />
       )}
     </div>
-  );
+  )
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
@@ -239,7 +239,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         Add a machine
       </Button>
     </div>
-  );
+  )
 }
 
 function AgentRow({
@@ -250,53 +250,53 @@ function AgentRow({
   onConnect,
   onChanged,
 }: {
-  agent: Agent;
-  now: number;
+  agent: Agent
+  now: number
   /** A saved host pointing at this machine, if one exists. */
-  host: Host | null;
-  busy: boolean;
-  onConnect: (host: Host) => Promise<string | null>;
-  onChanged: () => Promise<void>;
+  host: Host | null
+  busy: boolean
+  onConnect: (host: Host) => Promise<string | null>
+  onChanged: () => Promise<void>
 }) {
-  const [renaming, setRenaming] = useState(false);
-  const [label, setLabel] = useState(agent.label);
-  const revoked = Boolean(agent.revokedAt);
+  const [renaming, setRenaming] = useState(false)
+  const [label, setLabel] = useState(agent.label)
+  const revoked = Boolean(agent.revokedAt)
 
-  const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null;
-  const recent = seen !== null && now - seen.getTime() < SEEN_RECENTLY_MS;
+  const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null
+  const recent = seen !== null && now - seen.getTime() < SEEN_RECENTLY_MS
 
   async function rename() {
     const res = await fetch(`/api/agents/${agent.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label }),
-    });
+    })
     if (!res.ok) {
-      toast.error("Could not rename that machine");
-      return;
+      toast.error("Could not rename that machine")
+      return
     }
-    setRenaming(false);
-    await onChanged();
+    setRenaming(false)
+    await onChanged()
   }
 
   async function revoke() {
-    const res = await fetch(`/api/agents/${agent.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/agents/${agent.id}`, { method: "DELETE" })
     if (!res.ok) {
-      toast.error("Could not revoke that machine");
-      return;
+      toast.error("Could not revoke that machine")
+      return
     }
-    toast.success("Revoked. It cannot reconnect.");
-    await onChanged();
+    toast.success("Revoked. It cannot reconnect.")
+    await onChanged()
   }
 
   async function forget() {
-    const res = await fetch(`/api/agents/${agent.id}?forget=1`, { method: "DELETE" });
+    const res = await fetch(`/api/agents/${agent.id}?forget=1`, { method: "DELETE" })
     if (!res.ok) {
-      toast.error("Could not remove that machine");
-      return;
+      toast.error("Could not remove that machine")
+      return
     }
-    toast.success("Removed. That key can enrol again.");
-    await onChanged();
+    toast.success("Removed. That key can enrol again.")
+    await onChanged()
   }
 
   return (
@@ -423,7 +423,7 @@ function AgentRow({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void rename();
+              if (e.key === "Enter") void rename()
             }}
             autoFocus
           />
@@ -436,7 +436,7 @@ function AgentRow({
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }
 
 type EnrollState =
@@ -444,37 +444,37 @@ type EnrollState =
   | { phase: "waiting"; id: string; command: string; expiresAt: string }
   | { phase: "claimed"; agent: Agent }
   | { phase: "expired" }
-  | { phase: "error"; message: string };
+  | { phase: "error"; message: string }
 
 function EnrollDialog({ onClose }: { onClose: () => void }) {
-  const [state, setState] = useState<EnrollState>({ phase: "minting" });
+  const [state, setState] = useState<EnrollState>({ phase: "minting" })
 
   // Held in a ref so the polling effect can stop without being restarted by
   // every state change it causes.
-  const stopped = useRef(false);
+  const stopped = useRef(false)
   useEffect(
     () => () => {
-      stopped.current = true;
+      stopped.current = true
     },
     [],
-  );
+  )
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch("/api/agents", { method: "POST" });
+      const res = await fetch("/api/agents", { method: "POST" })
       const body = (await res.json().catch(() => ({}))) as {
-        token?: string;
-        enrollmentId?: string;
-        expiresAt?: string;
-        error?: string;
-      };
+        token?: string
+        enrollmentId?: string
+        expiresAt?: string
+        error?: string
+      }
 
       if (!res.ok || !body.token || !body.enrollmentId) {
         setState({
           phase: "error",
           message: body.error ?? "Could not create an enrollment token.",
-        });
-        return;
+        })
+        return
       }
 
       setState({
@@ -482,30 +482,30 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
         id: body.enrollmentId,
         expiresAt: body.expiresAt ?? "",
         command: `curl -fsSL ${location.origin}/install.sh | sudo sh -s -- --token=${body.token}`,
-      });
-    })();
-  }, []);
+      })
+    })()
+  }, [])
 
   useEffect(() => {
-    if (state.phase !== "waiting") return;
-    const id = state.id;
+    if (state.phase !== "waiting") return
+    const id = state.id
 
     const timer = setInterval(() => {
       void (async () => {
-        if (stopped.current) return;
-        const res = await fetch(`/api/agents/enrollments/${id}`);
-        if (!res.ok) return;
-        const body = (await res.json()) as { status: string; agent?: Agent };
+        if (stopped.current) return
+        const res = await fetch(`/api/agents/enrollments/${id}`)
+        if (!res.ok) return
+        const body = (await res.json()) as { status: string; agent?: Agent }
         if (body.status === "claimed" && body.agent) {
-          setState({ phase: "claimed", agent: body.agent });
+          setState({ phase: "claimed", agent: body.agent })
         } else if (body.status === "expired") {
-          setState({ phase: "expired" });
+          setState({ phase: "expired" })
         }
-      })();
-    }, POLL_MS);
+      })()
+    }, POLL_MS)
 
-    return () => clearInterval(timer);
-  }, [state]);
+    return () => clearInterval(timer)
+  }, [state])
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -590,7 +590,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 function CommandBlock({ command }: { command: string }) {
@@ -602,12 +602,12 @@ function CommandBlock({ command }: { command: string }) {
         size="icon"
         aria-label="Copy"
         onClick={() => {
-          void navigator.clipboard.writeText(command);
-          toast.success("Copied");
+          void navigator.clipboard.writeText(command)
+          toast.success("Copied")
         }}
       >
         <CopyIcon />
       </Button>
     </div>
-  );
+  )
 }

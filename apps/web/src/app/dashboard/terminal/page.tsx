@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import Link from "next/link"
 import {
   ColumnsIcon,
   KeyboardIcon,
@@ -14,9 +14,9 @@ import {
   SquareSplitHorizontalIcon,
   StopIcon,
   XIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt"
 import {
   DEFAULT_FONT_SIZE,
   MAX_FONT_SIZE,
@@ -24,8 +24,8 @@ import {
   TerminalView,
   useCoarsePointer,
   type TerminalHandle,
-} from "@/components/terminal";
-import { Button } from "@/components/ui/button";
+} from "@/components/terminal"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,23 +33,23 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBilling } from "@/lib/billing/client";
-import { listHosts, type Host } from "@/lib/hosts";
-import { useRecorders } from "@/lib/recording/capture";
-import { MAX_CAPTURE_BYTES } from "@/lib/recording/limits";
-import { useSessionRecorder } from "@/lib/recording/use-session-recorder";
-import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider";
-import { useConnectHost } from "@/lib/ssh/use-connect-host";
-import { cn } from "@/lib/utils";
+} from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useBilling } from "@/lib/billing/client"
+import { listHosts, type Host } from "@/lib/hosts"
+import { useRecorders } from "@/lib/recording/capture"
+import { MAX_CAPTURE_BYTES } from "@/lib/recording/limits"
+import { useSessionRecorder } from "@/lib/recording/use-session-recorder"
+import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider"
+import { useConnectHost } from "@/lib/ssh/use-connect-host"
+import { cn } from "@/lib/utils"
 
 /**
  * Terminal panes.
@@ -69,23 +69,23 @@ export default function TerminalPage() {
     setSplitDirection,
     splitPane,
     closePane,
-  } = useSshSession();
+  } = useSshSession()
 
   // The key bar follows the input device by default, but the override has to
   // exist in both directions: a laptop needs to be able to summon it to test
   // the thing, and a phone needs to be able to put it away when it is reading
   // output rather than typing.
-  const coarsePointer = useCoarsePointer();
-  const [keyBarOverride, setKeyBarOverride] = useState<boolean | null>(null);
-  const keyBar = keyBarOverride ?? coarsePointer;
+  const coarsePointer = useCoarsePointer()
+  const [keyBarOverride, setKeyBarOverride] = useState<boolean | null>(null)
+  const keyBar = keyBarOverride ?? coarsePointer
 
-  const [fontSize, setFontSize] = useTerminalFontSize();
+  const [fontSize, setFontSize] = useTerminalFontSize()
 
   // Which session the toolbar's record button acts on. `panes` can hold "" for a
   // pane that has been split but not pointed anywhere yet, and focusedPane can
   // outlive the pane it names while a close is settling, so both lookups are
   // allowed to come back empty rather than assumed.
-  const focusedSession = sessions.find((s) => s.id === panes[focusedPane]) ?? null;
+  const focusedSession = sessions.find((s) => s.id === panes[focusedPane]) ?? null
 
   if (sessions.length === 0 || panes.length === 0) {
     return (
@@ -104,10 +104,10 @@ export default function TerminalPage() {
           </Button>
         </div>
       </div>
-    );
+    )
   }
 
-  const split = panes.length > 1;
+  const split = panes.length > 1
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -275,10 +275,10 @@ export default function TerminalPage() {
         )}
       </div>
     </div>
-  );
+  )
 }
 
-const FONT_SIZE_KEY = "webxterm:terminal-font-size";
+const FONT_SIZE_KEY = "webxterm:terminal-font-size"
 
 /**
  * The terminal's text size, remembered across visits.
@@ -293,33 +293,33 @@ const FONT_SIZE_KEY = "webxterm:terminal-font-size";
  * starts with a visible jump, and with two panes mounted each would own a copy
  * of the same preference.
  */
-let fontSizeValue = DEFAULT_FONT_SIZE;
-let fontSizeLoaded = false;
-const fontSizeListeners = new Set<() => void>();
+let fontSizeValue = DEFAULT_FONT_SIZE
+let fontSizeLoaded = false
+const fontSizeListeners = new Set<() => void>()
 
 function fontSizeSnapshot(): number {
   // Read once, on the first browser snapshot. Subsequent calls return the cached
   // number, which is what useSyncExternalStore requires — a snapshot that
   // re-read storage every time would still be equal, but only by luck.
   if (!fontSizeLoaded) {
-    fontSizeLoaded = true;
+    fontSizeLoaded = true
     try {
-      const stored = Number(window.localStorage.getItem(FONT_SIZE_KEY));
+      const stored = Number(window.localStorage.getItem(FONT_SIZE_KEY))
       if (Number.isFinite(stored) && stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) {
-        fontSizeValue = stored;
+        fontSizeValue = stored
       }
     } catch {
       /* storage blocked; the default stands */
     }
   }
-  return fontSizeValue;
+  return fontSizeValue
 }
 
 function subscribeFontSize(fn: () => void): () => void {
-  fontSizeListeners.add(fn);
+  fontSizeListeners.add(fn)
   return () => {
-    fontSizeListeners.delete(fn);
-  };
+    fontSizeListeners.delete(fn)
+  }
 }
 
 function useTerminalFontSize(): [number, (next: number) => void] {
@@ -329,23 +329,23 @@ function useTerminalFontSize(): [number, (next: number) => void] {
     // Prerender: there is no localStorage on the server, so the default is the
     // only honest answer. React swaps in the stored value after hydration.
     () => DEFAULT_FONT_SIZE,
-  );
+  )
 
   const update = useCallback((next: number) => {
-    const clamped = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(next)));
-    if (clamped === fontSizeValue) return;
-    fontSizeValue = clamped;
-    fontSizeLoaded = true;
+    const clamped = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(next)))
+    if (clamped === fontSizeValue) return
+    fontSizeValue = clamped
+    fontSizeLoaded = true
     try {
-      window.localStorage.setItem(FONT_SIZE_KEY, String(clamped));
+      window.localStorage.setItem(FONT_SIZE_KEY, String(clamped))
     } catch {
       // Private windows and blocked site data both refuse writes. The size still
       // applies for this visit; only remembering it is lost.
     }
-    for (const fn of fontSizeListeners) fn();
-  }, []);
+    for (const fn of fontSizeListeners) fn()
+  }, [])
 
-  return [size, update];
+  return [size, update]
 }
 
 /**
@@ -363,18 +363,18 @@ function useTerminalFontSize(): [number, (next: number) => void] {
  * whose previous recording is unsaved would quietly discard it.
  */
 function RecordToggle({ session }: { session: SessionEntry }) {
-  const recorders = useRecorders();
-  const { start, stop } = useSessionRecorder();
-  const { billing } = useBilling();
+  const recorders = useRecorders()
+  const { start, stop } = useSessionRecorder()
+  const { billing } = useBilling()
   // Absent while the plan is still loading. Fail toward access, as the server
   // does — the save is where the refusal is enforced, and it enforces it there
   // whatever this button believes.
-  const canRecord = billing?.limits.sessionRecording ?? true;
+  const canRecord = billing?.limits.sessionRecording ?? true
 
-  const recorder = recorders.find((r) => r.sessionId === session.id) ?? null;
-  const capturing = recorder?.capturing === true;
-  const settling = recorder !== null && !capturing;
-  const pct = recorder ? Math.round((recorder.bytes / MAX_CAPTURE_BYTES) * 100) : 0;
+  const recorder = recorders.find((r) => r.sessionId === session.id) ?? null
+  const capturing = recorder?.capturing === true
+  const settling = recorder !== null && !capturing
+  const pct = recorder ? Math.round((recorder.bytes / MAX_CAPTURE_BYTES) * 100) : 0
 
   return (
     <Tooltip>
@@ -410,7 +410,7 @@ function RecordToggle({ session }: { session: SessionEntry }) {
               : "Session recording is a Pro feature"}
       </TooltipContent>
     </Tooltip>
-  );
+  )
 }
 
 /**
@@ -426,25 +426,25 @@ function EmptyPane({
   onFocus,
   onClose,
 }: {
-  index: number;
-  focused: boolean;
-  onFocus: () => void;
-  onClose: () => void;
+  index: number
+  focused: boolean
+  onFocus: () => void
+  onClose: () => void
 }) {
-  const { keys: usableKeys, sessions, setPaneSession } = useSshSession();
-  const [hosts, setHosts] = useState<Host[]>([]);
+  const { keys: usableKeys, sessions, setPaneSession } = useSshSession()
+  const [hosts, setHosts] = useState<Host[]>([])
 
-  const prompt = useCredentialPrompt();
+  const prompt = useCredentialPrompt()
   const { connectToHost, connecting } = useConnectHost({
     askFor: prompt.askFor,
     onConnected: (id) => setPaneSession(index, id),
-  });
+  })
 
   useEffect(() => {
     void listHosts()
       .then(setHosts)
-      .catch(() => setHosts([]));
-  }, []);
+      .catch(() => setHosts([]))
+  }, [])
 
   return (
     <div
@@ -521,7 +521,7 @@ function EmptyPane({
 
       <CredentialPrompt pending={prompt.pending} keys={usableKeys} onSettle={prompt.settle} />
     </div>
-  );
+  )
 }
 
 function Pane({
@@ -534,32 +534,32 @@ function Pane({
   onFocus,
   onClose,
 }: {
-  sessionId: string;
-  index: number;
-  focused: boolean;
-  showChrome: boolean;
-  keyBar: boolean;
-  fontSize: number;
-  onFocus: () => void;
-  onClose: () => void;
+  sessionId: string
+  index: number
+  focused: boolean
+  showChrome: boolean
+  keyBar: boolean
+  fontSize: number
+  onFocus: () => void
+  onClose: () => void
 }) {
-  const term = useRef<TerminalHandle>(null);
-  const { sessions, subscribe, write, resize, setPaneSession } = useSshSession();
-  const entry = sessions.find((s) => s.id === sessionId);
+  const term = useRef<TerminalHandle>(null)
+  const { sessions, subscribe, write, resize, setPaneSession } = useSshSession()
+  const entry = sessions.find((s) => s.id === sessionId)
 
   useEffect(() => {
     // Replays this session's buffer, so a pane opened later still shows the
     // banner and everything printed before it existed.
-    const unsubscribe = subscribe(sessionId, (bytes) => term.current?.write(bytes));
-    return unsubscribe;
-  }, [sessionId, subscribe]);
+    const unsubscribe = subscribe(sessionId, (bytes) => term.current?.write(bytes))
+    return unsubscribe
+  }, [sessionId, subscribe])
 
   if (!entry) {
     return (
       <div className="text-muted-foreground bg-terminal grid place-items-center text-xs">
         That session has closed.
       </div>
-    );
+    )
   }
 
   return (
@@ -613,5 +613,5 @@ function Pane({
         />
       </div>
     </div>
-  );
+  )
 }

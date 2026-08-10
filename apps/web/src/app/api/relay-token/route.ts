@@ -1,14 +1,14 @@
-import { createHmac, randomUUID } from "node:crypto";
-import { cookies, headers } from "next/headers";
-import { and, eq, isNull } from "drizzle-orm";
+import { createHmac, randomUUID } from "node:crypto"
+import { cookies, headers } from "next/headers"
+import { and, eq, isNull } from "drizzle-orm"
 
-import { auth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
-import { dbErrorSummary } from "@/lib/db/errors";
-import { relayAllowanceFor } from "@/lib/billing/subscription";
-import { periodFor, periodResetsAt } from "@/lib/billing/tiers";
-import { enforce } from "@/lib/rate-limit";
-import { RELAY_QUOTA_EXCEEDED } from "@/lib/usage";
+import { auth } from "@/lib/auth"
+import { db, schema } from "@/lib/db"
+import { dbErrorSummary } from "@/lib/db/errors"
+import { relayAllowanceFor } from "@/lib/billing/subscription"
+import { periodFor, periodResetsAt } from "@/lib/billing/tiers"
+import { enforce } from "@/lib/rate-limit"
+import { RELAY_QUOTA_EXCEEDED } from "@/lib/usage"
 
 /**
  * Mints a short-lived relay token.
@@ -31,14 +31,14 @@ import { RELAY_QUOTA_EXCEEDED } from "@/lib/usage";
  * not on the data path.
  */
 
-const TTL_SECONDS = 60;
+const TTL_SECONDS = 60
 /** Anonymous sessions get a shorter window, since nothing binds them to a person. */
-const ANON_TTL_SECONDS = 30;
-const ANON_COOKIE = "webxterm.anon";
-const MAX_PORT = 65535;
+const ANON_TTL_SECONDS = 30
+const ANON_COOKIE = "webxterm.anon"
+const MAX_PORT = 65535
 
 function b64url(buf: Buffer): string {
-  return buf.toString("base64url");
+  return buf.toString("base64url")
 }
 
 /**
@@ -54,24 +54,24 @@ function b64url(buf: Buffer): string {
  * token TTL, and meaningful per-account limits.
  */
 async function subjectFor(): Promise<{ sub: string; ttl: number; anonymous: boolean }> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await auth.api.getSession({ headers: await headers() })
   if (session?.user) {
-    return { sub: session.user.id, ttl: TTL_SECONDS, anonymous: false };
+    return { sub: session.user.id, ttl: TTL_SECONDS, anonymous: false }
   }
 
-  const jar = await cookies();
-  let anon = jar.get(ANON_COOKIE)?.value;
+  const jar = await cookies()
+  let anon = jar.get(ANON_COOKIE)?.value
   if (!anon || !/^[0-9a-f-]{36}$/i.test(anon)) {
-    anon = randomUUID();
+    anon = randomUUID()
     jar.set(ANON_COOKIE, anon, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 60 * 60 * 24,
-    });
+    })
   }
-  return { sub: `anon:${anon}`, ttl: ANON_TTL_SECONDS, anonymous: true };
+  return { sub: `anon:${anon}`, ttl: ANON_TTL_SECONDS, anonymous: true }
 }
 
 /**
@@ -96,9 +96,9 @@ async function allowanceCheck(
 ): Promise<
   { over: false } | { over: true; usedBytes: number; allowanceBytes: number; resetsAt: string }
 > {
-  const now = new Date();
+  const now = new Date()
   try {
-    const allowanceBytes = await relayAllowanceFor(userId);
+    const allowanceBytes = await relayAllowanceFor(userId)
     const [row] = await db
       .select({
         bytesUp: schema.relayUsage.bytesUp,
@@ -108,23 +108,23 @@ async function allowanceCheck(
       .where(
         and(eq(schema.relayUsage.userId, userId), eq(schema.relayUsage.period, periodFor(now))),
       )
-      .limit(1);
+      .limit(1)
 
-    const usedBytes = (row?.bytesUp ?? 0) + (row?.bytesDown ?? 0);
-    if (usedBytes < allowanceBytes) return { over: false };
+    const usedBytes = (row?.bytesUp ?? 0) + (row?.bytesDown ?? 0)
+    if (usedBytes < allowanceBytes) return { over: false }
 
     return {
       over: true,
       usedBytes,
       allowanceBytes,
       resetsAt: periodResetsAt(now).toISOString(),
-    };
+    }
   } catch (e) {
     // Summarised rather than logged whole: a drizzle query error's message is
     // the SQL and its bound parameters, and the parameters here are a user id
     // and a billing period. See lib/db/errors.ts.
-    console.warn("relay allowance check failed; minting anyway", dbErrorSummary(e));
-    return { over: false };
+    console.warn("relay allowance check failed; minting anyway", dbErrorSummary(e))
+    return { over: false }
   }
 }
 
@@ -143,51 +143,51 @@ async function allowanceCheck(
  * the honest position and is why the relay's own connection cap and port
  * allowlist, not this, are what actually bound anonymous use.
  */
-const MINT_LIMIT = { max: 60, windowSeconds: 60 };
+const MINT_LIMIT = { max: 60, windowSeconds: 60 }
 
 export async function POST(request: Request) {
-  const { sub, ttl, anonymous } = await subjectFor();
+  const { sub, ttl, anonymous } = await subjectFor()
 
   const limited = await enforce("relay-token", request, MINT_LIMIT, {
     userId: anonymous ? null : sub,
     message:
       "Too many connection attempts in the last minute. Sessions already open are unaffected; " +
       "wait a moment before opening another.",
-  });
-  if (limited) return limited;
+  })
+  if (limited) return limited
 
-  const secret = process.env.RELAY_SECRET;
+  const secret = process.env.RELAY_SECRET
   if (!secret) {
     // Fail closed: minting unsigned tokens would let anyone reach the relay.
-    return Response.json({ error: "relay not configured" }, { status: 503 });
+    return Response.json({ error: "relay not configured" }, { status: 503 })
   }
 
-  let body: { host?: unknown; port?: unknown; agent?: unknown };
+  let body: { host?: unknown; port?: unknown; agent?: unknown }
   try {
-    body = await request.json();
+    body = await request.json()
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { host, port, agent } = body;
+  const { host, port, agent } = body
 
   // One destination or the other, never both. The relay refuses a token that
   // names both anyway, but a request that asks for both is a caller bug worth
   // naming here rather than letting it fail one hop later.
   if (agent !== undefined && host !== undefined) {
-    return Response.json({ error: "name a host or an agent, not both" }, { status: 400 });
+    return Response.json({ error: "name a host or an agent, not both" }, { status: 400 })
   }
 
-  const wantsAgent = typeof agent === "string" && agent.length > 0;
+  const wantsAgent = typeof agent === "string" && agent.length > 0
 
   if (!wantsAgent && (typeof host !== "string" || !host || typeof port !== "number")) {
     return Response.json(
       { error: "host (string) and port (number), or agent (string), required" },
       { status: 400 },
-    );
+    )
   }
   if (typeof port === "number" && (!Number.isInteger(port) || port < 1 || port > MAX_PORT)) {
-    return Response.json({ error: "invalid port" }, { status: 400 });
+    return Response.json({ error: "invalid port" }, { status: 400 })
   }
 
   // Anonymous subjects are not metered. There is no user row behind an
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
   // nothing here to compare against — see the comment there. The relay's global
   // connection cap and the port allowlist are what bound anonymous use.
   if (!anonymous) {
-    const allowance = await allowanceCheck(sub);
+    const allowance = await allowanceCheck(sub)
     if (allowance.over) {
       // 402 is the only status that means "the account is out of allowance"
       // rather than "this request was wrong" or "you are going too fast". It is
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
           resetsAt: allowance.resetsAt,
         },
         { status: 402 },
-      );
+      )
     }
   }
 
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
    */
   if (wantsAgent) {
     if (anonymous) {
-      return Response.json({ error: "sign in to reach your own machines" }, { status: 401 });
+      return Response.json({ error: "sign in to reach your own machines" }, { status: 401 })
     }
 
     const [owned] = await db
@@ -245,12 +245,12 @@ export async function POST(request: Request) {
           isNull(schema.agent.revokedAt),
         ),
       )
-      .limit(1);
+      .limit(1)
 
     // 404, not 403: telling an account that an id it does not own is a real
     // agent is a fact about somebody else's machines.
     if (!owned) {
-      return Response.json({ error: "no such machine" }, { status: 404 });
+      return Response.json({ error: "no such machine" }, { status: 404 })
     }
   }
 
@@ -265,14 +265,14 @@ export async function POST(request: Request) {
         host,
         port,
         exp: Math.floor(Date.now() / 1000) + ttl,
-      };
+      }
 
-  const payload = b64url(Buffer.from(JSON.stringify(claims), "utf8"));
-  const signature = b64url(createHmac("sha256", secret).update(payload).digest());
+  const payload = b64url(Buffer.from(JSON.stringify(claims), "utf8"))
+  const signature = b64url(createHmac("sha256", secret).update(payload).digest())
 
   return Response.json({
     token: `${payload}.${signature}`,
     expiresIn: ttl,
     anonymous,
-  });
+  })
 }

@@ -1,8 +1,8 @@
-import { dbErrorSummary } from "@/lib/db/errors";
-import { pruneAuditEvents } from "./audit";
-import { clearStaleCounters } from "./counters";
-import { pruneAbandonedEnrollments } from "./enrollments";
-import { sweepOrphanedObjects } from "./objects";
+import { dbErrorSummary } from "@/lib/db/errors"
+import { pruneAuditEvents } from "./audit"
+import { clearStaleCounters } from "./counters"
+import { pruneAbandonedEnrollments } from "./enrollments"
+import { sweepOrphanedObjects } from "./objects"
 
 /**
  * Everything that has to happen on a timer, in one call.
@@ -44,19 +44,19 @@ import { sweepOrphanedObjects } from "./objects";
  */
 
 export interface JobOutcome {
-  job: string;
-  ok: boolean;
+  job: string
+  ok: boolean
   /** One line, for a log. Never includes a user id or a query. */
-  summary: string;
+  summary: string
   /** Whether a ceiling was hit and work remains for the next run. */
-  truncated?: boolean;
+  truncated?: boolean
 }
 
 export interface MaintenanceReport {
-  dryRun: boolean;
-  ok: boolean;
-  durationMs: number;
-  jobs: JobOutcome[];
+  dryRun: boolean
+  ok: boolean
+  durationMs: number
+  jobs: JobOutcome[]
 }
 
 async function run(
@@ -64,63 +64,63 @@ async function run(
   work: () => Promise<Omit<JobOutcome, "job" | "ok">>,
 ): Promise<JobOutcome> {
   try {
-    return { job, ok: true, ...(await work()) };
+    return { job, ok: true, ...(await work()) }
   } catch (e) {
     // Summarised rather than logged whole: a drizzle error's message is the SQL
     // and its bound parameters, and those parameters include user ids. See
     // lib/db/errors.ts.
-    const summary = dbErrorSummary(e);
-    console.error(`maintenance: ${job} failed`, summary);
-    return { job, ok: false, summary: `failed: ${summary}` };
+    const summary = dbErrorSummary(e)
+    console.error(`maintenance: ${job} failed`, summary)
+    return { job, ok: false, summary: `failed: ${summary}` }
   }
 }
 
 export async function runMaintenance(dryRun: boolean): Promise<MaintenanceReport> {
-  const started = Date.now();
+  const started = Date.now()
 
   // Sequential rather than parallel. They all touch the same database, and this
   // exists to run at four in the morning rather than quickly — four concurrent
   // bulk deletes competing for locks is a worse neighbour to a live request than
   // four that wait for each other.
-  const jobs: JobOutcome[] = [];
+  const jobs: JobOutcome[] = []
 
   jobs.push(
     await run("audit-events", async () => {
-      const r = await pruneAuditEvents(dryRun);
+      const r = await pruneAuditEvents(dryRun)
       return {
         summary: dryRun
           ? `${r.expired} expired, none deleted`
           : `deleted ${r.deleted} of ${r.expired} expired`,
         truncated: r.truncated,
-      };
+      }
     }),
-  );
+  )
 
   jobs.push(
     await run("agent-enrollments", async () => {
-      const r = await pruneAbandonedEnrollments(dryRun);
+      const r = await pruneAbandonedEnrollments(dryRun)
       return {
         summary: dryRun
           ? `${r.abandoned} abandoned, none deleted`
           : `deleted ${r.deleted} abandoned`,
-      };
+      }
     }),
-  );
+  )
 
   jobs.push(
     await run("rate-limit-counters", async () => {
-      const r = await clearStaleCounters(dryRun);
+      const r = await clearStaleCounters(dryRun)
       return {
         summary: dryRun ? `${r.stale} stale, none deleted` : `deleted ${r.deleted} stale`,
-      };
+      }
     }),
-  );
+  )
 
   jobs.push(
     await run("recording-objects", async () => {
-      const r = await sweepOrphanedObjects(dryRun);
+      const r = await sweepOrphanedObjects(dryRun)
       if (!r.applicable) {
-        return { summary: "no bucket configured; recordings are in Postgres" };
+        return { summary: "no bucket configured; recordings are in Postgres" }
       }
       return {
         summary:
@@ -128,14 +128,14 @@ export async function runMaintenance(dryRun: boolean): Promise<MaintenanceReport
           `, ${r.tooRecent} too recent to touch` +
           (r.failed > 0 ? `, ${r.failed} could not be removed` : ""),
         truncated: r.truncated,
-      };
+      }
     }),
-  );
+  )
 
   return {
     dryRun,
     ok: jobs.every((job) => job.ok),
     durationMs: Date.now() - started,
     jobs,
-  };
+  }
 }

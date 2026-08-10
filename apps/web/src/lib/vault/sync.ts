@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Vault sync.
@@ -24,51 +24,51 @@
  *    and your habits.
  */
 
-import type { Host } from "@/lib/hosts";
-import { listHosts, putHost } from "@/lib/hosts";
-import type { PinnedHostKey } from "@/lib/hostkeys";
-import { listPins, putPin } from "@/lib/hostkeys";
-import { idbGet, idbPut } from "@/lib/idb";
-import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys";
-import { listSnippets, putSnippet, type Snippet } from "@/lib/snippets";
+import type { Host } from "@/lib/hosts"
+import { listHosts, putHost } from "@/lib/hosts"
+import type { PinnedHostKey } from "@/lib/hostkeys"
+import { listPins, putPin } from "@/lib/hostkeys"
+import { idbGet, idbPut } from "@/lib/idb"
+import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys"
+import { listSnippets, putSnippet, type Snippet } from "@/lib/snippets"
 
-import { decryptVault, encryptVault, type VaultEnvelope } from "./crypto";
-import { getTombstones, setTombstones } from "./tombstones";
+import { decryptVault, encryptVault, type VaultEnvelope } from "./crypto"
+import { getTombstones, setTombstones } from "./tombstones"
 
-export { getTombstones, recordDeletion } from "./tombstones";
+export { getTombstones, recordDeletion } from "./tombstones"
 
 /** A portable key as it travels: ciphertext plus the public half. */
 export interface SyncedKey {
-  id: string;
-  label: string;
-  mode: "portable";
-  publicKeyRaw: string; // base64
-  wrapped: { iv: string; ciphertext: string }; // base64
-  createdAt: number;
+  id: string
+  label: string
+  mode: "portable"
+  publicKeyRaw: string // base64
+  wrapped: { iv: string; ciphertext: string } // base64
+  createdAt: number
 }
 
 export interface VaultDocument {
-  hosts: Host[];
-  keys: SyncedKey[];
-  hostKeys: PinnedHostKey[];
+  hosts: Host[]
+  keys: SyncedKey[]
+  hostKeys: PinnedHostKey[]
   /**
    * Added after the first vaults were written, so every document read from the
    * server predating it arrives without this field. The pull path spreads over
    * emptyDoc() and mergeVault defends itself, which is why this can stay
    * required in the type instead of leaking an optional into every consumer.
    */
-  snippets: Snippet[];
+  snippets: Snippet[]
   /** id -> deletedAt, so a delete beats an older edit. Shared across kinds. */
-  tombstones: Record<string, number>;
-  updatedAt: number;
+  tombstones: Record<string, number>
+  updatedAt: number
 }
 
 interface SyncState {
-  version: number;
-  lastSyncedAt: number;
+  version: number
+  lastSyncedAt: number
 }
 
-const STATE_KEY = "sync-state";
+const STATE_KEY = "sync-state"
 
 const emptyDoc = (): VaultDocument => ({
   hosts: [],
@@ -77,31 +77,31 @@ const emptyDoc = (): VaultDocument => ({
   snippets: [],
   tombstones: {},
   updatedAt: 0,
-});
+})
 
 async function getState(): Promise<SyncState> {
-  return (await idbGet<SyncState>("vault", STATE_KEY)) ?? { version: 0, lastSyncedAt: 0 };
+  return (await idbGet<SyncState>("vault", STATE_KEY)) ?? { version: 0, lastSyncedAt: 0 }
 }
 
 async function setState(state: SyncState): Promise<void> {
-  await idbPut("vault", STATE_KEY, state);
+  await idbPut("vault", STATE_KEY, state)
 }
 
 /* ------------------------------------------------------------- encoding --- */
 
 const b64 = (b: ArrayBuffer | Uint8Array): string => {
-  const bytes = b instanceof Uint8Array ? b : new Uint8Array(b);
-  let s = "";
-  for (const byte of bytes) s += String.fromCharCode(byte);
-  return btoa(s);
-};
+  const bytes = b instanceof Uint8Array ? b : new Uint8Array(b)
+  let s = ""
+  for (const byte of bytes) s += String.fromCharCode(byte)
+  return btoa(s)
+}
 
 const unb64 = (s: string): ArrayBuffer => {
-  const bin = atob(s);
-  const out = new Uint8Array(new ArrayBuffer(bin.length));
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out.buffer;
-};
+  const bin = atob(s)
+  const out = new Uint8Array(new ArrayBuffer(bin.length))
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out.buffer
+}
 
 /**
  * Only portable keys travel. A device-bound key is a non-extractable CryptoKey
@@ -109,7 +109,7 @@ const unb64 = (s: string): ArrayBuffer => {
  * send, which is the property the mode is chosen for.
  */
 function toSyncedKey(rec: StoredKey): SyncedKey | null {
-  if (rec.mode !== "portable" || !rec.wrapped) return null;
+  if (rec.mode !== "portable" || !rec.wrapped) return null
   return {
     id: rec.id,
     label: rec.label,
@@ -120,7 +120,7 @@ function toSyncedKey(rec: StoredKey): SyncedKey | null {
       ciphertext: b64(rec.wrapped.ciphertext),
     },
     createdAt: rec.createdAt,
-  };
+  }
 }
 
 function fromSyncedKey(k: SyncedKey): StoredKey {
@@ -134,7 +134,7 @@ function fromSyncedKey(k: SyncedKey): StoredKey {
       ciphertext: unb64(k.wrapped.ciphertext),
     },
     createdAt: k.createdAt,
-  };
+  }
 }
 
 /* ---------------------------------------------------------------- merge --- */
@@ -159,31 +159,31 @@ function mergeById<T extends { id: string }>(
   stamp: (item: T) => number,
   tombstones: Record<string, number>,
 ): T[] {
-  const byId = new Map<string, T>();
+  const byId = new Map<string, T>()
   for (const item of [...remote, ...local]) {
-    const existing = byId.get(item.id);
-    if (!existing || stamp(item) > stamp(existing)) byId.set(item.id, item);
+    const existing = byId.get(item.id)
+    if (!existing || stamp(item) > stamp(existing)) byId.set(item.id, item)
   }
   return [...byId.values()].filter((item) => {
-    const deletedAt = tombstones[item.id];
-    return !deletedAt || stamp(item) > deletedAt;
-  });
+    const deletedAt = tombstones[item.id]
+    return !deletedAt || stamp(item) > deletedAt
+  })
 }
 
 /**
  * The stamp hosts merge on. Exported so restore.ts counts against the same
  * number the merge resolved on rather than a second, drifting copy of it.
  */
-export const hostStamp = (h: Host): number => h.updatedAt ?? h.lastUsedAt ?? h.createdAt;
+export const hostStamp = (h: Host): number => h.updatedAt ?? h.lastUsedAt ?? h.createdAt
 
 /**
  * Pure, so it can be tested without a network or a database — which matters,
  * because this is where data gets lost if it's wrong.
  */
 export function mergeVault(local: VaultDocument, remote: VaultDocument): VaultDocument {
-  const tombstones = { ...remote.tombstones };
+  const tombstones = { ...remote.tombstones }
   for (const [id, at] of Object.entries(local.tombstones)) {
-    tombstones[id] = Math.max(tombstones[id] ?? 0, at);
+    tombstones[id] = Math.max(tombstones[id] ?? 0, at)
   }
 
   return {
@@ -212,7 +212,7 @@ export function mergeVault(local: VaultDocument, remote: VaultDocument): VaultDo
     ),
     tombstones,
     updatedAt: Math.max(local.updatedAt, remote.updatedAt),
-  };
+  }
 }
 
 /* ----------------------------------------------------------- local state --- */
@@ -224,7 +224,7 @@ async function localDocument(): Promise<VaultDocument> {
     listPins(),
     listSnippets(),
     getTombstones(),
-  ]);
+  ])
 
   return {
     hosts,
@@ -233,18 +233,18 @@ async function localDocument(): Promise<VaultDocument> {
     snippets,
     tombstones,
     updatedAt: Date.now(),
-  };
+  }
 }
 
 async function applyLocally(doc: VaultDocument): Promise<void> {
   // putHost, not saveHost: saveHost stamps updatedAt with "now", which would
   // restamp every record the server just handed us as a local edit and make the
   // next sync fight this one.
-  for (const host of doc.hosts) await putHost(host);
-  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key));
-  for (const pin of doc.hostKeys) await putPin(pin);
-  for (const snippet of doc.snippets ?? []) await putSnippet(snippet);
-  await setTombstones(doc.tombstones);
+  for (const host of doc.hosts) await putHost(host)
+  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key))
+  for (const pin of doc.hostKeys) await putPin(pin)
+  for (const snippet of doc.snippets ?? []) await putSnippet(snippet)
+  await setTombstones(doc.tombstones)
 }
 
 /**
@@ -261,11 +261,11 @@ async function opensWith(key: SyncedKey, vaultKey: CryptoKey): Promise<boolean> 
       { name: "AES-GCM", iv: unb64(key.wrapped.iv) },
       vaultKey,
       unb64(key.wrapped.ciphertext),
-    );
-    new Uint8Array(plaintext).fill(0);
-    return true;
+    )
+    new Uint8Array(plaintext).fill(0)
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -279,12 +279,12 @@ export interface SyncResult {
    *                     this is the result of re-reading and merging on top of it
    *   offline           the server could not be reached; nothing was pushed
    */
-  status: "synced" | "up-to-date" | "conflict-resolved" | "offline";
-  version: number;
-  hosts: number;
-  keys: number;
-  hostKeys: number;
-  snippets: number;
+  status: "synced" | "up-to-date" | "conflict-resolved" | "offline"
+  version: number
+  hosts: number
+  keys: number
+  hostKeys: number
+  snippets: number
   /**
    * Portable keys this device holds that the current vault key cannot open, and
    * that the server has never seen, so they were kept out of the push.
@@ -297,7 +297,7 @@ export interface SyncResult {
    * Withholding keeps the damage on the one device that already has it and lets
    * the keys page say so.
    */
-  keysWithheld: number;
+  keysWithheld: number
 }
 
 /**
@@ -305,7 +305,7 @@ export interface SyncResult {
  * wrote first, so we re-read, merge, and retry rather than overwrite.
  */
 export async function syncVault(vaultKey: CryptoKey): Promise<SyncResult> {
-  return runSync(vaultKey, 2, false);
+  return runSync(vaultKey, 2, false)
 }
 
 async function runSync(
@@ -313,11 +313,11 @@ async function runSync(
   retries: number,
   afterConflict: boolean,
 ): Promise<SyncResult> {
-  const state = await getState();
+  const state = await getState()
 
-  let res: Response;
+  let res: Response
   try {
-    res = await fetch("/api/vault", { cache: "no-store" });
+    res = await fetch("/api/vault", { cache: "no-store" })
   } catch {
     return {
       status: "offline",
@@ -327,45 +327,45 @@ async function runSync(
       hostKeys: 0,
       snippets: 0,
       keysWithheld: 0,
-    };
+    }
   }
-  if (res.status === 401) throw new Error("not signed in");
-  if (!res.ok) throw new Error(`vault pull failed: ${res.status}`);
+  if (res.status === 401) throw new Error("not signed in")
+  if (!res.ok) throw new Error(`vault pull failed: ${res.status}`)
 
-  const pulled = (await res.json()) as { version: number; blob: string | null };
+  const pulled = (await res.json()) as { version: number; blob: string | null }
 
   const remote: VaultDocument = pulled.blob
     ? {
         ...emptyDoc(),
         ...(await decryptVault<VaultDocument>(vaultKey, JSON.parse(pulled.blob) as VaultEnvelope)),
       }
-    : emptyDoc();
+    : emptyDoc()
 
-  const local = await localDocument();
-  const merged = mergeVault(local, remote);
-  await applyLocally(merged);
+  const local = await localDocument()
+  const merged = mergeVault(local, remote)
+  await applyLocally(merged)
 
   // A key the server already holds is pushed back unchanged even if it does not
   // open — it is the only copy of that ciphertext, and dropping it from the
   // document would delete it everywhere. Only keys this device would be
   // *introducing* are checked, because those are the ones a stale wrapping can
   // still be kept out of.
-  const known = new Set(remote.keys.map((k) => k.id));
-  const publishable: SyncedKey[] = [];
-  let keysWithheld = 0;
+  const known = new Set(remote.keys.map((k) => k.id))
+  const publishable: SyncedKey[] = []
+  let keysWithheld = 0
   for (const key of merged.keys) {
-    if (known.has(key.id) || (await opensWith(key, vaultKey))) publishable.push(key);
-    else keysWithheld++;
+    if (known.has(key.id) || (await opensWith(key, vaultKey))) publishable.push(key)
+    else keysWithheld++
   }
 
-  const outgoing: VaultDocument = { ...merged, keys: publishable };
+  const outgoing: VaultDocument = { ...merged, keys: publishable }
 
   // Nothing to say and nothing to write. Skipped only when the server already
   // holds a document: on a brand-new account the first push is what creates one,
   // and an account with no blob at all has an export button that says there is
   // nothing to export.
   if (pulled.blob && sameRecords(outgoing, remote)) {
-    await setState({ version: pulled.version, lastSyncedAt: Date.now() });
+    await setState({ version: pulled.version, lastSyncedAt: Date.now() })
     return {
       status: "up-to-date",
       version: pulled.version,
@@ -374,28 +374,28 @@ async function runSync(
       hostKeys: merged.hostKeys.length,
       snippets: merged.snippets.length,
       keysWithheld,
-    };
+    }
   }
 
-  const envelope = await encryptVault(vaultKey, outgoing);
+  const envelope = await encryptVault(vaultKey, outgoing)
   const put = await fetch("/api/vault", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ blob: JSON.stringify(envelope), baseVersion: pulled.version }),
-  });
+  })
 
   if (put.status === 409) {
-    if (retries <= 0) throw new Error("vault sync kept conflicting; try again");
+    if (retries <= 0) throw new Error("vault sync kept conflicting; try again")
     // The retry carries the fact that a conflict happened, so the status
     // reports one only when one occurred rather than inferring it from the
     // version number — every vault past its first write has a non-zero version,
     // which made "conflict-resolved" the label on every ordinary sync.
-    return runSync(vaultKey, retries - 1, true);
+    return runSync(vaultKey, retries - 1, true)
   }
-  if (!put.ok) throw new Error(`vault push failed: ${put.status}`);
+  if (!put.ok) throw new Error(`vault push failed: ${put.status}`)
 
-  const { version } = (await put.json()) as { version: number };
-  await setState({ version, lastSyncedAt: Date.now() });
+  const { version } = (await put.json()) as { version: number }
+  await setState({ version, lastSyncedAt: Date.now() })
 
   return {
     status: afterConflict ? "conflict-resolved" : "synced",
@@ -405,7 +405,7 @@ async function runSync(
     hostKeys: merged.hostKeys.length,
     snippets: merged.snippets.length,
     keysWithheld,
-  };
+  }
 }
 
 /**
@@ -419,6 +419,6 @@ async function runSync(
  */
 function sameRecords(a: VaultDocument, b: VaultDocument): boolean {
   const shape = (d: VaultDocument) =>
-    JSON.stringify([d.hosts, d.keys, d.hostKeys, d.snippets ?? [], d.tombstones]);
-  return shape(a) === shape(b);
+    JSON.stringify([d.hosts, d.keys, d.hostKeys, d.snippets ?? [], d.tombstones])
+  return shape(a) === shape(b)
 }

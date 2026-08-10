@@ -16,29 +16,29 @@
  * one of our panes"; the module below says which one and what it holds.
  */
 
-import type { SftpEntry } from "@/lib/ssh/types";
+import type { SftpEntry } from "@/lib/ssh/types"
 
 /**
  * Marker type on the DataTransfer. Vendor-prefixed and lowercase: the drag and
  * drop spec lowercases type strings, so a mixed-case name silently never
  * matches on the receiving end.
  */
-export const REMOTE_DRAG_TYPE = "application/x-webxterm-remote-files";
+export const REMOTE_DRAG_TYPE = "application/x-webxterm-remote-files"
 
 export interface RemoteDrag {
   /** Which pane started it, so a pane can refuse a drop onto itself. */
-  paneId: string;
+  paneId: string
   /** The session the entries live on. */
-  sessionId: string;
+  sessionId: string
   /** Directory the entries were listed from. */
-  cwd: string;
-  entries: SftpEntry[];
+  cwd: string
+  entries: SftpEntry[]
 }
 
-let active: RemoteDrag | null = null;
+let active: RemoteDrag | null = null
 
 export function beginRemoteDrag(drag: RemoteDrag): void {
-  active = drag;
+  active = drag
 }
 
 /**
@@ -49,7 +49,7 @@ export function beginRemoteDrag(drag: RemoteDrag): void {
  * available from the DataTransfer until it is too late to render them.
  */
 export function currentRemoteDrag(): RemoteDrag | null {
-  return active;
+  return active
 }
 
 /**
@@ -59,5 +59,5 @@ export function currentRemoteDrag(): RemoteDrag | null {
  * next dragover would offer to copy files the user is no longer holding.
  */
 export function endRemoteDrag(): void {
-  active = null;
+  active = null
 }

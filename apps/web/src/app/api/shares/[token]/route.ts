@@ -1,8 +1,8 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
-import { enforce } from "@/lib/rate-limit";
-import { BodyError, readBody, statusForBodyError } from "@/lib/recording/blobs";
+import { db, schema } from "@/lib/db"
+import { enforce } from "@/lib/rate-limit"
+import { BodyError, readBody, statusForBodyError } from "@/lib/recording/blobs"
 
 /**
  * The public end of a share link. No session, by design.
@@ -54,7 +54,7 @@ import { BodyError, readBody, statusForBodyError } from "@/lib/recording/blobs";
  */
 
 /** Thirty views a minute. A person opening a link does it once. */
-const VIEW_LIMIT = { max: 30, windowSeconds: 60 };
+const VIEW_LIMIT = { max: 30, windowSeconds: 60 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   // Before the statement below, which increments a counter and can serve
@@ -64,11 +64,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     message:
       "Too many requests for shared recordings from this network. This is a rate limit rather " +
       "than anything about the link you have — wait a moment and try it again.",
-  });
-  if (limited) return limited;
+  })
+  if (limited) return limited
 
   // Next.js 16: route params are async.
-  const { token } = await params;
+  const { token } = await params
 
   const [row] = await db
     .update(schema.recordingShare)
@@ -99,12 +99,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       views: schema.recordingShare.views,
       maxViews: schema.recordingShare.maxViews,
       expiresAt: schema.recordingShare.expiresAt,
-    });
+    })
 
   // One answer for four situations. Splitting them would be friendlier to the
   // one person holding a link that has just expired and would also tell anyone
   // guessing tokens which of their guesses named a real share.
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
+  if (!row) return Response.json({ error: "not found" }, { status: 404 })
 
   /**
    * The bytes, which may be in the row above or in a bucket.
@@ -124,22 +124,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
    * that has never heard of `revoked_at`, so handing one out would mean revoke
    * stops meaning revoked for as long as the signature lives.
    */
-  let blob: Buffer | null;
+  let blob: Buffer | null
   try {
-    blob = await readBody(row);
+    blob = await readBody(row)
   } catch (e) {
-    if (!(e instanceof BodyError)) throw e;
+    if (!(e instanceof BodyError)) throw e
     await db
       .update(schema.recordingShare)
       .set({ views: sql`greatest(${schema.recordingShare.views} - 1, 0)` })
-      .where(eq(schema.recordingShare.id, row.id));
-    return Response.json({ error: e.message }, { status: statusForBodyError(e) });
+      .where(eq(schema.recordingShare.id, row.id))
+    return Response.json({ error: e.message }, { status: statusForBodyError(e) })
   }
 
   // A live share with no bytes. The revoke path nulls both columns and stamps
   // `revoked_at`, which the WHERE clause above already excluded, so reaching
   // here means the two got out of step — 404 rather than a crash on a null.
-  if (!blob) return Response.json({ error: "not found" }, { status: 404 });
+  if (!blob) return Response.json({ error: "not found" }, { status: 404 })
 
   return Response.json(
     {
@@ -160,5 +160,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
         "Cache-Control": "no-store, private",
       },
     },
-  );
+  )
 }

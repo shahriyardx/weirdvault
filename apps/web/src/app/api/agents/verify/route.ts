@@ -1,8 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { timingSafeEqual } from "node:crypto"
+import { eq } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
-import { verifyAgentSignature } from "@/lib/agents/verify";
+import { db, schema } from "@/lib/db"
+import { verifyAgentSignature } from "@/lib/agents/verify"
 
 /**
  * The relay asking whether an agent is who it says it is.
@@ -39,14 +39,14 @@ import { verifyAgentSignature } from "@/lib/agents/verify";
  * configuration silently enabling the other's.
  */
 function authorised(request: Request): boolean {
-  const secret = process.env.RELAY_AGENT_SECRET;
-  if (!secret) return false;
+  const secret = process.env.RELAY_AGENT_SECRET
+  if (!secret) return false
 
-  const header = request.headers.get("authorization") ?? "";
-  const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const a = Buffer.from(presented, "utf8");
-  const b = Buffer.from(secret, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+  const header = request.headers.get("authorization") ?? ""
+  const presented = header.startsWith("Bearer ") ? header.slice(7) : ""
+  const a = Buffer.from(presented, "utf8")
+  const b = Buffer.from(secret, "utf8")
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 function refuse(error: string) {
@@ -54,22 +54,22 @@ function refuse(error: string) {
   // plane said no" from "the control plane could not be reached", and both must
   // refuse the agent — but only the first should be reported to an operator as
   // a decision rather than an outage.
-  return Response.json({ ok: false, error });
+  return Response.json({ ok: false, error })
 }
 
 export async function POST(request: Request) {
   if (!authorised(request)) {
-    return Response.json({ error: "unauthorized" }, { status: 401 });
+    return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  let body: { agentId?: unknown; nonce?: unknown; signature?: unknown };
+  let body: { agentId?: unknown; nonce?: unknown; signature?: unknown }
   try {
-    body = await request.json();
+    body = await request.json()
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { agentId, nonce, signature } = body;
+  const { agentId, nonce, signature } = body
   if (
     typeof agentId !== "string" ||
     typeof nonce !== "string" ||
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "agentId, nonce and signature (strings) required" },
       { status: 400 },
-    );
+    )
   }
 
   const [row] = await db
@@ -93,21 +93,21 @@ export async function POST(request: Request) {
     })
     .from(schema.agent)
     .where(eq(schema.agent.id, agentId))
-    .limit(1);
+    .limit(1)
 
   // Same words for "no such agent" and "wrong signature". The relay logs this
   // and an operator reading the log learns nothing either way, which is correct:
   // whoever is guessing agent ids should not be told when they guess one right.
-  if (!row) return refuse("unknown or revoked agent");
-  if (row.revokedAt) return refuse("unknown or revoked agent");
+  if (!row) return refuse("unknown or revoked agent")
+  if (row.revokedAt) return refuse("unknown or revoked agent")
 
   const valid = verifyAgentSignature({
     publicKeyBase64: row.publicKey,
     agentId,
     nonce,
     signatureBase64: signature,
-  });
-  if (!valid) return refuse("signature did not verify");
+  })
+  if (!valid) return refuse("signature did not verify")
 
   // Best-effort. A failed stamp is a stale "last seen" in the dashboard, and
   // refusing a verified agent over a cosmetic write would take somebody's
@@ -116,10 +116,10 @@ export async function POST(request: Request) {
     await db
       .update(schema.agent)
       .set({ lastSeenAt: new Date() })
-      .where(eq(schema.agent.id, agentId));
+      .where(eq(schema.agent.id, agentId))
   } catch (e) {
-    console.warn("could not stamp agent lastSeenAt", e);
+    console.warn("could not stamp agent lastSeenAt", e)
   }
 
-  return Response.json({ ok: true, userId: row.userId });
+  return Response.json({ ok: true, userId: row.userId })
 }

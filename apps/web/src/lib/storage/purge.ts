@@ -1,4 +1,4 @@
-import { accountPrefixes, deletePrefix, objectStore } from "./objects";
+import { accountPrefixes, deletePrefix, objectStore } from "./objects"
 
 /**
  * Everything one account put in the bucket, removed after the account is gone.
@@ -37,10 +37,10 @@ import { accountPrefixes, deletePrefix, objectStore } from "./objects";
  */
 
 export interface PurgeResult {
-  deleted: number;
-  failed: number;
+  deleted: number
+  failed: number
   /** False when this deployment stores recordings in Postgres and there is nothing to purge. */
-  attempted: boolean;
+  attempted: boolean
 }
 
 /**
@@ -52,30 +52,30 @@ export interface PurgeResult {
  * log and the sweep exist for.
  */
 export async function purgeAccountObjects(userId: string): Promise<PurgeResult> {
-  const store = objectStore();
-  if (!store) return { deleted: 0, failed: 0, attempted: false };
+  const store = objectStore()
+  if (!store) return { deleted: 0, failed: 0, attempted: false }
 
-  let deleted = 0;
-  let failed = 0;
+  let deleted = 0
+  let failed = 0
 
   for (const prefix of accountPrefixes(userId)) {
     try {
-      const result = await deletePrefix(store, prefix);
-      deleted += result.deleted;
-      failed += result.failed;
+      const result = await deletePrefix(store, prefix)
+      deleted += result.deleted
+      failed += result.failed
     } catch (e) {
       // A listing that failed. Counted as one failure rather than as the
       // unknown number of objects behind it, and the next prefix is still
       // tried — a bucket that refuses `rec/` may well serve `share/`, and
       // stopping here would leave the shares behind for no reason.
-      failed += 1;
+      failed += 1
       console.error(
         `could not purge ${prefix} after account deletion; the objects are orphaned until ` +
           "scripts/sweep-recordings.mjs runs",
         e instanceof Error ? e.message : "unknown error",
-      );
+      )
     }
   }
 
-  return { deleted, failed, attempted: true };
+  return { deleted, failed, attempted: true }
 }

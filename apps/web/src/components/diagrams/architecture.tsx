@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 /**
  * The trust-boundary diagram.
@@ -134,5 +134,5 @@ export function ArchitectureDiagram({ className }: { className?: string }) {
         Encryption begins and ends inside the tab.
       </text>
     </svg>
-  );
+  )
 }

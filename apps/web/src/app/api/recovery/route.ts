@@ -1,12 +1,12 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
-import { headers } from "next/headers";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
+import { eq, sql } from "drizzle-orm"
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { clientAddress } from "@/lib/audit/address";
-import { ipPrefix } from "@/lib/audit/events";
-import { db, schema } from "@/lib/db";
-import { enforce } from "@/lib/rate-limit";
+import { auth } from "@/lib/auth"
+import { clientAddress } from "@/lib/audit/address"
+import { ipPrefix } from "@/lib/audit/events"
+import { db, schema } from "@/lib/db"
+import { enforce } from "@/lib/rate-limit"
 
 /**
  * Recovery envelopes.
@@ -63,35 +63,35 @@ import { enforce } from "@/lib/rate-limit";
  * the payload layout changes, both ends move together or enrolment starts
  * failing this validation, which is the loud failure rather than the quiet one.
  */
-const ID_HEX_CHARS = 32;
-const SALT_BYTES = 16;
-const IV_BYTES = 12;
-const CIPHERTEXT_BYTES = 113; // 1 version byte + three 32-byte branches + GCM tag
+const ID_HEX_CHARS = 32
+const SALT_BYTES = 16
+const IV_BYTES = 12
+const CIPHERTEXT_BYTES = 113 // 1 version byte + three 32-byte branches + GCM tag
 
-const MIN_ENVELOPES = 1;
-const MAX_ENVELOPES = 32;
+const MIN_ENVELOPES = 1
+const MAX_ENVELOPES = 32
 
 interface StoredEnvelope {
-  id: string;
-  salt: string;
-  iv: string;
-  ciphertext: string;
+  id: string
+  salt: string
+  iv: string
+  ciphertext: string
 }
 
 function isStoredEnvelope(value: unknown): value is StoredEnvelope {
-  if (typeof value !== "object" || value === null) return false;
-  const e = value as Record<string, unknown>;
+  if (typeof value !== "object" || value === null) return false
+  const e = value as Record<string, unknown>
   if (typeof e.id !== "string" || !new RegExp(`^[0-9a-f]{${ID_HEX_CHARS}}$`).test(e.id)) {
-    return false;
+    return false
   }
   for (const [field, bytes] of [
     ["salt", SALT_BYTES],
     ["iv", IV_BYTES],
     ["ciphertext", CIPHERTEXT_BYTES],
   ] as const) {
-    const v = e[field];
-    if (typeof v !== "string") return false;
-    const buf = Buffer.from(v, "base64");
+    const v = e[field]
+    if (typeof v !== "string") return false
+    const buf = Buffer.from(v, "base64")
     // Exact lengths, not maxima. A ciphertext of an unexpected size would be
     // storage this route cannot account for, and would make the decoy above
     // distinguishable from the real thing by length alone.
@@ -99,14 +99,14 @@ function isStoredEnvelope(value: unknown): value is StoredEnvelope {
       buf.length !== bytes ||
       buf.toString("base64").replace(/=+$/, "") !== v.replace(/=+$/, "")
     ) {
-      return false;
+      return false
     }
   }
-  return true;
+  return true
 }
 
 function envelopesOf(row: { envelopes: unknown }): StoredEnvelope[] {
-  return Array.isArray(row.envelopes) ? (row.envelopes as StoredEnvelope[]) : [];
+  return Array.isArray(row.envelopes) ? (row.envelopes as StoredEnvelope[]) : []
 }
 
 /* ------------------------------------------------------------------- decoys */
@@ -122,33 +122,33 @@ function envelopesOf(row: { envelopes: unknown }): StoredEnvelope[] {
  * degrades rather than breaks, and it degrades on a deployment that is already
  * misconfigured.
  */
-const DECOY_SECRET = process.env.BETTER_AUTH_SECRET ?? randomBytes(32).toString("hex");
+const DECOY_SECRET = process.env.BETTER_AUTH_SECRET ?? randomBytes(32).toString("hex")
 
 function decoyBytes(label: string, length: number): Buffer {
-  const out = Buffer.alloc(length);
-  let written = 0;
-  let counter = 0;
+  const out = Buffer.alloc(length)
+  let written = 0
+  let counter = 0
   while (written < length) {
     const block = createHmac("sha256", DECOY_SECRET)
       .update(`webxterm/recovery/decoy/v1:${label}:${counter}`)
-      .digest();
-    const take = Math.min(block.length, length - written);
-    block.copy(out, written, 0, take);
-    written += take;
-    counter++;
+      .digest()
+    const take = Math.min(block.length, length - written)
+    block.copy(out, written, 0, take)
+    written += take
+    counter++
   }
-  return out;
+  return out
 }
 
 /** An envelope that is indistinguishable from a real one and opens for nobody. */
 function decoyEnvelope(email: string, codeId: string): StoredEnvelope {
-  const label = `${email}:${codeId}`;
+  const label = `${email}:${codeId}`
   return {
     id: codeId,
     salt: decoyBytes(`${label}:salt`, SALT_BYTES).toString("base64"),
     iv: decoyBytes(`${label}:iv`, IV_BYTES).toString("base64"),
     ciphertext: decoyBytes(`${label}:ct`, CIPHERTEXT_BYTES).toString("base64"),
-  };
+  }
 }
 
 /* ------------------------------------------------------------ rate limiting */
@@ -170,38 +170,38 @@ function decoyEnvelope(email: string, codeId: string): StoredEnvelope {
  * unpleasant and it is still the right way round: the alternative is a limiter
  * that stops nobody.
  */
-const REDEEM_LIMIT = { max: 20, windowSeconds: 600 };
+const REDEEM_LIMIT = { max: 20, windowSeconds: 600 }
 
 /* ------------------------------------------------------------------ helpers */
 
 async function requireUser() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session ?? null;
+  const session = await auth.api.getSession({ headers: await headers() })
+  return session ?? null
 }
 
 /** Null unless a trusted proxy is configured — see lib/audit/address.ts. */
 async function clientIp(): Promise<string | null> {
-  return clientAddress(await headers());
+  return clientAddress(await headers())
 }
 
 /** Constant-time id comparison, so envelope selection cannot be timed apart. */
 function idMatches(a: string, b: string): boolean {
-  const left = Buffer.from(a, "utf8");
-  const right = Buffer.from(b, "utf8");
-  return left.length === right.length && timingSafeEqual(left, right);
+  const left = Buffer.from(a, "utf8")
+  const right = Buffer.from(b, "utf8")
+  return left.length === right.length && timingSafeEqual(left, right)
 }
 
 /* ---------------------------------------------------------------------- GET */
 
 export async function GET() {
-  const session = await requireUser();
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await requireUser()
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   const [row] = await db
     .select()
     .from(schema.recoveryBlob)
     .where(eq(schema.recoveryBlob.userId, session.user.id))
-    .limit(1);
+    .limit(1)
 
   if (!row) {
     return Response.json({
@@ -209,7 +209,7 @@ export async function GET() {
       remaining: 0,
       createdAt: null,
       lastUsedAt: null,
-    });
+    })
   }
 
   return Response.json({
@@ -217,53 +217,53 @@ export async function GET() {
     remaining: envelopesOf(row).length,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
-  });
+  })
 }
 
 /* --------------------------------------------------------------------- POST */
 
 export async function POST(request: Request) {
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown>
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
   // The action decides whether a session is required, so it is read before any
   // authentication happens. Redemption exists precisely for callers who have
   // none.
-  if (body.action === "redeem") return redeem(request, body);
-  if (body.action === "enrol") return enrol(body);
-  return Response.json({ error: 'action must be "enrol" or "redeem"' }, { status: 400 });
+  if (body.action === "redeem") return redeem(request, body)
+  if (body.action === "enrol") return enrol(body)
+  return Response.json({ error: 'action must be "enrol" or "redeem"' }, { status: 400 })
 }
 
 async function enrol(body: Record<string, unknown>) {
-  const session = await requireUser();
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await requireUser()
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const { envelopes } = body;
+  const { envelopes } = body
   if (!Array.isArray(envelopes)) {
-    return Response.json({ error: "envelopes must be an array" }, { status: 400 });
+    return Response.json({ error: "envelopes must be an array" }, { status: 400 })
   }
   if (envelopes.length < MIN_ENVELOPES || envelopes.length > MAX_ENVELOPES) {
     return Response.json(
       { error: `between ${MIN_ENVELOPES} and ${MAX_ENVELOPES} envelopes` },
       { status: 400 },
-    );
+    )
   }
   if (!envelopes.every(isStoredEnvelope)) {
     return Response.json(
       { error: "each envelope must be { id, salt, iv, ciphertext } with exact lengths" },
       { status: 400 },
-    );
+    )
   }
 
-  const ids = new Set(envelopes.map((e) => e.id));
+  const ids = new Set(envelopes.map((e) => e.id))
   if (ids.size !== envelopes.length) {
     // Two identical ids would mean two identical codes, which would silently
     // halve the set. Better to reject a client bug than to store it.
-    return Response.json({ error: "duplicate envelope id" }, { status: 400 });
+    return Response.json({ error: "duplicate envelope id" }, { status: 400 })
   }
 
   const clean: StoredEnvelope[] = envelopes.map((e) => ({
@@ -271,8 +271,8 @@ async function enrol(body: Record<string, unknown>) {
     salt: e.salt,
     iv: e.iv,
     ciphertext: e.ciphertext,
-  }));
-  const now = new Date();
+  }))
+  const now = new Date()
 
   // Replace, never merge. "Regenerate my codes" has to retire the old ones, or
   // a leaked card of codes stays live after the user believes they revoked it.
@@ -289,7 +289,7 @@ async function enrol(body: Record<string, unknown>) {
     .onConflictDoUpdate({
       target: schema.recoveryBlob.userId,
       set: { envelopes: clean, updatedAt: now, lastUsedAt: null },
-    });
+    })
 
   await db.insert(schema.auditEvent).values({
     id: crypto.randomUUID(),
@@ -298,9 +298,9 @@ async function enrol(body: Record<string, unknown>) {
     source: "server",
     ipPrefix: ipPrefix(await clientIp()),
     metadata: { codes: clean.length },
-  });
+  })
 
-  return Response.json({ enrolled: true, remaining: clean.length }, { status: 201 });
+  return Response.json({ enrolled: true, remaining: clean.length }, { status: 201 })
 }
 
 /**
@@ -320,19 +320,19 @@ async function redeem(request: Request, body: Record<string, unknown>) {
   // header would hand every caller a private budget.
   const limited = await enforce("recovery-redeem", request, REDEEM_LIMIT, {
     message: "Too many recovery attempts. Wait ten minutes and try again.",
-  });
-  if (limited) return limited;
+  })
+  if (limited) return limited
 
-  const { email, codeId } = body;
+  const { email, codeId } = body
   if (typeof email !== "string" || typeof codeId !== "string") {
-    return Response.json({ error: "email and codeId required" }, { status: 400 });
+    return Response.json({ error: "email and codeId required" }, { status: 400 })
   }
-  const normalisedEmail = email.trim().toLowerCase();
+  const normalisedEmail = email.trim().toLowerCase()
   if (!new RegExp(`^[0-9a-f]{${ID_HEX_CHARS}}$`).test(codeId)) {
     // A malformed id cannot match anything, but answering "bad request" here
     // would still be a different answer than a well-formed miss gets. The decoy
     // keeps the two indistinguishable.
-    return Response.json({ envelope: decoyEnvelope(normalisedEmail, codeId) });
+    return Response.json({ envelope: decoyEnvelope(normalisedEmail, codeId) })
   }
 
   // One query for every caller, whether or not the account exists: the join is
@@ -347,20 +347,20 @@ async function redeem(request: Request, body: Record<string, unknown>) {
     .from(schema.recoveryBlob)
     .innerJoin(schema.user, eq(schema.user.id, schema.recoveryBlob.userId))
     .where(sql`lower(${schema.user.email}) = ${normalisedEmail}`)
-    .limit(1);
+    .limit(1)
 
-  const stored = row ? envelopesOf(row) : [];
-  const match = stored.find((e) => idMatches(e.id, codeId));
+  const stored = row ? envelopesOf(row) : []
+  const match = stored.find((e) => idMatches(e.id, codeId))
 
   if (!row || !match) {
-    return Response.json({ envelope: decoyEnvelope(normalisedEmail, codeId) });
+    return Response.json({ envelope: decoyEnvelope(normalisedEmail, codeId) })
   }
 
-  const remaining = stored.filter((e) => !idMatches(e.id, codeId));
+  const remaining = stored.filter((e) => !idMatches(e.id, codeId))
   await db
     .update(schema.recoveryBlob)
     .set({ envelopes: remaining, updatedAt: new Date(), lastUsedAt: new Date() })
-    .where(eq(schema.recoveryBlob.id, row.id));
+    .where(eq(schema.recoveryBlob.id, row.id))
 
   await db.insert(schema.auditEvent).values({
     id: crypto.randomUUID(),
@@ -373,21 +373,21 @@ async function redeem(request: Request, body: Record<string, unknown>) {
     // A null column is the honest answer. See lib/audit/address.ts.
     ipPrefix: ipPrefix(await clientIp()),
     metadata: { remaining: remaining.length },
-  });
+  })
 
-  return Response.json({ envelope: match });
+  return Response.json({ envelope: match })
 }
 
 /* ------------------------------------------------------------------- DELETE */
 
 export async function DELETE() {
-  const session = await requireUser();
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await requireUser()
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   const deleted = await db
     .delete(schema.recoveryBlob)
     .where(eq(schema.recoveryBlob.userId, session.user.id))
-    .returning({ id: schema.recoveryBlob.id });
+    .returning({ id: schema.recoveryBlob.id })
 
   // Only logged when something was actually removed. An audit row for a no-op
   // would be a record of an event that did not happen.
@@ -399,8 +399,8 @@ export async function DELETE() {
       source: "server",
       ipPrefix: ipPrefix(await clientIp()),
       metadata: {},
-    });
+    })
   }
 
-  return Response.json({ enrolled: false, remaining: 0, removed: deleted.length > 0 });
+  return Response.json({ enrolled: false, remaining: 0, removed: deleted.length > 0 })
 }

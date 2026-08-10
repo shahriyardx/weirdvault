@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Snippet records.
@@ -22,28 +22,28 @@
  * drop-in change to the four helpers below.
  */
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react"
 
-import { idbGet, idbPut } from "./idb";
-import { recordDeletion } from "./vault/tombstones";
+import { idbGet, idbPut } from "./idb"
+import { recordDeletion } from "./vault/tombstones"
 
 export interface Snippet {
-  id: string;
+  id: string
   /** What you call it in the list. Not unique; nothing keys off it. */
-  name: string;
+  name: string
   /** The text sent to the shell, verbatim. Newlines in here are real newlines. */
-  body: string;
-  description?: string;
-  tags?: string[];
-  createdAt: number;
+  body: string
+  description?: string
+  tags?: string[]
+  createdAt: number
   /** Bumped on every edit. This is the stamp vault merge resolves on. */
-  updatedAt: number;
+  updatedAt: number
 }
 
-const STORE = "vault";
-const KEY = "snippets";
+const STORE = "vault"
+const KEY = "snippets"
 
-type SnippetMap = Record<string, Snippet>;
+type SnippetMap = Record<string, Snippet>
 
 /* --------------------------------------------------------------- observers --- */
 
@@ -53,20 +53,20 @@ type SnippetMap = Record<string, Snippet>;
  * count plus a listener set is the smallest thing that works: useSyncExternalStore
  * demands a synchronous snapshot, and IndexedDB cannot give one.
  */
-let cachedCount: number | null = null;
-const listeners = new Set<() => void>();
+let cachedCount: number | null = null
+const listeners = new Set<() => void>()
 
 function publish(count: number) {
-  if (cachedCount === count) return;
-  cachedCount = count;
-  for (const fn of listeners) fn();
+  if (cachedCount === count) return
+  cachedCount = count
+  for (const fn of listeners) fn()
 }
 
 function subscribe(fn: () => void) {
-  listeners.add(fn);
+  listeners.add(fn)
   return () => {
-    listeners.delete(fn);
-  };
+    listeners.delete(fn)
+  }
 }
 
 /**
@@ -81,31 +81,31 @@ export function useSnippetCount(): number {
     () => cachedCount ?? 0,
     // Server render: IndexedDB does not exist there, and neither does the count.
     () => 0,
-  );
+  )
 
   useEffect(() => {
-    if (cachedCount === null) void listSnippets().catch(() => {});
-  }, []);
+    if (cachedCount === null) void listSnippets().catch(() => {})
+  }, [])
 
-  return count;
+  return count
 }
 
 /* ------------------------------------------------------------------ store --- */
 
 async function readMap(): Promise<SnippetMap> {
-  return (await idbGet<SnippetMap>(STORE, KEY)) ?? {};
+  return (await idbGet<SnippetMap>(STORE, KEY)) ?? {}
 }
 
 async function writeMap(map: SnippetMap): Promise<void> {
-  await idbPut(STORE, KEY, map);
-  publish(Object.keys(map).length);
+  await idbPut(STORE, KEY, map)
+  publish(Object.keys(map).length)
 }
 
 export async function listSnippets(): Promise<Snippet[]> {
-  const map = await readMap();
-  const all = Object.values(map);
-  publish(all.length);
-  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+  const map = await readMap()
+  const all = Object.values(map)
+  publish(all.length)
+  return all.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 /**
@@ -117,21 +117,21 @@ export async function listSnippets(): Promise<Snippet[]> {
  */
 export async function saveSnippet(
   snippet: Omit<Snippet, "id" | "createdAt" | "updatedAt"> & {
-    id?: string;
-    createdAt?: number;
+    id?: string
+    createdAt?: number
   },
 ): Promise<Snippet> {
-  const now = Date.now();
+  const now = Date.now()
   const record: Snippet = {
     ...snippet,
     id: snippet.id ?? crypto.randomUUID(),
     createdAt: snippet.createdAt ?? now,
     updatedAt: now,
-  };
-  const map = await readMap();
-  map[record.id] = record;
-  await writeMap(map);
-  return record;
+  }
+  const map = await readMap()
+  map[record.id] = record
+  await writeMap(map)
+  return record
 }
 
 /**
@@ -140,14 +140,14 @@ export async function saveSnippet(
  * like a local edit and start a stamp war between two devices.
  */
 export async function putSnippet(record: Snippet): Promise<void> {
-  const map = await readMap();
-  map[record.id] = record;
-  await writeMap(map);
+  const map = await readMap()
+  map[record.id] = record
+  await writeMap(map)
 }
 
 export async function deleteSnippet(id: string): Promise<void> {
-  const map = await readMap();
-  delete map[id];
-  await writeMap(map);
-  await recordDeletion(id);
+  const map = await readMap()
+  delete map[id]
+  await writeMap(map)
+  await recordDeletion(id)
 }

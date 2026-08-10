@@ -1,4 +1,4 @@
-import type { ITheme } from "@xterm/xterm";
+import type { ITheme } from "@xterm/xterm"
 
 /**
  * The xterm palette.
@@ -34,4 +34,4 @@ export const terminalTheme: ITheme = {
   brightMagenta: "#dbb4ff",
   brightCyan: "#74ccd8",
   brightWhite: "#eef1f6",
-};
+}

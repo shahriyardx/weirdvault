@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql } from "drizzle-orm"
 import {
   bigint,
   boolean,
@@ -11,7 +11,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/pg-core"
 
 /* ------------------------------------------------------------------ *
  * Better Auth core tables.
@@ -32,7 +32,7 @@ export const user = pgTable("user", {
   image: text("image"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+})
 
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
@@ -61,7 +61,7 @@ export const session = pgTable("session", {
    * revocation — the revoke dialog says so.
    */
   deviceId: text("device_id"),
-});
+})
 
 export const account = pgTable("account", {
   id: text("id").primaryKey(),
@@ -82,7 +82,7 @@ export const account = pgTable("account", {
   password: text("password"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+})
 
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
@@ -91,7 +91,7 @@ export const verification = pgTable("verification", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+})
 
 /* ------------------------------------------------------------------ *
  * Organization plugin — teams, membership, invitations.
@@ -104,7 +104,7 @@ export const organization = pgTable("organization", {
   logo: text("logo"),
   metadata: text("metadata"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+})
 
 export const member = pgTable(
   "member",
@@ -120,7 +120,7 @@ export const member = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("member_org_user_idx").on(t.organizationId, t.userId)],
-);
+)
 
 export const invitation = pgTable("invitation", {
   id: text("id").primaryKey(),
@@ -134,7 +134,7 @@ export const invitation = pgTable("invitation", {
   inviterId: text("inviter_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-});
+})
 
 /* ------------------------------------------------------------------ *
  * webxterm tables.
@@ -142,7 +142,7 @@ export const invitation = pgTable("invitation", {
 
 const bytea = customType<{ data: Buffer; default: false }>({
   dataType: () => "bytea",
-});
+})
 
 /**
  * The entire sync system.
@@ -167,7 +167,7 @@ export const vaultBlob = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("vault_blob_user_idx").on(t.userId)],
-);
+)
 
 /** Registered devices, for revocation and "where am I signed in". */
 export const device = pgTable(
@@ -197,7 +197,7 @@ export const device = pgTable(
     index("device_user_idx").on(t.userId),
     uniqueIndex("device_user_signing_key_idx").on(t.userId, t.signingKey),
   ],
-);
+)
 
 /**
  * Recovery codes.
@@ -234,7 +234,7 @@ export const recoveryBlob = pgTable(
     lastUsedAt: timestamp("last_used_at"),
   },
   (t) => [uniqueIndex("recovery_blob_user_idx").on(t.userId)],
-);
+)
 
 /**
  * Team keys.
@@ -260,7 +260,7 @@ export const teamKey = pgTable(
     retiredAt: timestamp("retired_at"),
   },
   (t) => [index("team_key_org_idx").on(t.organizationId, t.createdAt)],
-);
+)
 
 /**
  * One team key, wrapped to one device.
@@ -292,7 +292,7 @@ export const teamKeyWrap = pgTable(
     uniqueIndex("team_key_wrap_key_device_idx").on(t.keyId, t.deviceId),
     index("team_key_wrap_member_idx").on(t.memberUserId),
   ],
-);
+)
 
 /**
  * Audit trail.
@@ -342,7 +342,7 @@ export const auditEvent = pgTable(
     index("audit_user_target_idx").on(t.userId, t.targetRef, t.createdAt),
     index("audit_created_idx").on(t.createdAt),
   ],
-);
+)
 
 /**
  * Relay transfer accounting.
@@ -375,7 +375,7 @@ export const relayUsage = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("relay_usage_user_period_idx").on(t.userId, t.period)],
-);
+)
 
 /**
  * Session recordings.
@@ -443,7 +443,7 @@ export const recording = pgTable(
       sql`not (${t.ciphertext} is not null and ${t.storageKey} is not null)`,
     ),
   ],
-);
+)
 
 /**
  * A share link for a recording.
@@ -533,7 +533,7 @@ export const recordingShare = pgTable(
       sql`not (${t.ciphertext} is not null and ${t.storageKey} is not null)`,
     ),
   ],
-);
+)
 
 /**
  * Stripe subscriptions.
@@ -620,7 +620,7 @@ export const subscription = pgTable(
     index("subscription_customer_idx").on(t.stripeCustomerId),
     index("subscription_stripe_sub_idx").on(t.stripeSubscriptionId),
   ],
-);
+)
 
 /**
  * Rate limit counters.
@@ -658,7 +658,7 @@ export const rateLimit = pgTable("rate_limit", {
   count: integer("count").notNull().default(0),
   /** Epoch milliseconds. `bigint` because a JS timestamp overflows `integer`. */
   windowStart: bigint("window_start", { mode: "number" }).notNull(),
-});
+})
 
 /**
  * Webhook events already processed.
@@ -673,7 +673,7 @@ export const stripeEvent = pgTable("stripe_event", {
   id: text("id").primaryKey(),
   type: text("type").notNull(),
   processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
-});
+})
 
 /* ------------------------------------------------------------------ *
  * Second factors: TOTP and passkeys.
@@ -741,7 +741,7 @@ export const twoFactor = pgTable(
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
   },
   (t) => [index("two_factor_user_idx").on(t.userId)],
-);
+)
 
 /**
  * Registered passkeys.
@@ -785,7 +785,7 @@ export const passkey = pgTable(
     index("passkey_user_idx").on(t.userId),
     uniqueIndex("passkey_credential_idx").on(t.credentialID),
   ],
-);
+)
 
 /* ------------------------------------------------------------------ *
  * Agents: machines that cannot be dialled.
@@ -852,7 +852,7 @@ export const agent = pgTable(
     index("agent_user_idx").on(t.userId),
     uniqueIndex("agent_public_key_idx").on(t.publicKey),
   ],
-);
+)
 
 /**
  * A one-time token that turns into an agent.
@@ -888,4 +888,4 @@ export const agentEnrollment = pgTable(
     uniqueIndex("agent_enrollment_token_idx").on(t.tokenHash),
     index("agent_enrollment_user_idx").on(t.userId),
   ],
-);
+)

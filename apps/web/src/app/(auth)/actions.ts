@@ -1,4 +1,4 @@
-"use server";
+"use server"
 
 /**
  * The two things the auth screens need from the server and cannot work out for
@@ -22,11 +22,11 @@
  * the vault key. See lib/vault/kdf.ts.
  */
 
-import { headers } from "next/headers";
-import { APIError } from "better-auth/api";
+import { headers } from "next/headers"
+import { APIError } from "better-auth/api"
 
-import { auth, githubConfigured, hasVaultCredential } from "@/lib/auth";
-import { dbErrorSummary } from "@/lib/db/errors";
+import { auth, githubConfigured, hasVaultCredential } from "@/lib/auth"
+import { dbErrorSummary } from "@/lib/db/errors"
 
 /**
  * Whether this deployment registered the GitHub provider.
@@ -37,7 +37,7 @@ import { dbErrorSummary } from "@/lib/db/errors";
  * the operator is the only person who could change that.
  */
 export async function githubSignInAvailable(): Promise<boolean> {
-  return githubConfigured();
+  return githubConfigured()
 }
 
 /**
@@ -52,7 +52,7 @@ export async function githubSignInAvailable(): Promise<boolean> {
 export type SetVaultPasswordResult =
   | { status: "ok" }
   | { status: "already-set" }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string }
 
 /**
  * Store the derived auth token as this account's password credential.
@@ -85,20 +85,20 @@ export type SetVaultPasswordResult =
 export async function setVaultPasswordCredential(
   authToken: string,
 ): Promise<SetVaultPasswordResult> {
-  const requestHeaders = await headers();
+  const requestHeaders = await headers()
 
   try {
     // Checked before the write so the "you already have one" case is a plain
     // answer rather than a parsed error string. The race between this and the
     // write is real and harmless: setPassword refuses a second credential
     // itself, and the catch below reports it.
-    if (await hasVaultCredential(requestHeaders)) return { status: "already-set" };
+    if (await hasVaultCredential(requestHeaders)) return { status: "already-set" }
 
     await auth.api.setPassword({
       body: { newPassword: authToken },
       headers: requestHeaders,
-    });
-    return { status: "ok" };
+    })
+    return { status: "ok" }
   } catch (e) {
     // Two kinds of failure, and only one of them is safe to repeat.
     //
@@ -113,15 +113,15 @@ export async function setVaultPasswordCredential(
     // carrying it would hand a log reader the ability to sign in as this
     // account.
     if (e instanceof APIError) {
-      const message = typeof e.body?.message === "string" ? e.body.message : e.message;
-      console.error("vault password bootstrap refused:", message);
-      return { status: "error", message };
+      const message = typeof e.body?.message === "string" ? e.body.message : e.message
+      console.error("vault password bootstrap refused:", message)
+      return { status: "error", message }
     }
-    console.error("vault password bootstrap failed:", dbErrorSummary(e));
+    console.error("vault password bootstrap failed:", dbErrorSummary(e))
     return {
       status: "error",
       message:
         "The password could not be stored, so nothing was set. Nothing else changed — try again.",
-    };
+    }
   }
 }

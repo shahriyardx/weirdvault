@@ -1,7 +1,7 @@
-import { isNotNull } from "drizzle-orm";
+import { isNotNull } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
-import { deleteObject, listObjects, objectStore } from "@/lib/storage/objects";
+import { db, schema } from "@/lib/db"
+import { deleteObject, listObjects, objectStore } from "@/lib/storage/objects"
 
 /**
  * Deleting stored recordings that no row claims.
@@ -41,7 +41,7 @@ import { deleteObject, listObjects, objectStore } from "@/lib/storage/objects";
  */
 
 /** How old an unclaimed object must be before it is treated as abandoned. */
-const GRACE_MS = 60 * 60 * 1000;
+const GRACE_MS = 60 * 60 * 1000
 
 /**
  * Objects deleted per run.
@@ -51,20 +51,20 @@ const GRACE_MS = 60 * 60 * 1000;
  * stopped early would read as "nothing left to clean" — and the next run
  * continues, because an orphan does not become harder to find by being left.
  */
-const MAX_DELETES = 500;
+const MAX_DELETES = 500
 
 /** The prefixes the app writes under. Anything else in the bucket is not ours. */
-const PREFIXES = ["rec/", "share/"];
+const PREFIXES = ["rec/", "share/"]
 
 export interface ObjectSweepResult {
   /** False when no bucket is configured and recordings live in Postgres. */
-  applicable: boolean;
-  deleted: number;
-  failed: number;
+  applicable: boolean
+  deleted: number
+  failed: number
   /** Unclaimed but inside the grace window, so deliberately left alone. */
-  tooRecent: number;
+  tooRecent: number
   /** True when MAX_DELETES was reached and orphans remain. */
-  truncated: boolean;
+  truncated: boolean
 }
 
 const NOT_APPLICABLE: ObjectSweepResult = {
@@ -73,11 +73,11 @@ const NOT_APPLICABLE: ObjectSweepResult = {
   failed: 0,
   tooRecent: 0,
   truncated: false,
-};
+}
 
 export async function sweepOrphanedObjects(dryRun: boolean): Promise<ObjectSweepResult> {
-  const store = objectStore();
-  if (!store) return NOT_APPLICABLE;
+  const store = objectStore()
+  if (!store) return NOT_APPLICABLE
 
   // Both tables, in one set. A share's copy lives under its own key, and a sweep
   // that read only `recording` would delete every live share link's bytes.
@@ -90,41 +90,41 @@ export async function sweepOrphanedObjects(dryRun: boolean): Promise<ObjectSweep
       .select({ key: schema.recordingShare.storageKey })
       .from(schema.recordingShare)
       .where(isNotNull(schema.recordingShare.storageKey)),
-  ]);
+  ])
 
-  const claimed = new Set<string>();
-  for (const row of [...recordings, ...shares]) if (row.key) claimed.add(row.key);
+  const claimed = new Set<string>()
+  for (const row of [...recordings, ...shares]) if (row.key) claimed.add(row.key)
 
-  const cutoff = Date.now() - GRACE_MS;
-  let deleted = 0;
-  let failed = 0;
-  let tooRecent = 0;
-  let truncated = false;
+  const cutoff = Date.now() - GRACE_MS
+  let deleted = 0
+  let failed = 0
+  let tooRecent = 0
+  let truncated = false
 
   for (const prefix of PREFIXES) {
     for (const object of await listObjects(store, prefix)) {
-      if (claimed.has(object.key)) continue;
+      if (claimed.has(object.key)) continue
       if (object.lastModified > cutoff) {
-        tooRecent += 1;
-        continue;
+        tooRecent += 1
+        continue
       }
       if (deleted + failed >= MAX_DELETES) {
-        truncated = true;
-        break;
+        truncated = true
+        break
       }
       if (dryRun) {
-        deleted += 1;
-        continue;
+        deleted += 1
+        continue
       }
       try {
-        await deleteObject(store, object.key);
-        deleted += 1;
+        await deleteObject(store, object.key)
+        deleted += 1
       } catch {
-        failed += 1;
+        failed += 1
       }
     }
-    if (truncated) break;
+    if (truncated) break
   }
 
-  return { applicable: true, deleted, failed, tooRecent, truncated };
+  return { applicable: true, deleted, failed, tooRecent, truncated }
 }

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Signing in with a recovery code.
@@ -23,18 +23,18 @@
  * a dead end into a form that works. It is memory-only and dies with the tab.
  */
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowRightIcon,
   LifebuoyIcon,
   SpinnerGapIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -42,18 +42,18 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { signInWithRecoveredToken } from "@/lib/auth-client";
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { signInWithRecoveredToken } from "@/lib/auth-client"
 import {
   formatRecoveryCode,
   isPlausibleRecoveryCode,
   normaliseRecoveryCode,
   redeemRecoveryCode,
   RecoveryCodeError,
-} from "@/lib/vault/recovery";
-import { setRecoveredSecrets, setVaultKey } from "@/lib/vault/session";
+} from "@/lib/vault/recovery"
+import { setRecoveredSecrets, setVaultKey } from "@/lib/vault/session"
 
 /**
  * Which step failed, because the two mean opposite things to the user.
@@ -66,29 +66,29 @@ import { setRecoveredSecrets, setVaultKey } from "@/lib/vault/session";
  * from their card and burns a second code for a problem that was never the
  * code's fault.
  */
-type Failure = { step: "code" | "after"; message: string };
+type Failure = { step: "code" | "after"; message: string }
 
 export default function RecoverPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<Failure | null>(null);
+  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [code, setCode] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<Failure | null>(null)
 
-  const ready = email.trim().length > 0 && isPlausibleRecoveryCode(code);
+  const ready = email.trim().length > 0 && isPlausibleRecoveryCode(code)
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!ready) return;
-    setBusy(true);
-    setFailure(null);
+    e.preventDefault()
+    if (!ready) return
+    setBusy(true)
+    setFailure(null)
 
     // Order matters. The envelope is opened first, so a failure here happens
     // before any session exists — there is no state to unwind, and the code is
     // spent on the server either way.
-    let secrets;
+    let secrets: Awaited<ReturnType<typeof redeemRecoveryCode>>
     try {
-      secrets = await redeemRecoveryCode(email, code);
+      secrets = await redeemRecoveryCode(email, code)
     } catch (err) {
       // RecoveryCodeError is the deliberate single answer to "wrong code",
       // "unknown account" and "already used". Anything else here is the server
@@ -98,19 +98,19 @@ export default function RecoverPage() {
         step: "code",
         message:
           err instanceof RecoveryCodeError ? err.message : String((err as Error).message ?? err),
-      });
-      setBusy(false);
-      return;
+      })
+      setBusy(false)
+      return
     }
 
     try {
-      await signInWithRecoveredToken(email.trim().toLowerCase(), secrets.authToken);
-      setVaultKey(secrets.vaultKey, secrets.auditKey);
-      setRecoveredSecrets(secrets);
-      router.push("/dashboard/settings?tab=security&rekey=1");
+      await signInWithRecoveredToken(email.trim().toLowerCase(), secrets.authToken)
+      setVaultKey(secrets.vaultKey, secrets.auditKey)
+      setRecoveredSecrets(secrets)
+      router.push("/dashboard/settings?tab=security&rekey=1")
     } catch (err) {
-      setFailure({ step: "after", message: String((err as Error).message ?? err) });
-      setBusy(false);
+      setFailure({ step: "after", message: String((err as Error).message ?? err) })
+      setBusy(false)
     }
   }
 
@@ -233,5 +233,5 @@ export default function RecoverPage() {
         </p>
       </CardFooter>
     </Card>
-  );
+  )
 }

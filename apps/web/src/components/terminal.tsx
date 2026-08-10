@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import {
   useCallback,
@@ -8,16 +8,16 @@ import {
   useState,
   useSyncExternalStore,
   type Ref,
-} from "react";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
-import { LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
-import "@xterm/xterm/css/xterm.css";
+} from "react"
+import { Terminal } from "@xterm/xterm"
+import { FitAddon } from "@xterm/addon-fit"
+import { WebglAddon } from "@xterm/addon-webgl"
+import { LockSimpleIcon } from "@phosphor-icons/react/dist/ssr"
+import "@xterm/xterm/css/xterm.css"
 
-import { Button } from "@/components/ui/button";
-import { terminalTheme } from "@/lib/terminal-theme";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button"
+import { terminalTheme } from "@/lib/terminal-theme"
+import { cn } from "@/lib/utils"
 
 /**
  * The monospace stack as a literal font string.
@@ -29,30 +29,28 @@ import { cn } from "@/lib/utils";
  * hand xterm a real stack.
  */
 function monoFontStack(): string {
-  const fallback = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-  if (typeof window === "undefined") return fallback;
-  const resolved = getComputedStyle(document.documentElement)
-    .getPropertyValue("--font-mono")
-    .trim();
-  return resolved ? `${resolved}, ${fallback}` : fallback;
+  const fallback = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  if (typeof window === "undefined") return fallback
+  const resolved = getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim()
+  return resolved ? `${resolved}, ${fallback}` : fallback
 }
 
-const COARSE_POINTER = "(hover: none) and (pointer: coarse)";
+const COARSE_POINTER = "(hover: none) and (pointer: coarse)"
 
 // Created once, on first use, so that subscribing does not build a new
 // MediaQueryList on every render — and so nothing touches matchMedia until a
 // component actually asks, which keeps the module importable on the server.
-let coarseQuery: MediaQueryList | null = null;
+let coarseQuery: MediaQueryList | null = null
 
 function coarsePointerQuery(): MediaQueryList {
-  if (!coarseQuery) coarseQuery = window.matchMedia(COARSE_POINTER);
-  return coarseQuery;
+  if (!coarseQuery) coarseQuery = window.matchMedia(COARSE_POINTER)
+  return coarseQuery
 }
 
 function subscribeCoarsePointer(onChange: () => void): () => void {
-  const mql = coarsePointerQuery();
-  mql.addEventListener("change", onChange);
-  return () => mql.removeEventListener("change", onChange);
+  const mql = coarsePointerQuery()
+  mql.addEventListener("change", onChange)
+  return () => mql.removeEventListener("change", onChange)
 }
 
 /**
@@ -75,14 +73,14 @@ export function useCoarsePointer(): boolean {
     subscribeCoarsePointer,
     () => coarsePointerQuery().matches,
     () => false,
-  );
+  )
 }
 
 /* -------------------------------------------------------------------------- */
 /* Accessory keys                                                             */
 /* -------------------------------------------------------------------------- */
 
-type ModifierName = "ctrl" | "alt";
+type ModifierName = "ctrl" | "alt"
 
 /**
  * Sticky modifiers have three states, not two.
@@ -92,44 +90,44 @@ type ModifierName = "ctrl" | "alt";
  * when arrowing around with Alt held. The middle state is the common one, so a
  * single tap arms; locking takes a deliberate second tap in quick succession.
  */
-type ModifierState = "off" | "armed" | "locked";
+type ModifierState = "off" | "armed" | "locked"
 
-type ModifierMap = Record<ModifierName, ModifierState>;
+type ModifierMap = Record<ModifierName, ModifierState>
 
 /** A key whose wire form is a character that modifiers fold into. */
 interface LiteralKey {
-  kind: "literal";
-  label: string;
+  kind: "literal"
+  label: string
   /** Single character (or C0 byte); the Ctrl fold assumes length one. */
-  value: string;
-  aria: string;
+  value: string
+  aria: string
 }
 
 /** Arrows, Home and End: SS3 under DECCKM, CSI otherwise. */
 interface CursorKey {
-  kind: "cursor";
-  label: string;
-  final: string;
-  aria: string;
+  kind: "cursor"
+  label: string
+  final: string
+  aria: string
 }
 
 /** Keys encoded as `CSI <n> ~`, which is the page-up family. */
 interface TildeKey {
-  kind: "tilde";
-  label: string;
-  code: number;
-  aria: string;
+  kind: "tilde"
+  label: string
+  code: number
+  aria: string
 }
 
 interface ModifierKey {
-  kind: "modifier";
-  label: string;
-  mod: ModifierName;
-  aria: string;
+  kind: "modifier"
+  label: string
+  mod: ModifierName
+  aria: string
 }
 
-type SendableKey = LiteralKey | CursorKey | TildeKey;
-type AccessoryKey = SendableKey | ModifierKey;
+type SendableKey = LiteralKey | CursorKey | TildeKey
+type AccessoryKey = SendableKey | ModifierKey
 
 /**
  * The row, in groups.
@@ -173,26 +171,26 @@ const KEY_GROUPS: AccessoryKey[][] = [
     { kind: "literal", label: "*", value: "*", aria: "Asterisk" },
     { kind: "literal", label: "`", value: "`", aria: "Backtick" },
   ],
-];
+]
 
 /** xterm's modifier parameter: one plus a bitmask, alt 2, ctrl 4. */
 function modifierParam(mods: { ctrl: boolean; alt: boolean }): number {
-  return 1 + (mods.alt ? 2 : 0) + (mods.ctrl ? 4 : 0);
+  return 1 + (mods.alt ? 2 : 0) + (mods.ctrl ? 4 : 0)
 }
 
 /** Ctrl folds a character to its C0 form; Alt prefixes it with ESC. */
 function foldCharacter(char: string, mods: { ctrl: boolean; alt: boolean }): string {
-  let out = char;
-  if (mods.ctrl) out = String.fromCharCode(out.toUpperCase().charCodeAt(0) & 0x1f);
-  if (mods.alt) out = `\x1b${out}`;
-  return out;
+  let out = char
+  if (mods.ctrl) out = String.fromCharCode(out.toUpperCase().charCodeAt(0) & 0x1f)
+  if (mods.alt) out = `\x1b${out}`
+  return out
 }
 
 /** Printable ASCII is the only thing a sticky modifier can meaningfully fold. */
 function isFoldable(data: string): boolean {
-  if (data.length !== 1) return false;
-  const code = data.charCodeAt(0);
-  return code >= 0x20 && code <= 0x7e;
+  if (data.length !== 1) return false
+  const code = data.charCodeAt(0)
+  return code >= 0x20 && code <= 0x7e
 }
 
 /**
@@ -214,29 +212,29 @@ function encodeKey(
 ): string {
   switch (key.kind) {
     case "literal":
-      return foldCharacter(key.value, mods);
+      return foldCharacter(key.value, mods)
     case "cursor": {
-      const param = modifierParam(mods);
-      if (param > 1) return `\x1b[1;${param}${key.final}`;
-      return applicationCursor ? `\x1bO${key.final}` : `\x1b[${key.final}`;
+      const param = modifierParam(mods)
+      if (param > 1) return `\x1b[1;${param}${key.final}`
+      return applicationCursor ? `\x1bO${key.final}` : `\x1b[${key.final}`
     }
     case "tilde": {
-      const param = modifierParam(mods);
-      return param > 1 ? `\x1b[${key.code};${param}~` : `\x1b[${key.code}~`;
+      const param = modifierParam(mods)
+      return param > 1 ? `\x1b[${key.code};${param}~` : `\x1b[${key.code}~`
     }
   }
 }
 
 /** A second tap inside this window locks the modifier rather than clearing it. */
-const LOCK_TAP_MS = 400;
+const LOCK_TAP_MS = 400
 /** How far a finger may travel and still count as a tap rather than a scroll. */
-const TAP_SLOP_PX = 10;
+const TAP_SLOP_PX = 10
 
 export interface TerminalHandle {
-  write(data: string | Uint8Array): void;
-  clear(): void;
-  focus(): void;
-  size(): { cols: number; rows: number };
+  write(data: string | Uint8Array): void
+  clear(): void
+  focus(): void
+  size(): { cols: number; rows: number }
 }
 
 /**
@@ -247,20 +245,20 @@ export interface TerminalHandle {
  * columns for the output most shell tools assume. The default matches what the
  * dashboard's other monospace surfaces use.
  */
-export const MIN_FONT_SIZE = 9;
-export const MAX_FONT_SIZE = 24;
-export const DEFAULT_FONT_SIZE = 13;
+export const MIN_FONT_SIZE = 9
+export const MAX_FONT_SIZE = 24
+export const DEFAULT_FONT_SIZE = 13
 
 interface Props {
-  ref?: Ref<TerminalHandle>;
-  onInput?: (data: string) => void;
-  onResize?: (cols: number, rows: number) => void;
+  ref?: Ref<TerminalHandle>
+  onInput?: (data: string) => void
+  onResize?: (cols: number, rows: number) => void
   /**
    * Render the touch accessory row. Decided by the caller so the terminal page
    * can offer a manual override, and so only the focused pane grows a bar when
    * the view is split.
    */
-  showKeyboardBar?: boolean;
+  showKeyboardBar?: boolean
   /**
    * Cell size in pixels.
    *
@@ -270,7 +268,7 @@ interface Props {
    * remote PTY is told; that is the point rather than a side effect, since
    * zooming in on a shell means fewer, bigger columns.
    */
-  fontSize?: number;
+  fontSize?: number
 }
 
 export function TerminalView({
@@ -280,32 +278,29 @@ export function TerminalView({
   showKeyboardBar = false,
   fontSize = DEFAULT_FONT_SIZE,
 }: Props) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
   // Held so a font-size change can clear the glyph atlas. Null where WebGL was
   // refused and the canvas fallback is doing the painting, which needs nothing.
-  const webglRef = useRef<WebglAddon | null>(null);
+  const webglRef = useRef<WebglAddon | null>(null)
 
   // Modifier state is held twice on purpose. The state renders the row; the
   // ref is what input is judged against, because keystrokes arrive from xterm
   // synchronously and cannot wait for a render to know whether Ctrl was armed.
-  const [mods, setMods] = useState<ModifierMap>({ ctrl: "off", alt: "off" });
-  const modsRef = useRef<ModifierMap>({ ctrl: "off", alt: "off" });
-  const lastModTap = useRef<Partial<Record<ModifierName, number>>>({});
-  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [mods, setMods] = useState<ModifierMap>({ ctrl: "off", alt: "off" })
+  const modsRef = useRef<ModifierMap>({ ctrl: "off", alt: "off" })
+  const lastModTap = useRef<Partial<Record<ModifierName, number>>>({})
+  const [keyboardInset, setKeyboardInset] = useState(0)
 
   const updateMods = useCallback((fn: (prev: ModifierMap) => ModifierMap) => {
-    const next = fn(modsRef.current);
-    modsRef.current = next;
-    setMods(next);
-  }, []);
+    const next = fn(modsRef.current)
+    modsRef.current = next
+    setMods(next)
+  }, [])
 
-  const resetMods = useCallback(
-    () => updateMods(() => ({ ctrl: "off", alt: "off" })),
-    [updateMods],
-  );
+  const resetMods = useCallback(() => updateMods(() => ({ ctrl: "off", alt: "off" })), [updateMods])
 
   /** Spend the armed modifiers, leaving locked ones in place. */
   const spendMods = useCallback(
@@ -315,7 +310,7 @@ export function TerminalView({
         alt: prev.alt === "armed" ? "off" : prev.alt,
       })),
     [updateMods],
-  );
+  )
 
   // Keep the latest callbacks without tearing down the terminal on re-render.
   // The write happens in an effect rather than during render: a render can be
@@ -324,38 +319,38 @@ export function TerminalView({
   // not have. Both readers below fire from xterm events, which cannot run
   // before the commit that installed them, so the one-commit delay is not
   // observable.
-  const cbs = useRef({ onInput, onResize });
+  const cbs = useRef({ onInput, onResize })
   useEffect(() => {
-    cbs.current = { onInput, onResize };
-  }, [onInput, onResize]);
+    cbs.current = { onInput, onResize }
+  }, [onInput, onResize])
 
-  const fontSizeRef = useRef(fontSize);
+  const fontSizeRef = useRef(fontSize)
   useEffect(() => {
-    fontSizeRef.current = fontSize;
-    const term = termRef.current;
-    if (!term || term.options.fontSize === fontSize) return;
-    term.options.fontSize = fontSize;
+    fontSizeRef.current = fontSize
+    const term = termRef.current
+    if (!term || term.options.fontSize === fontSize) return
+    term.options.fontSize = fontSize
     // The cell size has changed, so the grid that fitted the container no longer
     // does. Re-fit, and clear the WebGL atlas — it caches glyphs at the old size
     // and would otherwise paint them scaled and blurred into the new cells.
-    webglRef.current?.clearTextureAtlas();
+    webglRef.current?.clearTextureAtlas()
     try {
-      fitRef.current?.fit();
+      fitRef.current?.fit()
     } catch {
       /* not laid out */
     }
-  }, [fontSize]);
+  }, [fontSize])
 
   useImperativeHandle(ref, () => ({
     write: (d) => termRef.current?.write(d as string),
     clear: () => termRef.current?.clear(),
     focus: () => termRef.current?.focus(),
     size: () => ({ cols: termRef.current?.cols ?? 80, rows: termRef.current?.rows ?? 24 }),
-  }));
+  }))
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    let disposed = false;
+    if (!containerRef.current) return
+    let disposed = false
 
     const term = new Terminal({
       fontFamily: monoFontStack(),
@@ -368,17 +363,17 @@ export function TerminalView({
       allowProposedApi: true,
       scrollback: 10_000,
       theme: terminalTheme,
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(containerRef.current);
+    })
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.open(containerRef.current)
 
     // WebGL is a large perf win but unavailable in some environments; a
     // failure here should degrade rendering, not break the terminal.
-    let webgl: WebglAddon | null = null;
+    let webgl: WebglAddon | null = null
     try {
-      webgl = webglRef.current = new WebglAddon();
-      term.loadAddon(webgl);
+      webgl = webglRef.current = new WebglAddon()
+      term.loadAddon(webgl)
     } catch {
       /* canvas fallback */
     }
@@ -395,15 +390,15 @@ export function TerminalView({
       .load(`${term.options.fontSize}px ${term.options.fontFamily}`)
       .catch(() => [])
       .then(() => {
-        if (disposed) return;
-        webgl?.clearTextureAtlas();
+        if (disposed) return
+        webgl?.clearTextureAtlas()
         try {
-          fit.fit();
+          fit.fit()
         } catch {
           /* not laid out yet */
         }
-        term.refresh(0, term.rows - 1);
-      });
+        term.refresh(0, term.rows - 1)
+      })
 
     /**
      * Report the size before the first fit, not after.
@@ -419,23 +414,23 @@ export function TerminalView({
      * rendering at the true size the whole time; only everything downstream of
      * the callback was wrong.
      */
-    term.onResize(({ cols, rows }) => cbs.current.onResize?.(cols, rows));
+    term.onResize(({ cols, rows }) => cbs.current.onResize?.(cols, rows))
 
-    fit.fit();
+    fit.fit()
     // And once explicitly, because "no change" is a real outcome: a container
     // that happens to fit exactly 80×24, or a fit that ran before layout and
     // computed nothing, both leave onResize silent. Publishing unconditionally
     // costs one redundant call and removes the whole class of failure.
-    cbs.current.onResize?.(term.cols, term.rows);
+    cbs.current.onResize?.(term.cols, term.rows)
 
-    termRef.current = term;
-    fitRef.current = fit;
+    termRef.current = term
+    fitRef.current = fit
 
     // The WebGL renderer paints to canvas, so terminal text never lands in the
     // DOM and end-to-end tests have nothing to assert against. Expose the
     // instance in development only.
     if (process.env.NODE_ENV === "development") {
-      (window as unknown as { __webxtermTerm?: Terminal }).__webxtermTerm = term;
+      ;(window as unknown as { __webxtermTerm?: Terminal }).__webxtermTerm = term
     }
 
     /**
@@ -453,41 +448,41 @@ export function TerminalView({
      * be a worse surprise than losing it on a key that could not carry it.
      */
     const foldTyped = (data: string): string => {
-      const current = modsRef.current;
-      const active = { ctrl: current.ctrl !== "off", alt: current.alt !== "off" };
-      if (!active.ctrl && !active.alt) return data;
-      spendMods();
-      return isFoldable(data) ? foldCharacter(data, active) : data;
-    };
+      const current = modsRef.current
+      const active = { ctrl: current.ctrl !== "off", alt: current.alt !== "off" }
+      if (!active.ctrl && !active.alt) return data
+      spendMods()
+      return isFoldable(data) ? foldCharacter(data, active) : data
+    }
 
-    term.onData((d) => cbs.current.onInput?.(foldTyped(d)));
+    term.onData((d) => cbs.current.onInput?.(foldTyped(d)))
 
     const ro = new ResizeObserver(() => {
       try {
-        fit.fit();
+        fit.fit()
       } catch {
         /* container not laid out yet */
       }
-    });
-    ro.observe(containerRef.current);
+    })
+    ro.observe(containerRef.current)
 
     return () => {
-      disposed = true;
-      ro.disconnect();
-      term.dispose();
-      termRef.current = null;
-      fitRef.current = null;
-      webglRef.current = null;
-    };
+      disposed = true
+      ro.disconnect()
+      term.dispose()
+      termRef.current = null
+      fitRef.current = null
+      webglRef.current = null
+    }
     // spendMods is stable for the life of the component; this effect must run
     // exactly once, because re-running it throws away the terminal and every
     // line of scrollback with it.
-  }, [spendMods]);
+  }, [spendMods])
 
   // The measurement is kept rather than cleared when the bar goes away; the
   // padding that actually gets applied is derived, so a stale reading cannot
   // leak into a layout that has no bar in it.
-  const keyboardPadding = showKeyboardBar ? keyboardInset : 0;
+  const keyboardPadding = showKeyboardBar ? keyboardInset : 0
 
   // The bar sits in the flex column rather than on top of the terminal, so
   // showing it shrinks the canvas box and the ResizeObserver above re-fits.
@@ -496,11 +491,11 @@ export function TerminalView({
   // last line of output is the failure mode this whole layout is avoiding.
   useEffect(() => {
     try {
-      fitRef.current?.fit();
+      fitRef.current?.fit()
     } catch {
       /* not laid out yet */
     }
-  }, [showKeyboardBar, keyboardPadding]);
+  }, [showKeyboardBar, keyboardPadding])
 
   /**
    * Keep the bar above the soft keyboard on browsers that overlay it.
@@ -518,31 +513,31 @@ export function TerminalView({
    * briefly pad too, and browsers without visualViewport get the plain layout.
    */
   useEffect(() => {
-    const vv = typeof window === "undefined" ? null : window.visualViewport;
-    if (!showKeyboardBar || !vv) return;
+    const vv = typeof window === "undefined" ? null : window.visualViewport
+    if (!showKeyboardBar || !vv) return
 
     const measure = () => {
-      const root = rootRef.current;
-      if (!root) return;
-      const overlap = root.getBoundingClientRect().bottom - (vv.offsetTop + vv.height);
-      const next = Math.max(0, Math.round(overlap));
+      const root = rootRef.current
+      if (!root) return
+      const overlap = root.getBoundingClientRect().bottom - (vv.offsetTop + vv.height)
+      const next = Math.max(0, Math.round(overlap))
       // The element's own bottom edge is fixed by its parent, so this padding
       // cannot feed back into the measurement; the epsilon is only to stop
       // sub-pixel jitter from re-rendering on every scroll event.
-      setKeyboardInset((prev) => (Math.abs(prev - next) > 1 ? next : prev));
-    };
+      setKeyboardInset((prev) => (Math.abs(prev - next) > 1 ? next : prev))
+    }
 
     // visualViewport settles a frame or two after the keyboard animates in, so
     // take the first reading on the next frame rather than during the effect.
-    const first = requestAnimationFrame(measure);
-    vv.addEventListener("resize", measure);
-    vv.addEventListener("scroll", measure);
+    const first = requestAnimationFrame(measure)
+    vv.addEventListener("resize", measure)
+    vv.addEventListener("scroll", measure)
     return () => {
-      cancelAnimationFrame(first);
-      vv.removeEventListener("resize", measure);
-      vv.removeEventListener("scroll", measure);
-    };
-  }, [showKeyboardBar]);
+      cancelAnimationFrame(first)
+      vv.removeEventListener("resize", measure)
+      vv.removeEventListener("scroll", measure)
+    }
+  }, [showKeyboardBar])
 
   /**
    * Feed a tapped key in as though it had been typed.
@@ -554,38 +549,38 @@ export function TerminalView({
    * used the bar or the keyboard.
    */
   function sendKey(key: SendableKey) {
-    const term = termRef.current;
-    if (!term) return;
+    const term = termRef.current
+    if (!term) return
 
-    const current = modsRef.current;
-    const active = { ctrl: current.ctrl !== "off", alt: current.alt !== "off" };
-    const data = encodeKey(key, active, term.modes.applicationCursorKeysMode);
+    const current = modsRef.current
+    const active = { ctrl: current.ctrl !== "off", alt: current.alt !== "off" }
+    const data = encodeKey(key, active, term.modes.applicationCursorKeysMode)
 
     // Spend the modifiers before the write, not after: term.input dispatches
     // onData synchronously, and the fold there would otherwise apply Ctrl a
     // second time to a byte that already has it.
-    spendMods();
-    term.input(data);
+    spendMods()
+    term.input(data)
 
     // The tap happened on a button, not the textarea, so nothing has moved
     // focus — but if focus was elsewhere entirely this puts it back, and doing
     // it inside the gesture is what lets iOS re-open the keyboard.
-    term.focus();
+    term.focus()
   }
 
   function toggleModifier(mod: ModifierName) {
-    const now = Date.now();
-    const previousTap = lastModTap.current[mod] ?? 0;
-    lastModTap.current[mod] = now;
+    const now = Date.now()
+    const previousTap = lastModTap.current[mod] ?? 0
+    lastModTap.current[mod] = now
 
     updateMods((prev) => {
-      const state = prev[mod];
-      if (state === "off") return { ...prev, [mod]: "armed" };
+      const state = prev[mod]
+      if (state === "off") return { ...prev, [mod]: "armed" }
       if (state === "armed" && now - previousTap < LOCK_TAP_MS) {
-        return { ...prev, [mod]: "locked" };
+        return { ...prev, [mod]: "locked" }
       }
-      return { ...prev, [mod]: "off" };
-    });
+      return { ...prev, [mod]: "off" }
+    })
   }
 
   return (
@@ -604,7 +599,7 @@ export function TerminalView({
         />
       )}
     </div>
-  );
+  )
 }
 
 /**
@@ -626,39 +621,39 @@ function KeyboardBar({
   onModifier,
   onUnmount,
 }: {
-  mods: ModifierMap;
-  onKey: (key: SendableKey) => void;
-  onModifier: (mod: ModifierName) => void;
-  onUnmount: () => void;
+  mods: ModifierMap
+  onKey: (key: SendableKey) => void
+  onModifier: (mod: ModifierName) => void
+  onUnmount: () => void
 }) {
-  const downs = useRef(new Map<number, { x: number; y: number }>());
+  const downs = useRef(new Map<number, { x: number; y: number }>())
 
   // An armed modifier folds into keys typed on the soft keyboard too, so it
   // must not outlive the row that shows it. Hiding the bar with Ctrl armed
   // would otherwise leave an invisible modifier waiting to turn the next
   // letter into a control character.
-  useEffect(() => onUnmount, [onUnmount]);
+  useEffect(() => onUnmount, [onUnmount])
 
   function press(key: AccessoryKey) {
-    if (key.kind === "modifier") onModifier(key.mod);
-    else onKey(key);
+    if (key.kind === "modifier") onModifier(key.mod)
+    else onKey(key)
   }
 
   function keyHandlers(key: AccessoryKey) {
     return {
       onPointerDown(e: React.PointerEvent) {
-        e.preventDefault();
-        downs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        e.preventDefault()
+        downs.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
       },
       onPointerUp(e: React.PointerEvent) {
-        const down = downs.current.get(e.pointerId);
-        downs.current.delete(e.pointerId);
-        if (!down) return;
-        if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) return;
-        press(key);
+        const down = downs.current.get(e.pointerId)
+        downs.current.delete(e.pointerId)
+        if (!down) return
+        if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > TAP_SLOP_PX) return
+        press(key)
       },
       onPointerCancel(e: React.PointerEvent) {
-        downs.current.delete(e.pointerId);
+        downs.current.delete(e.pointerId)
       },
       // There is deliberately no onClick: a mouse tap would fire both it and
       // the pointerup above, sending the key twice. That leaves keyboard
@@ -666,11 +661,11 @@ function KeyboardBar({
       // here — and cancelled, so the click the browser would synthesise from
       // them cannot arrive later and double-send.
       onKeyDown(e: React.KeyboardEvent) {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault();
-        press(key);
+        if (e.key !== "Enter" && e.key !== " ") return
+        e.preventDefault()
+        press(key)
       },
-    };
+    }
   }
 
   return (
@@ -701,7 +696,7 @@ function KeyboardBar({
         <div key={groupIndex} className="flex shrink-0 items-center gap-0.5">
           {groupIndex > 0 && <span aria-hidden className="bg-border mx-1 h-5 w-px shrink-0" />}
           {group.map((key) => {
-            const state = key.kind === "modifier" ? mods[key.mod] : "off";
+            const state = key.kind === "modifier" ? mods[key.mod] : "off"
             return (
               <Button
                 key={key.label}
@@ -721,16 +716,16 @@ function KeyboardBar({
                 {key.label}
                 {state === "locked" && <LockSimpleIcon className="size-3" weight="fill" />}
               </Button>
-            );
+            )
           })}
         </div>
       ))}
     </div>
-  );
+  )
 }
 
 function modifierTitle(label: string, state: ModifierState): string {
-  if (state === "locked") return `${label} locked — tap to release`;
-  if (state === "armed") return `${label} applies to the next key — tap twice to lock`;
-  return `${label} for the next key`;
+  if (state === "locked") return `${label} locked — tap to release`
+  if (state === "armed") return `${label} applies to the next key — tap twice to lock`
+  return `${label} for the next key`
 }

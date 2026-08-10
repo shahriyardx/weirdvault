@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Session recordings.
@@ -32,8 +32,8 @@
  * says so before it is dismissed rather than after.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import {
   ArrowClockwiseIcon,
   CopyIcon,
@@ -55,11 +55,11 @@ import {
   TrashIcon,
   WarningCircleIcon,
   WarningOctagonIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { RecordingPlayer } from "@/components/recording-player";
-import { PageHeader } from "@/components/shell/page-shell";
+import { RecordingPlayer } from "@/components/recording-player"
+import { PageHeader } from "@/components/shell/page-shell"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,30 +69,30 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+} from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 import {
   Table,
   TableBody,
@@ -100,16 +100,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { buildHostLabels, shortRef } from "@/lib/audit/query";
-import { useBilling } from "@/lib/billing/client";
+} from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { buildHostLabels, shortRef } from "@/lib/audit/query"
+import { useBilling } from "@/lib/billing/client"
 import {
   MAX_ACCOUNT_RECORDING_BYTES,
   MAX_BLOB_BYTES,
   MAX_CAPTURE_BYTES,
   WARN_CAPTURE_BYTES,
-} from "@/lib/recording/limits";
+} from "@/lib/recording/limits"
 import {
   castFor,
   discardRecording,
@@ -118,9 +118,9 @@ import {
   useRecorders,
   type EndReason,
   type RecorderState,
-} from "@/lib/recording/capture";
-import { useSessionRecorder } from "@/lib/recording/use-session-recorder";
-import { toAsciicast, type Cast } from "@/lib/recording/format";
+} from "@/lib/recording/capture"
+import { useSessionRecorder } from "@/lib/recording/use-session-recorder"
+import { toAsciicast, type Cast } from "@/lib/recording/format"
 import {
   MAX_SHARE_VIEWS,
   SHARE_EXPIRIES,
@@ -128,36 +128,36 @@ import {
   listShares,
   revokeShare,
   type ShareSummary,
-} from "@/lib/recording/share";
+} from "@/lib/recording/share"
 import {
   RecordingRequestError,
   deleteRecording,
   listRecordings,
   loadCast,
   type RecordingSummary,
-} from "@/lib/recording/store";
-import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider";
-import { getAuditKey, getVaultKey, requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
+} from "@/lib/recording/store"
+import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider"
+import { getAuditKey, getVaultKey, requestUnlock, useVaultUnlocked } from "@/lib/vault/session"
 
 type ListState =
   | { phase: "loading" }
   | { phase: "ready" }
   | { phase: "unauthorized" }
-  | { phase: "error"; message: string };
+  | { phase: "error"; message: string }
 
 /** Same three states the activity log distinguishes, for the same column. */
-type HostIndexState = "resolving" | "ready" | "locked" | "no-audit-key" | "failed";
+type HostIndexState = "resolving" | "ready" | "locked" | "no-audit-key" | "failed"
 
 const END_REASONS: Record<EndReason, string> = {
   user: "stopped by you",
   cap: `stopped at the ${formatBytes(MAX_CAPTURE_BYTES)} capture limit`,
   "session-closed": "stopped because the session closed",
-};
+}
 
 export default function RecordingsPage() {
-  const unlocked = useVaultUnlocked();
-  const { sessions } = useSshSession();
-  const recorders = useRecorders();
+  const unlocked = useVaultUnlocked()
+  const { sessions } = useSshSession()
+  const recorders = useRecorders()
   /**
    * The plan, as the server states it. Never resolved here: a tab knows which
    * account it is signed into and nothing about what that account pays.
@@ -167,66 +167,66 @@ export default function RecordingsPage() {
    * button that is disabled for a second on every page load, for everybody,
    * including the people who have paid.
    */
-  const { billing } = useBilling();
-  const canRecord = billing?.limits.sessionRecording ?? true;
+  const { billing } = useBilling()
+  const canRecord = billing?.limits.sessionRecording ?? true
 
-  const [rows, setRows] = useState<RecordingSummary[]>([]);
+  const [rows, setRows] = useState<RecordingSummary[]>([])
   /** What the account holds, which is not always what this page loaded. */
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState(0)
   /**
    * Ciphertext this account is holding, and the ceiling a save is refused at.
    * Server-side numbers: the page only ever has a page, and the sum of what is
    * on screen would read low for anyone with more than a page of recordings —
    * exactly the people close to the ceiling.
    */
-  const [storedBytes, setStoredBytes] = useState<number | null>(null);
-  const [storageLimit, setStorageLimit] = useState<number | null>(null);
-  const [state, setState] = useState<ListState>({ phase: "loading" });
-  const [attempt, setAttempt] = useState(0);
-  const [readAt, setReadAt] = useState(() => Date.now());
+  const [storedBytes, setStoredBytes] = useState<number | null>(null)
+  const [storageLimit, setStorageLimit] = useState<number | null>(null)
+  const [state, setState] = useState<ListState>({ phase: "loading" })
+  const [attempt, setAttempt] = useState(0)
+  const [readAt, setReadAt] = useState(() => Date.now())
 
-  const [hostLabels, setHostLabels] = useState<Map<string, string>>(() => new Map());
-  const [hostIndex, setHostIndex] = useState<HostIndexState>("resolving");
+  const [hostLabels, setHostLabels] = useState<Map<string, string>>(() => new Map())
+  const [hostIndex, setHostIndex] = useState<HostIndexState>("resolving")
 
-  const [opening, setOpening] = useState<string | null>(null);
-  const [playing, setPlaying] = useState<{ summary: RecordingSummary; cast: Cast } | null>(null);
+  const [opening, setOpening] = useState<string | null>(null)
+  const [playing, setPlaying] = useState<{ summary: RecordingSummary; cast: Cast } | null>(null)
   /**
    * The share dialog carries the decrypted cast, not the recording id, because
    * a share is a re-encryption rather than a pointer: the transcript has to be
    * open in this tab before a link can exist at all.
    */
-  const [sharing, setSharing] = useState<{ summary: RecordingSummary; cast: Cast } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<RecordingSummary | null>(null);
+  const [sharing, setSharing] = useState<{ summary: RecordingSummary; cast: Cast } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<RecordingSummary | null>(null)
 
   /* ------------------------------------------------------------- the list */
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     void (async () => {
-      setState({ phase: "loading" });
+      setState({ phase: "loading" })
       try {
-        const page = await listRecordings();
-        if (cancelled) return;
-        setRows(page.recordings);
-        setTotal(page.total);
-        setStoredBytes(page.storedBytes);
-        setStorageLimit(page.storageLimitBytes);
-        setReadAt(Date.now());
-        setState({ phase: "ready" });
+        const page = await listRecordings()
+        if (cancelled) return
+        setRows(page.recordings)
+        setTotal(page.total)
+        setStoredBytes(page.storedBytes)
+        setStorageLimit(page.storageLimitBytes)
+        setReadAt(Date.now())
+        setState({ phase: "ready" })
       } catch (error) {
-        if (cancelled) return;
-        const kind = error instanceof RecordingRequestError ? error.kind : "server";
+        if (cancelled) return
+        const kind = error instanceof RecordingRequestError ? error.kind : "server"
         setState(
           kind === "unauthorized"
             ? { phase: "unauthorized" }
             : { phase: "error", message: message(error) },
-        );
+        )
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
+      cancelled = true
+    }
+  }, [attempt])
 
   // A recording can finish without anybody pressing stop — the cap, or the
   // session hanging up — so the list is told by the recorder rather than by the
@@ -237,100 +237,100 @@ export default function RecordingsPage() {
   useEffect(
     () =>
       subscribeSaved((summary) => {
-        setRows((prev) => [summary, ...prev.filter((r) => r.id !== summary.id)]);
-        setTotal((n) => n + 1);
-        setStoredBytes((n) => (n === null ? null : n + summary.sizeBytes));
+        setRows((prev) => [summary, ...prev.filter((r) => r.id !== summary.id)])
+        setTotal((n) => n + 1)
+        setStoredBytes((n) => (n === null ? null : n + summary.sizeBytes))
       }),
     [],
-  );
+  )
 
   // Host resolution, re-run when the vault unlocks. Identical in shape to the
   // activity log's, because it is the same problem: the server holds a blinded
   // reference and only this device can say what it points at.
   useEffect(() => {
-    let cancelled = false;
-    const auditKey = getAuditKey();
+    let cancelled = false
+    const auditKey = getAuditKey()
 
     void (async () => {
       if (!auditKey) {
-        setHostLabels(new Map());
-        setHostIndex(unlocked ? "no-audit-key" : "locked");
-        return;
+        setHostLabels(new Map())
+        setHostIndex(unlocked ? "no-audit-key" : "locked")
+        return
       }
-      setHostIndex("resolving");
+      setHostIndex("resolving")
       try {
-        const index = await buildHostLabels(auditKey);
-        if (cancelled) return;
-        setHostLabels(index);
-        setHostIndex("ready");
+        const index = await buildHostLabels(auditKey)
+        if (cancelled) return
+        setHostLabels(index)
+        setHostIndex("ready")
       } catch {
-        if (cancelled) return;
-        setHostLabels(new Map());
-        setHostIndex("failed");
+        if (cancelled) return
+        setHostLabels(new Map())
+        setHostIndex("failed")
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [unlocked]);
+      cancelled = true
+    }
+  }, [unlocked])
 
   const recorderFor = useCallback(
     (sessionId: string) => recorders.find((r) => r.sessionId === sessionId) ?? null,
     [recorders],
-  );
+  )
 
   /** Recorders whose session has already gone from the list, still unsaved. */
   const orphans = useMemo(
     () => recorders.filter((r) => !sessions.some((s) => s.id === r.sessionId)),
     [recorders, sessions],
-  );
+  )
 
   /* ----------------------------------------------------------- recording */
 
   // Shared with the terminal toolbar, which can start and stop a recording
   // without coming here. See lib/recording/use-session-recorder.ts.
-  const { start, stop } = useSessionRecorder();
+  const { start, stop } = useSessionRecorder()
 
   /* ------------------------------------------------------------ playback */
 
   async function open(summary: RecordingSummary, then: (cast: Cast) => void) {
-    const vaultKey = getVaultKey();
+    const vaultKey = getVaultKey()
     if (!vaultKey) {
-      requestUnlock();
+      requestUnlock()
       toast.error("The vault is locked", {
         description:
           "The recording is on the server as ciphertext; opening it needs the key that is only in memory.",
-      });
-      return;
+      })
+      return
     }
-    setOpening(summary.id);
+    setOpening(summary.id)
     try {
-      then(await loadCast(summary.id, vaultKey));
+      then(await loadCast(summary.id, vaultKey))
     } catch (error) {
-      toast.error("Could not open that recording", { description: message(error) });
+      toast.error("Could not open that recording", { description: message(error) })
     } finally {
-      setOpening(null);
+      setOpening(null)
     }
   }
 
   function play(summary: RecordingSummary) {
-    void open(summary, (cast) => setPlaying({ summary, cast }));
+    void open(summary, (cast) => setPlaying({ summary, cast }))
   }
 
   function share(summary: RecordingSummary) {
-    void open(summary, (cast) => setSharing({ summary, cast }));
+    void open(summary, (cast) => setSharing({ summary, cast }))
   }
 
   function download(summary: RecordingSummary) {
     void open(summary, (cast) => {
-      const name = `webxterm-${stamp(summary.startedAt)}.cast`;
-      downloadText(name, toAsciicast(cast), "application/x-asciicast");
+      const name = `webxterm-${stamp(summary.startedAt)}.cast`
+      downloadText(name, toAsciicast(cast), "application/x-asciicast")
       toast.success(`Saved ${name}`, {
         description:
           "asciinema v2 format, decrypted here. Output is text in that format, so any byte the session printed that was not valid UTF-8 is a replacement character in the file.",
-      });
-    });
+      })
+    })
   }
 
   /**
@@ -344,39 +344,39 @@ export default function RecordingsPage() {
    * feature imply otherwise.
    */
   function downloadUnsaved(sessionId: string) {
-    const cast = castFor(sessionId);
+    const cast = castFor(sessionId)
     if (!cast) {
       toast.error("There is nothing to download yet", {
         description: "The recording is still capturing. Stop it first.",
-      });
-      return;
+      })
+      return
     }
-    const name = `webxterm-${stamp(cast.header.startedAt)}.cast`;
-    downloadText(name, toAsciicast(cast), "application/x-asciicast");
+    const name = `webxterm-${stamp(cast.header.startedAt)}.cast`
+    downloadText(name, toAsciicast(cast), "application/x-asciicast")
     toast.success(`Saved ${name}`, {
       description:
         "asciinema v2 format, written straight from this tab. It is not encrypted — it is a " +
         "plain file on your disk now. The recording is still here until you discard it.",
-    });
+    })
   }
 
   async function confirmDelete() {
-    if (!pendingDelete) return;
-    const target = pendingDelete;
-    setPendingDelete(null);
+    if (!pendingDelete) return
+    const target = pendingDelete
+    setPendingDelete(null)
     try {
-      await deleteRecording(target.id);
-      setRows((prev) => prev.filter((r) => r.id !== target.id));
-      setTotal((n) => Math.max(0, n - 1));
-      setStoredBytes((n) => (n === null ? null : Math.max(0, n - target.sizeBytes)));
-      if (playing?.summary.id === target.id) setPlaying(null);
+      await deleteRecording(target.id)
+      setRows((prev) => prev.filter((r) => r.id !== target.id))
+      setTotal((n) => Math.max(0, n - 1))
+      setStoredBytes((n) => (n === null ? null : Math.max(0, n - target.sizeBytes)))
+      if (playing?.summary.id === target.id) setPlaying(null)
       toast.success("Recording deleted", {
         description:
           "The row and every share link made from it are deleted rather than flagged. Any copy " +
           "already downloaded is not.",
-      });
+      })
     } catch (error) {
-      toast.error("Could not delete that recording", { description: message(error) });
+      toast.error("Could not delete that recording", { description: message(error) })
     }
   }
 
@@ -736,7 +736,7 @@ export default function RecordingsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ share */
@@ -767,90 +767,90 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
    * the panel keeps working for both — an owner must always be able to cut off a
    * live link, whatever they pay.
    */
-  const { billing } = useBilling();
-  const canShare = billing?.limits.sessionRecording ?? true;
+  const { billing } = useBilling()
+  const canShare = billing?.limits.sessionRecording ?? true
 
-  const [expiryId, setExpiryId] = useState("24h");
-  const [limited, setLimited] = useState(true);
-  const [viewsText, setViewsText] = useState("5");
-  const [creating, setCreating] = useState(false);
+  const [expiryId, setExpiryId] = useState("24h")
+  const [limited, setLimited] = useState(true)
+  const [viewsText, setViewsText] = useState("5")
+  const [creating, setCreating] = useState(false)
 
   /** The one moment this string exists. Never persisted, never re-derivable. */
-  const [link, setLink] = useState<string | null>(null);
+  const [link, setLink] = useState<string | null>(null)
 
-  const [shares, setShares] = useState<ShareSummary[]>([]);
-  const [listState, setListState] = useState<"loading" | "ready" | "failed">("loading");
-  const [revoking, setRevoking] = useState<string | null>(null);
+  const [shares, setShares] = useState<ShareSummary[]>([])
+  const [listState, setListState] = useState<"loading" | "ready" | "failed">("loading")
+  const [revoking, setRevoking] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     void (async () => {
       try {
-        const rows = await listShares(summary.id);
+        const rows = await listShares(summary.id)
         if (!cancelled) {
-          setShares(rows);
-          setListState("ready");
+          setShares(rows)
+          setListState("ready")
         }
       } catch {
         // No message: the list of existing links is not what the dialog is for,
         // and a failure to load it must not read as a failure to share.
-        if (!cancelled) setListState("failed");
+        if (!cancelled) setListState("failed")
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, [summary.id]);
+      cancelled = true
+    }
+  }, [summary.id])
 
   async function create() {
-    const expiry = SHARE_EXPIRIES.find((e) => e.id === expiryId);
-    if (!expiry) return;
+    const expiry = SHARE_EXPIRIES.find((e) => e.id === expiryId)
+    if (!expiry) return
 
-    let maxViews: number | null = null;
+    let maxViews: number | null = null
     if (limited) {
-      const parsed = Number(viewsText);
+      const parsed = Number(viewsText)
       if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_SHARE_VIEWS) {
         toast.error("That view limit is not a number of views", {
           description: `It has to be a whole number between 1 and ${MAX_SHARE_VIEWS}, or the limit switched off.`,
-        });
-        return;
+        })
+        return
       }
-      maxViews = parsed;
+      maxViews = parsed
     }
 
-    setCreating(true);
+    setCreating(true)
     try {
       const created = await createShare(
         summary.id,
         cast,
         { ttlMs: expiry.ms, maxViews },
         window.location.origin,
-      );
-      setLink(created.link);
-      setShares((prev) => [created.share, ...prev]);
-      setListState("ready");
+      )
+      setLink(created.link)
+      setShares((prev) => [created.share, ...prev])
+      setListState("ready")
     } catch (error) {
-      toast.error("The share link was not created", { description: message(error) });
+      toast.error("The share link was not created", { description: message(error) })
     } finally {
-      setCreating(false);
+      setCreating(false)
     }
   }
 
   async function revoke(share: ShareSummary) {
-    setRevoking(share.id);
+    setRevoking(share.id)
     try {
-      await revokeShare(summary.id, share.id);
+      await revokeShare(summary.id, share.id)
       setShares((prev) =>
         prev.map((s) => (s.id === share.id ? { ...s, revokedAt: Date.now(), sizeBytes: 0 } : s)),
-      );
+      )
       toast.success("That link no longer opens anything", {
         description:
           "The encrypted copy is deleted and the storage is back. Anyone who already watched the recording still has what they saw, and the link they hold still contains a working key — there is simply nothing left for it to open.",
-      });
+      })
     } catch (error) {
-      toast.error("The link was not revoked", { description: message(error) });
+      toast.error("The link was not revoked", { description: message(error) })
     } finally {
-      setRevoking(null);
+      setRevoking(null)
     }
   }
 
@@ -858,7 +858,7 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
   // that expires while this panel is on screen keeps saying "live" until it is
   // reopened, which is the same staleness the row timestamps already carry and
   // is not worth a ticking clock — the server is the one that refuses.
-  const [now] = useState(() => Date.now());
+  const [now] = useState(() => Date.now())
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -992,7 +992,7 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
         </p>
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -1029,7 +1029,7 @@ function NewLink({ link, onDone }: { link: string; onDone: () => void }) {
                 toast.error("The clipboard was refused", {
                   description: "Select the link above and copy it by hand.",
                 }),
-              );
+              )
           }}
         >
           <CopyIcon data-icon="inline-start" />
@@ -1040,7 +1040,7 @@ function NewLink({ link, onDone }: { link: string; onDone: () => void }) {
         </Button>
       </div>
     </div>
-  );
+  )
 }
 
 function ShareRow({
@@ -1049,12 +1049,12 @@ function ShareRow({
   busy,
   onRevoke,
 }: {
-  share: ShareSummary;
-  now: number;
-  busy: boolean;
-  onRevoke: () => void;
+  share: ShareSummary
+  now: number
+  busy: boolean
+  onRevoke: () => void
 }) {
-  const status = shareStatus(share, now);
+  const status = shareStatus(share, now)
 
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
@@ -1087,7 +1087,7 @@ function ShareRow({
         </Button>
       )}
     </li>
-  );
+  )
 }
 
 /**
@@ -1096,12 +1096,12 @@ function ShareRow({
  * link that would also have expired is described by the act, not the clock.
  */
 function shareStatus(share: ShareSummary, now: number): { label: string; tone: string } {
-  if (share.revokedAt !== null) return { label: "revoked", tone: "text-muted-foreground" };
-  if (share.expiresAt <= now) return { label: "expired", tone: "text-muted-foreground" };
+  if (share.revokedAt !== null) return { label: "revoked", tone: "text-muted-foreground" }
+  if (share.expiresAt <= now) return { label: "expired", tone: "text-muted-foreground" }
   if (share.maxViews !== null && share.views >= share.maxViews) {
-    return { label: "used up", tone: "text-muted-foreground" };
+    return { label: "used up", tone: "text-muted-foreground" }
   }
-  return { label: "live", tone: "text-success" };
+  return { label: "live", tone: "text-success" }
 }
 
 /* -------------------------------------------------------------- live rows */
@@ -1116,24 +1116,24 @@ function SessionRow({
   onDownload,
   onDiscard,
 }: {
-  session: SessionEntry;
-  recorder: RecorderState | null;
+  session: SessionEntry
+  recorder: RecorderState | null
   /**
    * Whether this account may save a new recording. Disabled rather than hidden,
    * with the reason on the button: a Record control that quietly vanishes on
    * Free reads as a bug, and one that starts a capture the server will refuse to
    * store is worse than either.
    */
-  canRecord: boolean;
-  onStart: () => void;
-  onStop: () => void;
-  onRetry: () => void;
-  onDownload: () => void;
-  onDiscard: () => void;
+  canRecord: boolean
+  onStart: () => void
+  onStop: () => void
+  onRetry: () => void
+  onDownload: () => void
+  onDiscard: () => void
 }) {
-  const capturing = recorder?.capturing ?? false;
-  const percent = recorder ? Math.min(100, (recorder.bytes / MAX_CAPTURE_BYTES) * 100) : 0;
-  const nearingCap = recorder !== null && recorder.bytes >= WARN_CAPTURE_BYTES;
+  const capturing = recorder?.capturing ?? false
+  const percent = recorder ? Math.min(100, (recorder.bytes / MAX_CAPTURE_BYTES) * 100) : 0
+  const nearingCap = recorder !== null && recorder.bytes >= WARN_CAPTURE_BYTES
 
   return (
     <div className="flex flex-col gap-2 border-b border-border pb-3 last:border-0 last:pb-0">
@@ -1195,7 +1195,7 @@ function SessionRow({
         </div>
       )}
     </div>
-  );
+  )
 }
 
 /**
@@ -1210,10 +1210,10 @@ function UnsavedRow({
   onDownload,
   onDiscard,
 }: {
-  recorder: RecorderState;
-  onRetry: () => void;
-  onDownload: () => void;
-  onDiscard: () => void;
+  recorder: RecorderState
+  onRetry: () => void
+  onDownload: () => void
+  onDiscard: () => void
 }) {
   return (
     <div className="flex flex-col gap-2 border-b border-border pb-3 last:border-0 last:pb-0">
@@ -1227,7 +1227,7 @@ function UnsavedRow({
         />
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -1251,10 +1251,10 @@ function SaveState({
   onDownload,
   onDiscard,
 }: {
-  recorder: RecorderState;
-  onRetry: () => void;
-  onDownload: () => void;
-  onDiscard: () => void;
+  recorder: RecorderState
+  onRetry: () => void
+  onDownload: () => void
+  onDiscard: () => void
 }) {
   if (recorder.saving) {
     return (
@@ -1262,7 +1262,7 @@ function SaveState({
         <SpinnerGapIcon className="animate-spin" />
         Encrypting and storing {formatBytes(recorder.bytes)}
       </span>
-    );
+    )
   }
 
   return (
@@ -1283,7 +1283,7 @@ function SaveState({
         <TrashIcon /> Discard
       </Button>
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- host cell */
@@ -1299,16 +1299,16 @@ const OPAQUE_COPY: Record<HostIndexState, string> = {
     "This tab holds the vault key but not the audit branch it is derived alongside, so references cannot be matched.",
   failed:
     "The saved host list could not be read in this browser, so there was nothing to match this reference against.",
-};
+}
 
 function HostCell({
   targetRef,
   label,
   index,
 }: {
-  targetRef: string | null;
-  label: string | null;
-  index: HostIndexState;
+  targetRef: string | null
+  label: string | null
+  index: HostIndexState
 }) {
   if (!targetRef) {
     return (
@@ -1322,7 +1322,7 @@ function HostCell({
           header says.
         </TooltipContent>
       </Tooltip>
-    );
+    )
   }
 
   if (label) {
@@ -1334,7 +1334,7 @@ function HostCell({
         </div>
         <div className="text-muted-foreground">{shortRef(targetRef)}</div>
       </>
-    );
+    )
   }
 
   return (
@@ -1349,7 +1349,7 @@ function HostCell({
       </TooltipTrigger>
       <TooltipContent className="block max-w-sm">{OPAQUE_COPY[index]}</TooltipContent>
     </Tooltip>
-  );
+  )
 }
 
 /* ----------------------------------------------------------------- states */
@@ -1378,7 +1378,7 @@ function EmptyState() {
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function LoadingRows() {
@@ -1394,7 +1394,7 @@ function LoadingRows() {
         ))}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function SignedOutState() {
@@ -1417,7 +1417,7 @@ function SignedOutState() {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function ErrorState({ message: text, onRetry }: { message: string; onRetry: () => void }) {
@@ -1441,48 +1441,48 @@ function ErrorState({ message: text, onRetry }: { message: string; onRetry: () =
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- formatting */
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? error.message : String(error)
 }
 
 /** Decimal units, matching the transfer counters elsewhere in the product. */
 function formatBytes(n: number): string {
-  const units = ["B", "kB", "MB", "GB"];
-  let value = n;
-  let unit = 0;
+  const units = ["B", "kB", "MB", "GB"]
+  let value = n
+  let unit = 0
   while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
+    value /= 1000
+    unit += 1
   }
-  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Number(value.toFixed(1));
-  return `${rounded} ${units[unit]}`;
+  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Number(value.toFixed(1))
+  return `${rounded} ${units[unit]}`
 }
 
 function formatDuration(ms: number): string {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
 function pad(n: number): string {
-  return String(n).padStart(2, "0");
+  return String(n).padStart(2, "0")
 }
 
 function absolute(at: number): string {
-  const d = new Date(at);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const d = new Date(at)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function stamp(at: number): string {
-  const d = new Date(at);
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const d = new Date(at)
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`
 }
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -1492,25 +1492,25 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 24 * 60 * 60 * 1000],
   ["hour", 60 * 60 * 1000],
   ["minute", 60 * 1000],
-];
+]
 
-const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 function relative(at: number, now: number): string {
-  const delta = at - now;
-  const abs = Math.abs(delta);
-  if (abs < 60_000) return "just now";
+  const delta = at - now
+  const abs = Math.abs(delta)
+  if (abs < 60_000) return "just now"
   for (const [unit, ms] of UNITS) {
-    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit);
+    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit)
   }
-  return "just now";
+  return "just now"
 }
 
 function downloadText(name: string, body: string, mime: string) {
-  const url = URL.createObjectURL(new Blob([body], { type: mime }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(new Blob([body], { type: mime }))
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = name
+  anchor.click()
+  URL.revokeObjectURL(url)
 }

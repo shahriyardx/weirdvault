@@ -1,9 +1,9 @@
-import { sql } from "drizzle-orm";
+import { sql } from "drizzle-orm"
 
-import { clientAddress, proxyConfigured } from "@/lib/audit/address";
-import { ipPrefix } from "@/lib/audit/events";
-import { db, schema } from "@/lib/db";
-import { dbErrorSummary } from "@/lib/db/errors";
+import { clientAddress, proxyConfigured } from "@/lib/audit/address"
+import { ipPrefix } from "@/lib/audit/events"
+import { db, schema } from "@/lib/db"
+import { dbErrorSummary } from "@/lib/db/errors"
 
 /**
  * One limiter, for every route that has one.
@@ -60,17 +60,17 @@ import { dbErrorSummary } from "@/lib/db/errors";
 
 /** A limit: how many, over how long. */
 export interface Rule {
-  max: number;
-  windowSeconds: number;
+  max: number
+  windowSeconds: number
 }
 
 export interface Decision {
-  allowed: boolean;
+  allowed: boolean
   /** Seconds until the window opens again. Zero when allowed. */
-  retryAfter: number;
+  retryAfter: number
 }
 
-const ALLOWED: Decision = { allowed: true, retryAfter: 0 };
+const ALLOWED: Decision = { allowed: true, retryAfter: 0 }
 
 /**
  * Records one request against `key` and says whether it may proceed.
@@ -83,8 +83,8 @@ const ALLOWED: Decision = { allowed: true, retryAfter: 0 };
  * primary key.
  */
 export async function consume(key: string, rule: Rule): Promise<Decision> {
-  const now = Date.now();
-  const windowMs = rule.windowSeconds * 1000;
+  const now = Date.now()
+  const windowMs = rule.windowSeconds * 1000
 
   try {
     const rows = await db.execute<{ count: number; window_start: string }>(sql`
@@ -100,33 +100,33 @@ export async function consume(key: string, rule: Rule): Promise<Decision> {
           else "rate_limit"."window_start"
         end
       returning "count", "window_start"
-    `);
+    `)
 
-    const row = rows.rows[0];
-    if (!row) return ALLOWED;
+    const row = rows.rows[0]
+    if (!row) return ALLOWED
 
-    const count = Number(row.count);
-    if (count <= rule.max) return ALLOWED;
+    const count = Number(row.count)
+    if (count <= rule.max) return ALLOWED
 
     // `window_start` comes back as a string: node-postgres hands bigint out as
     // text rather than silently rounding it through a double.
-    const endsAt = Number(row.window_start) + windowMs;
-    return { allowed: false, retryAfter: Math.max(1, Math.ceil((endsAt - now) / 1000)) };
+    const endsAt = Number(row.window_start) + windowMs
+    return { allowed: false, retryAfter: Math.max(1, Math.ceil((endsAt - now) / 1000)) }
   } catch (e) {
     // Fails open, and loudly. The alternative is that an unreachable database
     // stops sign-in, playback and everything else in the app — trading a bounded
     // abuse problem for a total outage. Summarised rather than logged whole,
     // because a drizzle error's message carries the SQL and its bound
     // parameters, and one of those parameters is a user id. See lib/db/errors.ts.
-    console.warn("rate limit check failed; allowing the request", dbErrorSummary(e));
-    return ALLOWED;
+    console.warn("rate limit check failed; allowing the request", dbErrorSummary(e))
+    return ALLOWED
   }
 }
 
 /* ------------------------------------------------------------------ subjects */
 
 /** The bucket everything shares when no subject can be established. */
-const UNRESOLVED = "unresolved";
+const UNRESOLVED = "unresolved"
 
 /**
  * Who to count this request against.
@@ -137,16 +137,16 @@ const UNRESOLVED = "unresolved";
  * route that wants a limit.
  */
 export function subjectFor(headers: Headers, userId?: string | null): string {
-  if (userId) return `u:${userId}`;
-  if (!proxyConfigured) return UNRESOLVED;
-  const address = clientAddress(headers);
-  const prefix = address ? ipPrefix(address) : null;
-  return prefix ? `n:${prefix}` : UNRESOLVED;
+  if (userId) return `u:${userId}`
+  if (!proxyConfigured) return UNRESOLVED
+  const address = clientAddress(headers)
+  const prefix = address ? ipPrefix(address) : null
+  return prefix ? `n:${prefix}` : UNRESOLVED
 }
 
 /** `<bucket>:<subject>`, so two routes cannot share a budget by accident. */
 export function keyFor(bucket: string, subject: string): string {
-  return `${bucket}:${subject}`;
+  return `${bucket}:${subject}`
 }
 
 /**
@@ -162,9 +162,9 @@ export async function enforce(
   rule: Rule,
   options: { userId?: string | null; message?: string } = {},
 ): Promise<Response | null> {
-  const decision = await consume(keyFor(bucket, subjectFor(request.headers, options.userId)), rule);
-  if (decision.allowed) return null;
-  return tooManyRequests(decision, options.message);
+  const decision = await consume(keyFor(bucket, subjectFor(request.headers, options.userId)), rule)
+  if (decision.allowed) return null
+  return tooManyRequests(decision, options.message)
 }
 
 /**
@@ -175,7 +175,7 @@ export async function enforce(
  * because the app's own error handling surfaces `error` to the user.
  */
 export function tooManyRequests(decision: Decision, message?: string): Response {
-  const seconds = Math.max(1, decision.retryAfter);
+  const seconds = Math.max(1, decision.retryAfter)
   return Response.json(
     {
       error:
@@ -184,7 +184,7 @@ export function tooManyRequests(decision: Decision, message?: string): Response 
       retryAfter: seconds,
     },
     { status: 429, headers: { "Retry-After": String(seconds) } },
-  );
+  )
 }
 
 /* --------------------------------------------------------------- better auth */
@@ -211,10 +211,10 @@ export const authRateLimitStorage = {
   async get(key: string) {
     const rows = await db.execute<{ count: number; window_start: string }>(sql`
       select "count", "window_start" from ${schema.rateLimit} where "key" = ${key}
-    `);
-    const row = rows.rows[0];
-    if (!row) return null;
-    return { key, count: Number(row.count), lastRequest: Number(row.window_start) };
+    `)
+    const row = rows.rows[0]
+    if (!row) return null
+    return { key, count: Number(row.count), lastRequest: Number(row.window_start) }
   },
 
   async set(key: string, value: { count: number; lastRequest: number }) {
@@ -223,16 +223,16 @@ export const authRateLimitStorage = {
       values (${key}, ${value.count}, ${value.lastRequest})
       on conflict ("key") do update set
         "count" = ${value.count}, "window_start" = ${value.lastRequest}
-    `);
+    `)
   },
 
   async consume(key: string, rule: { window: number; max: number }) {
     // Better Auth counts its window in seconds and calls it `window`; the shape
     // is otherwise identical.
-    const decision = await consume(key, { max: rule.max, windowSeconds: rule.window });
+    const decision = await consume(key, { max: rule.max, windowSeconds: rule.window })
     return {
       allowed: decision.allowed,
       retryAfter: decision.allowed ? null : decision.retryAfter,
-    };
+    }
   },
-};
+}

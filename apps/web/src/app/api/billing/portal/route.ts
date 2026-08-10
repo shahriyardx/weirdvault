@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { BillingNotConfiguredError, appOrigin, stripeClient } from "@/lib/billing/stripe";
-import { subscriptionFor } from "@/lib/billing/subscription";
+import { auth } from "@/lib/auth"
+import { BillingNotConfiguredError, appOrigin, stripeClient } from "@/lib/billing/stripe"
+import { subscriptionFor } from "@/lib/billing/subscription"
 
 /**
  * Opens Stripe's billing portal for the signed-in user.
@@ -28,11 +28,11 @@ import { subscriptionFor } from "@/lib/billing/subscription";
  */
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   try {
-    const row = await subscriptionFor(session.user.id);
+    const row = await subscriptionFor(session.user.id)
     if (!row) {
       return Response.json(
         {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
           code: "no-customer",
         },
         { status: 404 },
-      );
+      )
     }
 
     const portal = await stripeClient().billingPortal.sessions.create({
@@ -54,23 +54,20 @@ export async function POST(request: Request) {
       // shows "Renews" with nothing on the page admitting the lag, and the user
       // reasonably concludes the cancellation did not take.
       return_url: `${appOrigin(request)}/dashboard/settings?tab=account&portal=returned`,
-    });
+    })
 
-    return Response.json({ url: portal.url });
+    return Response.json({ url: portal.url })
   } catch (e) {
     if (e instanceof BillingNotConfiguredError) {
       return Response.json(
         { error: e.message, missing: e.missing, code: "billing-not-configured" },
         { status: 503 },
-      );
+      )
     }
     // The most common real cause of a failure here is that the billing portal
     // has never been configured in the Stripe dashboard, which is a setting
     // rather than a bug, so the message says so instead of blaming the request.
-    console.error(
-      "billing portal session could not be created",
-      e instanceof Error ? e.message : e,
-    );
+    console.error("billing portal session could not be created", e instanceof Error ? e.message : e)
     return Response.json(
       {
         error:
@@ -78,6 +75,6 @@ export async function POST(request: Request) {
           "The portal has to be enabled once in the Stripe dashboard before it will open.",
       },
       { status: 502 },
-    );
+    )
   }
 }

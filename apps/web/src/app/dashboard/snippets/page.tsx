@@ -1,13 +1,13 @@
-"use client";
+"use client"
 
 // Client component, for the same reason the hosts list is one: snippets are
 // stored encrypted and only exist as plaintext after this tab has decrypted
 // them. There is nothing here the server could render, because there is nothing
 // here the server can read.
 
-import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import * as React from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowElbowDownLeftIcon,
   CodeIcon,
@@ -20,10 +20,10 @@ import {
   PlugsConnectedIcon,
   PlusIcon,
   TrashIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { PageHeader } from "@/components/shell/page-shell";
+import { PageHeader } from "@/components/shell/page-shell"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,11 +33,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+} from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogClose,
@@ -46,38 +46,38 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { deleteSnippet, listSnippets, saveSnippet, type Snippet } from "@/lib/snippets";
-import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider";
-import { getVaultKey } from "@/lib/vault/session";
-import { syncVault } from "@/lib/vault/sync";
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { deleteSnippet, listSnippets, saveSnippet, type Snippet } from "@/lib/snippets"
+import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider"
+import { getVaultKey } from "@/lib/vault/session"
+import { syncVault } from "@/lib/vault/sync"
 
 /* -------------------------------------------------------------------- form */
 
 interface SnippetForm {
-  id?: string;
-  createdAt?: number;
-  name: string;
-  body: string;
-  description: string;
-  tags: string;
+  id?: string
+  createdAt?: number
+  name: string
+  body: string
+  description: string
+  tags: string
 }
 
 const blankForm = (): SnippetForm => ({
@@ -85,7 +85,7 @@ const blankForm = (): SnippetForm => ({
   body: "",
   description: "",
   tags: "",
-});
+})
 
 const formFor = (s: Snippet): SnippetForm => ({
   id: s.id,
@@ -94,7 +94,7 @@ const formFor = (s: Snippet): SnippetForm => ({
   body: s.body,
   description: s.description ?? "",
   tags: (s.tags ?? []).join(", "),
-});
+})
 
 /**
  * Stored bodies never end in a newline.
@@ -111,7 +111,7 @@ const formFor = (s: Snippet): SnippetForm => ({
  * toWire's decision, not the storage format's.
  */
 function normaliseBody(raw: string): string {
-  return raw.replace(/\r\n?/g, "\n").trimEnd();
+  return raw.replace(/\r\n?/g, "\n").trimEnd()
 }
 
 /**
@@ -133,41 +133,41 @@ function normaliseBody(raw: string): string {
  * so the dialog shows the target session and lets the user judge.
  */
 function toWire(body: string, execute: boolean): string {
-  const typed = body.replace(/\n/g, "\r");
-  return execute ? `${typed}\r` : typed;
+  const typed = body.replace(/\n/g, "\r")
+  return execute ? `${typed}\r` : typed
 }
 
 /* -------------------------------------------------------------------- page */
 
 export default function SnippetsPage() {
-  const router = useRouter();
-  const { sessions, activeId, setActive, write } = useSshSession();
+  const router = useRouter()
+  const { sessions, activeId, setActive, write } = useSshSession()
 
-  const [snippets, setSnippets] = React.useState<Snippet[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [query, setQuery] = React.useState("");
+  const [snippets, setSnippets] = React.useState<Snippet[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [query, setQuery] = React.useState("")
 
-  const [form, setForm] = React.useState<SnippetForm | null>(null);
-  const [saving, setSaving] = React.useState(false);
-  const [pendingDelete, setPendingDelete] = React.useState<Snippet | null>(null);
-  const [sendTarget, setSendTarget] = React.useState<Snippet | null>(null);
+  const [form, setForm] = React.useState<SnippetForm | null>(null)
+  const [saving, setSaving] = React.useState(false)
+  const [pendingDelete, setPendingDelete] = React.useState<Snippet | null>(null)
+  const [sendTarget, setSendTarget] = React.useState<Snippet | null>(null)
 
   React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    let cancelled = false
+    ;(async () => {
       try {
-        const all = await listSnippets();
-        if (!cancelled) setSnippets(all);
+        const all = await listSnippets()
+        if (!cancelled) setSnippets(all)
       } catch {
-        if (!cancelled) toast.error("Could not read the local snippet store.");
+        if (!cancelled) toast.error("Could not read the local snippet store.")
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoading(false)
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   /**
    * Pushes the encrypted vault and reports what actually happened.
@@ -180,67 +180,67 @@ export default function SnippetsPage() {
    * by a correction.
    */
   const persist = React.useCallback(async (done: string) => {
-    const vaultKey = getVaultKey();
+    const vaultKey = getVaultKey()
     if (!vaultKey) {
       toast.success(
         `${done} The vault is locked in this tab, so it stays on this device until you unlock.`,
-      );
-      return;
+      )
+      return
     }
     try {
       // syncVault reports being offline by returning, not by throwing — the
       // catch below never sees it — so the result has to be read. Saying
       // "Synced" after a failed pull would be the cheerful lie this comment
       // block promises not to tell.
-      const result = await syncVault(vaultKey);
+      const result = await syncVault(vaultKey)
       if (result.status === "offline") {
         toast.message(
           `${done} The server could not be reached, so it is on this device only for now.`,
-        );
+        )
       } else {
-        toast.success(`${done} Synced.`);
+        toast.success(`${done} Synced.`)
       }
     } catch {
-      toast.message(`${done} On this device only — the vault will sync on the next attempt.`);
+      toast.message(`${done} On this device only — the vault will sync on the next attempt.`)
     }
-  }, []);
+  }, [])
 
   // Local search, because the vault is a blob the server cannot index. Bodies
   // are searched as well as names: half the time what you remember about a
   // snippet is a flag in the middle of it.
   const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return snippets;
+    const q = query.trim().toLowerCase()
+    if (!q) return snippets
     return snippets.filter((s) =>
       [s.name, s.description ?? "", (s.tags ?? []).join(" "), s.body]
         .join(" ")
         .toLowerCase()
         .includes(q),
-    );
-  }, [snippets, query]);
+    )
+  }, [snippets, query])
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!form) return;
+    event.preventDefault()
+    if (!form) return
 
-    const name = form.name.trim();
-    const body = normaliseBody(form.body);
+    const name = form.name.trim()
+    const body = normaliseBody(form.body)
 
     if (!name) {
-      toast.error("Give the snippet a name so you can find it later.");
-      return;
+      toast.error("Give the snippet a name so you can find it later.")
+      return
     }
     if (!body) {
-      toast.error("A snippet with an empty body has nothing to send.");
-      return;
+      toast.error("A snippet with an empty body has nothing to send.")
+      return
     }
 
-    setSaving(true);
+    setSaving(true)
     try {
       const tags = form.tags
         .split(",")
         .map((t) => t.trim())
-        .filter(Boolean);
+        .filter(Boolean)
 
       await saveSnippet({
         id: form.id,
@@ -249,40 +249,40 @@ export default function SnippetsPage() {
         body,
         description: form.description.trim() || undefined,
         tags: tags.length ? tags : undefined,
-      });
+      })
 
-      setSnippets(await listSnippets());
-      setForm(null);
-      await persist(form.id ? `Updated ${name}.` : `Saved ${name}.`);
+      setSnippets(await listSnippets())
+      setForm(null)
+      await persist(form.id ? `Updated ${name}.` : `Saved ${name}.`)
     } catch {
-      toast.error("Could not write to the local snippet store.");
+      toast.error("Could not write to the local snippet store.")
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!pendingDelete) return;
-    const { id, name } = pendingDelete;
-    setPendingDelete(null);
+    if (!pendingDelete) return
+    const { id, name } = pendingDelete
+    setPendingDelete(null)
     try {
-      await deleteSnippet(id);
-      setSnippets(await listSnippets());
-      await persist(`Deleted ${name}.`);
+      await deleteSnippet(id)
+      setSnippets(await listSnippets())
+      await persist(`Deleted ${name}.`)
     } catch {
-      toast.error("Could not delete the snippet.");
+      toast.error("Could not delete the snippet.")
     }
   }
 
   async function handleCopy(snippet: Snippet) {
     try {
-      await navigator.clipboard.writeText(snippet.body);
-      toast.success(`Copied ${snippet.name} to the clipboard.`);
+      await navigator.clipboard.writeText(snippet.body)
+      toast.success(`Copied ${snippet.name} to the clipboard.`)
     } catch {
       // Clipboard access is refused outside secure contexts and whenever the
       // user has denied the permission. Claiming a copy that did not happen
       // would be worse than saying so.
-      toast.error("The browser refused clipboard access. Select the text and copy it.");
+      toast.error("The browser refused clipboard access. Select the text and copy it.")
     }
   }
 
@@ -313,17 +313,17 @@ export default function SnippetsPage() {
     // sidebar, or because the server hung up. Writing into a dead session is a
     // silent no-op, so check first rather than report a success that isn't one.
     if (!sessions.some((s) => s.id === sessionId)) {
-      toast.error("That session is no longer open.");
-      return;
+      toast.error("That session is no longer open.")
+      return
     }
 
-    write(sessionId, toWire(snippet.body, execute));
-    setSendTarget(null);
+    write(sessionId, toWire(snippet.body, execute))
+    setSendTarget(null)
 
     // Send then look elsewhere and you have no idea what happened. Switch to
     // the session that just received it.
-    setActive(sessionId);
-    router.push("/dashboard/terminal");
+    setActive(sessionId)
+    router.push("/dashboard/terminal")
   }
 
   return (
@@ -527,7 +527,7 @@ export default function SnippetsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
+  )
 }
 
 /* --------------------------------------------------------------- send flow */
@@ -539,13 +539,13 @@ function SendDialog({
   onClose,
   onSend,
 }: {
-  snippet: Snippet | null;
-  sessions: SessionEntry[];
-  preferredId: string | null;
-  onClose: () => void;
-  onSend: (snippet: Snippet, sessionId: string, execute: boolean) => void;
+  snippet: Snippet | null
+  sessions: SessionEntry[]
+  preferredId: string | null
+  onClose: () => void
+  onSend: (snippet: Snippet, sessionId: string, execute: boolean) => void
 }) {
-  const [chosen, setChosen] = React.useState<string | null>(null);
+  const [chosen, setChosen] = React.useState<string | null>(null)
 
   // Derived rather than synchronised in an effect: the default is "the session
   // you were last looking at", and an explicit choice only holds for as long as
@@ -554,9 +554,9 @@ function SendDialog({
   const target =
     chosen && sessions.some((s) => s.id === chosen)
       ? chosen
-      : (sessions.find((s) => s.id === preferredId)?.id ?? sessions[0]?.id ?? "");
+      : (sessions.find((s) => s.id === preferredId)?.id ?? sessions[0]?.id ?? "")
 
-  const multiline = snippet?.body.includes("\n") ?? false;
+  const multiline = snippet?.body.includes("\n") ?? false
 
   return (
     <Dialog open={snippet !== null} onOpenChange={(open) => !open && onClose()}>
@@ -653,7 +653,7 @@ function SendDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 /* --------------------------------------------------------------- list card */
@@ -665,13 +665,13 @@ function SnippetCard({
   onEdit,
   onDelete,
 }: {
-  snippet: Snippet;
-  onSend: () => void;
-  onCopy: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  snippet: Snippet
+  onSend: () => void
+  onCopy: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
-  const lines = snippet.body.split("\n");
+  const lines = snippet.body.split("\n")
 
   return (
     <Card>
@@ -733,7 +733,7 @@ function SnippetCard({
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* ------------------------------------------------------------ empty states */
@@ -764,7 +764,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
@@ -781,7 +781,7 @@ function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function LoadingCards() {
@@ -797,5 +797,5 @@ function LoadingCards() {
         </Card>
       ))}
     </div>
-  );
+  )
 }

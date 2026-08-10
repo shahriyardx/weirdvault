@@ -1,0 +1,101 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!build",
+      "!next-env.d.ts",
+
+      // Generated SQL. drizzle-kit owns the formatting.
+      "!drizzle",
+
+      // Static assets, not source. Next's starter SVGs live here and would
+      // otherwise be reported for having no <title>.
+      "!public",
+
+      // shadcn output: generated components, updated by re-running the
+      // generator, so local edits made to satisfy a linter are lost the next
+      // time a component is pulled.
+      "!src/components/ui"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    // What the codebase was already hand-wrapped to before Biome arrived.
+    // Without this it is 80, which rewraps every file in the app.
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noUnknownAtRules": "off",
+        "noArrayIndexKey": "off",
+
+        // console.info/warn/error are how the app reports operational events.
+        // scripts/ is exempted below — a command's output is its purpose.
+        "noConsole": {
+          "level": "error",
+          "options": { "allow": ["info", "warn", "error"] }
+        }
+      },
+      "a11y": {
+        "noStaticElementInteractions": "off",
+        "useKeyWithClickEvents": "off"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "off"
+      },
+      "style": {
+        // `!` is used deliberately here, and always immediately after the thing
+        // that establishes it: a regex match already checked for null, an index
+        // inside a bounds check, a map lookup after the key was inserted.
+        // Rewriting those as optional chaining replaces a stated assumption
+        // with a silent fallback.
+        "noNonNullAssertion": "off"
+      }
+    },
+    "domains": {
+      "next": "recommended",
+      "react": "recommended"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded",
+      "indentWidth": 2,
+      "indentStyle": "space"
+    }
+  },
+  "overrides": [
+    {
+      // Operator commands. Printing is what they do.
+      "includes": ["scripts/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ]
+}

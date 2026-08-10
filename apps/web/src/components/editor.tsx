@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react"
 
-import type { SftpHandle } from "@/lib/ssh/types";
+import type { SftpHandle } from "@/lib/ssh/types"
 
 /**
  * Remote file editing.
@@ -16,54 +16,54 @@ import type { SftpHandle } from "@/lib/ssh/types";
  * bundle; a user who only wants a terminal pays nothing for it.
  */
 
-const TEXT_LIMIT = 2 * 1024 * 1024;
+const TEXT_LIMIT = 2 * 1024 * 1024
 
 interface Props {
-  sftp: SftpHandle;
-  path: string;
-  onClose: () => void;
-  onSaved?: () => void;
+  sftp: SftpHandle
+  path: string
+  onClose: () => void
+  onSaved?: () => void
 }
 
 export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
-  const hostRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<{
-    getValue(): string;
-    dispose(): void;
-    onDidChangeModelContent(cb: () => void): void;
-  } | null>(null);
+    getValue(): string
+    dispose(): void
+    onDidChangeModelContent(cb: () => void): void
+  } | null>(null)
 
-  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
-  const [error, setError] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading")
+  const [error, setError] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
-    let disposed = false;
-    let cleanup = () => {};
+    let disposed = false
+    let cleanup = () => {}
 
-    (async () => {
+    ;(async () => {
       // Read the whole file: an editor needs it all anyway, and the limit
       // keeps someone from opening a 4 GB log and wedging the tab.
-      const stat = await sftp.stat(path);
+      const stat = await sftp.stat(path)
       if (stat.size > TEXT_LIMIT) {
         throw new Error(
           `${path} is ${(stat.size / 1048576).toFixed(1)} MB — too large to edit. ` +
             `Download it instead.`,
-        );
+        )
       }
 
-      const chunks: Uint8Array[] = [];
+      const chunks: Uint8Array[] = []
       await sftp.download(path, (c) => {
-        chunks.push(c.slice());
-      });
-      const bytes = concat(chunks);
+        chunks.push(c.slice())
+      })
+      const bytes = concat(chunks)
 
       // Refuse binaries rather than corrupting them on save: a NUL byte in the
       // first block is the same heuristic git uses.
       if (bytes.subarray(0, 8000).includes(0)) {
-        throw new Error(`${path} looks like a binary file.`);
+        throw new Error(`${path} looks like a binary file.`)
       }
-      const text = new TextDecoder().decode(bytes);
+      const text = new TextDecoder().decode(bytes)
 
       // The editor-only build plus Monarch highlighting for the basic
       // languages. The full `monaco-editor` entry pulls in language services
@@ -72,9 +72,9 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
       // the part that carries real value here.
       // Subpaths go through monaco's exports map, which rewrites "./*" to
       // "./esm/vs/*" — so the esm/vs prefix must be left off.
-      const monaco = await import("monaco-editor/editor/editor.api");
-      await import("monaco-editor/basic-languages/monaco.contribution");
-      if (disposed || !hostRef.current) return;
+      const monaco = await import("monaco-editor/editor/editor.api")
+      await import("monaco-editor/basic-languages/monaco.contribution")
+      if (disposed || !hostRef.current) return
 
       const editor = monaco.editor.create(hostRef.current, {
         value: text,
@@ -85,50 +85,50 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
         fontSize: 13,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         scrollBeyondLastLine: false,
-      });
-      editor.onDidChangeModelContent(() => setDirty(true));
-      editorRef.current = editor;
+      })
+      editor.onDidChangeModelContent(() => setDirty(true))
+      editorRef.current = editor
 
       // Monaco 0.56 uses the EditContext API rather than a hidden textarea, so
       // there is no stable element for a test to type into. Expose the
       // instance in development, as the terminal does.
       if (process.env.NODE_ENV === "development") {
-        (window as unknown as { __webxtermEditor?: unknown }).__webxtermEditor = editor;
+        ;(window as unknown as { __webxtermEditor?: unknown }).__webxtermEditor = editor
       }
 
-      cleanup = () => editor.dispose();
-      setState("ready");
+      cleanup = () => editor.dispose()
+      setState("ready")
     })().catch((e) => {
-      if (disposed) return;
-      setError(String((e as Error).message ?? e));
-      setState("error");
-    });
+      if (disposed) return
+      setError(String((e as Error).message ?? e))
+      setState("error")
+    })
 
     return () => {
-      disposed = true;
-      cleanup();
-      editorRef.current = null;
-    };
-  }, [sftp, path]);
+      disposed = true
+      cleanup()
+      editorRef.current = null
+    }
+  }, [sftp, path])
 
   async function save() {
-    if (!editorRef.current) return;
-    setState("saving");
-    setError(null);
+    if (!editorRef.current) return
+    setState("saving")
+    setError(null)
     try {
-      const bytes = new TextEncoder().encode(editorRef.current.getValue());
-      let sent = false;
+      const bytes = new TextEncoder().encode(editorRef.current.getValue())
+      let sent = false
       await sftp.upload(path, async () => {
-        if (sent) return null;
-        sent = true;
-        return bytes;
-      });
-      setDirty(false);
-      setState("ready");
-      onSaved?.();
+        if (sent) return null
+        sent = true
+        return bytes
+      })
+      setDirty(false)
+      setState("ready")
+      onSaved?.()
     } catch (e) {
-      setError(String((e as Error).message ?? e));
-      setState("ready");
+      setError(String((e as Error).message ?? e))
+      setState("ready")
     }
   }
 
@@ -136,13 +136,13 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        void save();
+        e.preventDefault()
+        void save()
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
 
   return (
     <div className="bg-terminal flex h-full flex-col">
@@ -153,6 +153,7 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
         </span>
         <div className="ml-auto flex gap-2">
           <button
+            type="button"
             onClick={save}
             disabled={!dirty || state !== "ready"}
             className="border-border bg-secondary hover:bg-accent rounded-sm border px-2.5 py-1 text-xs disabled:opacity-40"
@@ -160,6 +161,7 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
             {state === "saving" ? "Saving…" : "Save"}
           </button>
           <button
+            type="button"
             onClick={onClose}
             className="border-border hover:bg-accent rounded-sm border px-2.5 py-1 text-xs"
           >
@@ -174,30 +176,30 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
       )}
       <div ref={hostRef} className="min-h-0 flex-1" />
     </div>
-  );
+  )
 }
 
 function concat(chunks: Uint8Array[]): Uint8Array {
-  const total = chunks.reduce((n, c) => n + c.length, 0);
-  const out = new Uint8Array(total);
-  let off = 0;
+  const total = chunks.reduce((n, c) => n + c.length, 0)
+  const out = new Uint8Array(total)
+  let off = 0
   for (const c of chunks) {
-    out.set(c, off);
-    off += c.length;
+    out.set(c, off)
+    off += c.length
   }
-  return out;
+  return out
 }
 
 function languageFor(path: string): string {
-  const name = path.split("/").pop() ?? "";
-  const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
+  const name = path.split("/").pop() ?? ""
+  const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : ""
 
   const byName: Record<string, string> = {
     dockerfile: "dockerfile",
     makefile: "makefile",
     "docker-compose.yml": "yaml",
-  };
-  if (byName[name.toLowerCase()]) return byName[name.toLowerCase()];
+  }
+  if (byName[name.toLowerCase()]) return byName[name.toLowerCase()]
 
   const byExt: Record<string, string> = {
     ts: "typescript",
@@ -232,6 +234,6 @@ function languageFor(path: string): string {
     xml: "xml",
     log: "plaintext",
     env: "ini",
-  };
-  return byExt[ext] ?? "plaintext";
+  }
+  return byExt[ext] ?? "plaintext"
 }

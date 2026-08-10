@@ -45,13 +45,13 @@
  * token minting happens on the server, where that module is a client boundary.
  */
 
-import { decryptVault, encryptVault, type VaultEnvelope } from "@/lib/vault/crypto";
-import { decodeCast, encodeCast, type Cast } from "./format";
+import { decryptVault, encryptVault, type VaultEnvelope } from "@/lib/vault/crypto"
+import { decodeCast, encodeCast, type Cast } from "./format"
 
 /* ------------------------------------------------------------------ limits */
 
 /** AES-256-GCM. 32 bytes is 43 base64url characters, which is a short link. */
-const SHARE_KEY_BYTES = 32;
+const SHARE_KEY_BYTES = 32
 
 /**
  * The path segment. 32 random bytes rather than a UUID's 122 bits, because the
@@ -59,12 +59,12 @@ const SHARE_KEY_BYTES = 32;
  * ciphertext — the key is the second lock, but the first one should not be the
  * weaker of the two by an order of magnitude for no reason.
  */
-const SHARE_TOKEN_BYTES = 32;
+const SHARE_TOKEN_BYTES = 32
 
 export interface ShareExpiry {
-  id: string;
-  label: string;
-  ms: number;
+  id: string
+  label: string
+  ms: number
 }
 
 /**
@@ -84,17 +84,17 @@ export const SHARE_EXPIRIES: ShareExpiry[] = [
   { id: "24h", label: "24 hours", ms: 24 * 60 * 60 * 1000 },
   { id: "7d", label: "7 days", ms: 7 * 24 * 60 * 60 * 1000 },
   { id: "30d", label: "30 days", ms: 30 * 24 * 60 * 60 * 1000 },
-];
+]
 
 /** Derived, not retyped, so the offered windows and the enforced one agree. */
-export const MAX_SHARE_TTL_MS = Math.max(...SHARE_EXPIRIES.map((e) => e.ms));
+export const MAX_SHARE_TTL_MS = Math.max(...SHARE_EXPIRIES.map((e) => e.ms))
 
 /**
  * The largest view limit that is still a limit. Past a thousand the number is
  * decoration — the link is public to whoever holds it, and somebody who needs a
  * recording watched a thousand times wants an expiry, not a counter.
  */
-export const MAX_SHARE_VIEWS = 1000;
+export const MAX_SHARE_VIEWS = 1000
 
 /* --------------------------------------------------------------- failures */
 
@@ -113,29 +113,29 @@ export type ShareFailure =
   | "gone"
   | "network"
   | "unauthorized"
-  | "server";
+  | "server"
 
 export class ShareError extends Error {
-  readonly kind: ShareFailure;
+  readonly kind: ShareFailure
 
   constructor(kind: ShareFailure, message: string) {
-    super(message);
-    this.name = "ShareError";
-    this.kind = kind;
+    super(message)
+    this.name = "ShareError"
+    this.kind = kind
   }
 }
 
 /* -------------------------------------------------------------- base64url */
 
 /** The base64url alphabet, unpadded. Anything else is not one of our values. */
-const B64URL = /^[A-Za-z0-9_-]+$/;
+const B64URL = /^[A-Za-z0-9_-]+$/
 
 export function toB64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  let binary = ""
+  for (const byte of bytes) binary += String.fromCharCode(byte)
   // `+/` are the two standard-base64 characters that a URL or a chat client may
   // mangle, and `=` padding is noise in a fragment that has a fixed length.
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
 /**
@@ -147,17 +147,17 @@ export function toB64Url(bytes: Uint8Array): string {
  * a decryption failure rather than a broken link.
  */
 export function fromB64Url(text: string): Uint8Array {
-  if (!B64URL.test(text)) throw new ShareError("unreadable-key", "not base64url");
-  const padded = text.replace(/-/g, "+").replace(/_/g, "/");
-  let binary: string;
+  if (!B64URL.test(text)) throw new ShareError("unreadable-key", "not base64url")
+  const padded = text.replace(/-/g, "+").replace(/_/g, "/")
+  let binary: string
   try {
-    binary = atob(padded);
+    binary = atob(padded)
   } catch {
-    throw new ShareError("unreadable-key", "not base64url");
+    throw new ShareError("unreadable-key", "not base64url")
   }
-  const out = new Uint8Array(new ArrayBuffer(binary.length));
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-  return out;
+  const out = new Uint8Array(new ArrayBuffer(binary.length))
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+  return out
 }
 
 /* ----------------------------------------------------------------- values */
@@ -170,7 +170,7 @@ export function fromB64Url(text: string): Uint8Array {
  * token from it. share.test.ts asserts the arity for that reason.
  */
 export function newShareToken(): string {
-  return toB64Url(crypto.getRandomValues(new Uint8Array(SHARE_TOKEN_BYTES)));
+  return toB64Url(crypto.getRandomValues(new Uint8Array(SHARE_TOKEN_BYTES)))
 }
 
 /**
@@ -191,26 +191,26 @@ export async function newShareKey(): Promise<{ key: CryptoKey; material: string 
     { name: "AES-GCM", length: SHARE_KEY_BYTES * 8 },
     true,
     ["encrypt", "decrypt"],
-  );
-  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", exportable));
-  const material = toB64Url(raw);
-  const key = await importShareKey(material);
-  raw.fill(0);
-  return { key, material };
+  )
+  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", exportable))
+  const material = toB64Url(raw)
+  const key = await importShareKey(material)
+  raw.fill(0)
+  return { key, material }
 }
 
 export async function importShareKey(material: string): Promise<CryptoKey> {
-  const raw = fromB64Url(material);
+  const raw = fromB64Url(material)
   if (raw.length !== SHARE_KEY_BYTES) {
     throw new ShareError(
       "unreadable-key",
       `the key in this link is ${raw.length} bytes, and a share key is ${SHARE_KEY_BYTES}`,
-    );
+    )
   }
   return crypto.subtle.importKey("raw", raw as BufferSource, "AES-GCM", false, [
     "encrypt",
     "decrypt",
-  ]);
+  ])
 }
 
 /* ------------------------------------------------------------------ links */
@@ -220,7 +220,7 @@ export async function importShareKey(material: string): Promise<CryptoKey> {
  * a pure function that a test can check and a server could call.
  */
 export function buildShareLink(origin: string, token: string, material: string): string {
-  return `${origin}/share/${encodeURIComponent(token)}#k=${material}`;
+  return `${origin}/share/${encodeURIComponent(token)}#k=${material}`
 }
 
 /**
@@ -232,10 +232,10 @@ export function buildShareLink(origin: string, token: string, material: string):
  * the way in or out.
  */
 export function parseShareFragment(hash: string): string | null {
-  const body = hash.startsWith("#") ? hash.slice(1) : hash;
-  if (body === "") return null;
-  const key = new URLSearchParams(body).get("k");
-  return key === null || key === "" ? null : key;
+  const body = hash.startsWith("#") ? hash.slice(1) : hash
+  if (body === "") return null
+  const key = new URLSearchParams(body).get("k")
+  return key === null || key === "" ? null : key
 }
 
 /* --------------------------------------------------------------- envelope */
@@ -246,8 +246,8 @@ export function parseShareFragment(hash: string): string | null {
  * has understood both and the cast format only ever has one wrapper to grow.
  */
 interface SharePayload {
-  v: 1;
-  cast: string;
+  v: 1
+  cast: string
 }
 
 /**
@@ -264,64 +264,64 @@ export async function sealForShare(key: CryptoKey, cast: Cast): Promise<string> 
   const envelope = await encryptVault(key, {
     v: 1,
     cast: encodeCast(cast),
-  } satisfies SharePayload);
-  return JSON.stringify(envelope);
+  } satisfies SharePayload)
+  return JSON.stringify(envelope)
 }
 
 export async function openShared(key: CryptoKey, blob: string): Promise<Cast> {
-  let envelope: VaultEnvelope;
+  let envelope: VaultEnvelope
   try {
-    envelope = JSON.parse(blob) as VaultEnvelope;
+    envelope = JSON.parse(blob) as VaultEnvelope
   } catch {
     // Not a key problem. Saying "wrong key" here would send somebody hunting
     // through their link for a character that is fine.
-    throw new ShareError("server", "the server returned something that is not a share envelope");
+    throw new ShareError("server", "the server returned something that is not a share envelope")
   }
 
-  let payload: SharePayload;
+  let payload: SharePayload
   try {
-    payload = await decryptVault<SharePayload>(key, envelope);
+    payload = await decryptVault<SharePayload>(key, envelope)
   } catch {
-    throw new ShareError("wrong-key", "the key in this link does not open this recording");
+    throw new ShareError("wrong-key", "the key in this link does not open this recording")
   }
 
   if (payload.v !== 1) {
-    throw new ShareError("server", `unsupported share container v${String(payload.v)}`);
+    throw new ShareError("server", `unsupported share container v${String(payload.v)}`)
   }
-  return decodeCast(payload.cast);
+  return decodeCast(payload.cast)
 }
 
 /* ---------------------------------------------------------------- the API */
 
 /** One share as the owner route describes it. Never includes the token. */
 export interface ShareSummary {
-  id: string;
+  id: string
   /** Bytes of the second ciphertext, as the server counted them. */
-  sizeBytes: number;
+  sizeBytes: number
   /** Milliseconds since the epoch. */
-  expiresAt: number;
-  maxViews: number | null;
-  views: number;
-  revokedAt: number | null;
-  createdAt: number;
+  expiresAt: number
+  maxViews: number | null
+  views: number
+  revokedAt: number | null
+  createdAt: number
 }
 
 export interface CreatedShare {
-  share: ShareSummary;
+  share: ShareSummary
   /**
    * The whole link, fragment included. This is the only moment it exists: the
    * key is not stored anywhere, so nothing — here or on the server — can build
    * this string a second time.
    */
-  link: string;
+  link: string
 }
 
 export interface SharedRecording {
-  cast: Cast;
-  expiresAt: number;
+  cast: Cast
+  expiresAt: number
   /** Including the fetch that just happened. */
-  views: number;
-  maxViews: number | null;
+  views: number
+  maxViews: number | null
 }
 
 export async function createShare(
@@ -330,8 +330,8 @@ export async function createShare(
   options: { ttlMs: number; maxViews: number | null },
   origin: string,
 ): Promise<CreatedShare> {
-  const { key, material } = await newShareKey();
-  const blob = await sealForShare(key, cast);
+  const { key, material } = await newShareKey()
+  const blob = await sealForShare(key, cast)
 
   const res = await request(`/api/recordings/${encodeURIComponent(recordingId)}/shares`, {
     method: "POST",
@@ -341,32 +341,32 @@ export async function createShare(
       expiresAt: new Date(Date.now() + options.ttlMs).toISOString(),
       maxViews: options.maxViews,
     }),
-  });
+  })
 
-  const body = (await res.json()) as { share?: unknown; token?: unknown };
-  const share = toSummary(body.share);
+  const body = (await res.json()) as { share?: unknown; token?: unknown }
+  const share = toSummary(body.share)
   if (!share || typeof body.token !== "string") {
-    throw new ShareError("server", "The share was created but the server described it oddly.");
+    throw new ShareError("server", "The share was created but the server described it oddly.")
   }
 
-  return { share, link: buildShareLink(origin, body.token, material) };
+  return { share, link: buildShareLink(origin, body.token, material) }
 }
 
 export async function listShares(recordingId: string): Promise<ShareSummary[]> {
-  const res = await request(`/api/recordings/${encodeURIComponent(recordingId)}/shares`);
-  const body = (await res.json()) as { shares?: unknown };
-  if (!Array.isArray(body.shares)) return [];
+  const res = await request(`/api/recordings/${encodeURIComponent(recordingId)}/shares`)
+  const body = (await res.json()) as { shares?: unknown }
+  if (!Array.isArray(body.shares)) return []
   return body.shares.flatMap((raw) => {
-    const row = toSummary(raw);
-    return row ? [row] : [];
-  });
+    const row = toSummary(raw)
+    return row ? [row] : []
+  })
 }
 
 export async function revokeShare(recordingId: string, shareId: string): Promise<void> {
   await request(
     `/api/recordings/${encodeURIComponent(recordingId)}/shares?share=${encodeURIComponent(shareId)}`,
     { method: "DELETE" },
-  );
+  )
 }
 
 /**
@@ -380,30 +380,30 @@ export async function revokeShare(recordingId: string, shareId: string): Promise
 export async function fetchShared(token: string, material: string): Promise<SharedRecording> {
   // Before the fetch, so a link whose key is mangled does not spend a view on a
   // recording it could never have opened.
-  const key = await importShareKey(material);
+  const key = await importShareKey(material)
 
-  let res: Response;
+  let res: Response
   try {
-    res = await fetch(`/api/shares/${encodeURIComponent(token)}`, { cache: "no-store" });
+    res = await fetch(`/api/shares/${encodeURIComponent(token)}`, { cache: "no-store" })
   } catch {
-    throw new ShareError("network", "The request never reached the server. You may be offline.");
+    throw new ShareError("network", "The request never reached the server. You may be offline.")
   }
 
   if (res.status === 404) {
-    throw new ShareError("gone", "This link does not open anything.");
+    throw new ShareError("gone", "This link does not open anything.")
   }
   if (!res.ok) {
-    throw new ShareError("server", `The server returned ${res.status}.`);
+    throw new ShareError("server", `The server returned ${res.status}.`)
   }
 
   const body = (await res.json()) as {
-    blob?: unknown;
-    expiresAt?: unknown;
-    views?: unknown;
-    maxViews?: unknown;
-  };
+    blob?: unknown
+    expiresAt?: unknown
+    views?: unknown
+    maxViews?: unknown
+  }
   if (typeof body.blob !== "string") {
-    throw new ShareError("server", "The server returned no recording data.");
+    throw new ShareError("server", "The server returned no recording data.")
   }
 
   return {
@@ -411,22 +411,22 @@ export async function fetchShared(token: string, material: string): Promise<Shar
     expiresAt: typeof body.expiresAt === "string" ? Date.parse(body.expiresAt) : Number.NaN,
     views: typeof body.views === "number" ? body.views : 0,
     maxViews: typeof body.maxViews === "number" ? body.maxViews : null,
-  };
+  }
 }
 
 /* ------------------------------------------------------------------ plumbing */
 
 async function request(url: string, init?: RequestInit): Promise<Response> {
-  let res: Response;
+  let res: Response
   try {
-    res = await fetch(url, { cache: "no-store", ...init });
+    res = await fetch(url, { cache: "no-store", ...init })
   } catch {
-    throw new ShareError("network", "The request never reached the server. You may be offline.");
+    throw new ShareError("network", "The request never reached the server. You may be offline.")
   }
-  if (res.ok) return res;
+  if (res.ok) return res
 
   if (res.status === 401) {
-    throw new ShareError("unauthorized", "This browser is no longer signed in.");
+    throw new ShareError("unauthorized", "This browser is no longer signed in.")
   }
   // The routes answer with a readable `error`, and a refusal the owner could not
   // have predicted — the storage ceiling, chiefly — is worth passing through
@@ -434,18 +434,18 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
   const detail = await res
     .json()
     .then((b: { error?: unknown }) => (typeof b.error === "string" ? b.error : null))
-    .catch(() => null);
-  throw new ShareError("server", detail ?? `The server returned ${res.status}.`);
+    .catch(() => null)
+  throw new ShareError("server", detail ?? `The server returned ${res.status}.`)
 }
 
 function toSummary(raw: unknown): ShareSummary | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  if (typeof r.id !== "string") return null;
+  if (!raw || typeof raw !== "object") return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.id !== "string") return null
 
-  const expiresAt = typeof r.expiresAt === "string" ? Date.parse(r.expiresAt) : Number.NaN;
-  const createdAt = typeof r.createdAt === "string" ? Date.parse(r.createdAt) : Number.NaN;
-  if (Number.isNaN(expiresAt) || Number.isNaN(createdAt)) return null;
+  const expiresAt = typeof r.expiresAt === "string" ? Date.parse(r.expiresAt) : Number.NaN
+  const createdAt = typeof r.createdAt === "string" ? Date.parse(r.createdAt) : Number.NaN
+  if (Number.isNaN(expiresAt) || Number.isNaN(createdAt)) return null
 
   return {
     id: r.id,
@@ -455,5 +455,5 @@ function toSummary(raw: unknown): ShareSummary | null {
     views: typeof r.views === "number" ? r.views : 0,
     revokedAt: typeof r.revokedAt === "string" ? Date.parse(r.revokedAt) : null,
     createdAt,
-  };
+  }
 }

@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
+import { headers } from "next/headers"
+import { and, eq } from "drizzle-orm"
 
-import { auth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
+import { auth } from "@/lib/auth"
+import { db, schema } from "@/lib/db"
 
 /**
  * Has the machine called home yet?
@@ -20,10 +20,10 @@ import { db, schema } from "@/lib/db";
  */
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const { id } = await params;
+  const { id } = await params
 
   const [row] = await db
     .select({
@@ -35,19 +35,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .where(
       and(eq(schema.agentEnrollment.id, id), eq(schema.agentEnrollment.userId, session.user.id)),
     )
-    .limit(1);
+    .limit(1)
 
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
+  if (!row) return Response.json({ error: "not found" }, { status: 404 })
 
   if (!row.usedAt || !row.agentId) {
     // Expiry is reported rather than left for the caller to work out from a
     // timestamp, so the page can stop polling and offer a fresh token instead
     // of spinning against a token that can no longer be spent.
-    const expired = row.expiresAt.getTime() <= Date.now();
+    const expired = row.expiresAt.getTime() <= Date.now()
     return Response.json({
       status: expired ? "expired" : "waiting",
       expiresAt: row.expiresAt.toISOString(),
-    });
+    })
   }
 
   const [agent] = await db
@@ -64,14 +64,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })
     .from(schema.agent)
     .where(and(eq(schema.agent.id, row.agentId), eq(schema.agent.userId, session.user.id)))
-    .limit(1);
+    .limit(1)
 
   if (!agent) {
     // The agent was revoked and cascaded away between the token being spent and
     // this poll. Rare, but "claimed by something that no longer exists" is not a
     // state the page should render as success.
-    return Response.json({ status: "expired", expiresAt: row.expiresAt.toISOString() });
+    return Response.json({ status: "expired", expiresAt: row.expiresAt.toISOString() })
   }
 
-  return Response.json({ status: "claimed", agent });
+  return Response.json({ status: "claimed", agent })
 }

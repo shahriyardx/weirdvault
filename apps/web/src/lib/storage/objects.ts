@@ -1,4 +1,4 @@
-import { encodePath, signRequest, type SigningCredentials } from "./sigv4";
+import { encodePath, signRequest, type SigningCredentials } from "./sigv4"
 
 /**
  * Where the recording bytes live, when they do not live in Postgres.
@@ -52,9 +52,9 @@ import { encodePath, signRequest, type SigningCredentials } from "./sigv4";
 /* -------------------------------------------------------------------- config */
 
 export interface ObjectStore {
-  endpoint: URL;
-  bucket: string;
-  credentials: SigningCredentials;
+  endpoint: URL
+  bucket: string
+  credentials: SigningCredentials
 }
 
 /**
@@ -66,9 +66,9 @@ export interface ObjectStore {
  * a bucket. So all-set and none-set are the two supported answers and anything
  * else names the missing half here, out loud, once at startup.
  */
-export type StorageProblem = { missing: string[] } | { badEndpoint: string };
+export type StorageProblem = { missing: string[] } | { badEndpoint: string }
 
-const VARS = ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] as const;
+const VARS = ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] as const
 
 /**
  * Reads the environment into a store, or explains why it could not.
@@ -79,20 +79,20 @@ const VARS = ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_
 export function readStorageConfig(
   env: Record<string, string | undefined>,
 ): { store: ObjectStore } | { off: true } | { problem: StorageProblem } {
-  const present = VARS.filter((v) => (env[v] ?? "") !== "");
-  if (present.length === 0) return { off: true };
+  const present = VARS.filter((v) => (env[v] ?? "") !== "")
+  if (present.length === 0) return { off: true }
   if (present.length < VARS.length) {
-    return { problem: { missing: VARS.filter((v) => !present.includes(v)) } };
+    return { problem: { missing: VARS.filter((v) => !present.includes(v)) } }
   }
 
-  let endpoint: URL;
+  let endpoint: URL
   try {
-    endpoint = new URL(env.R2_ENDPOINT as string);
+    endpoint = new URL(env.R2_ENDPOINT as string)
   } catch {
-    return { problem: { badEndpoint: env.R2_ENDPOINT as string } };
+    return { problem: { badEndpoint: env.R2_ENDPOINT as string } }
   }
   if (endpoint.protocol !== "https:" && endpoint.protocol !== "http:") {
-    return { problem: { badEndpoint: env.R2_ENDPOINT as string } };
+    return { problem: { badEndpoint: env.R2_ENDPOINT as string } }
   }
 
   return {
@@ -109,10 +109,10 @@ export function readStorageConfig(
         service: "s3",
       },
     },
-  };
+  }
 }
 
-let resolved: ObjectStore | null | undefined;
+let resolved: ObjectStore | null | undefined
 
 /**
  * This process's bucket, or null when recordings stay in Postgres.
@@ -122,40 +122,40 @@ let resolved: ObjectStore | null | undefined;
  * is printed once, on the first call, for the same reason.
  */
 export function objectStore(): ObjectStore | null {
-  if (resolved !== undefined) return resolved;
+  if (resolved !== undefined) return resolved
 
-  const result = readStorageConfig(process.env);
+  const result = readStorageConfig(process.env)
   if ("store" in result) {
-    resolved = result.store;
+    resolved = result.store
   } else if ("off" in result) {
-    resolved = null;
+    resolved = null
   } else {
-    resolved = null;
-    const p = result.problem;
+    resolved = null
+    const p = result.problem
     console.warn(
       "missing" in p
         ? `recording object storage is half-configured and therefore off: ${p.missing.join(", ")} ` +
             "not set. Recordings will be stored in Postgres. Set all four, or none."
         : `recording object storage is off: R2_ENDPOINT is not a usable URL (${p.badEndpoint}). ` +
             "It is the S3 API endpoint, e.g. https://<account>.r2.cloudflarestorage.com.",
-    );
+    )
   }
-  return resolved;
+  return resolved
 }
 
 /** Test seam. Nothing in the app calls this. */
 export function resetObjectStoreCache(): void {
-  resolved = undefined;
+  resolved = undefined
 }
 
 /* ---------------------------------------------------------------------- keys */
 
 export function recordingKey(userId: string, recordingId: string): string {
-  return `rec/${userId}/${recordingId}`;
+  return `rec/${userId}/${recordingId}`
 }
 
 export function shareKey(userId: string, shareId: string): string {
-  return `share/${userId}/${shareId}`;
+  return `share/${userId}/${shareId}`
 }
 
 /**
@@ -166,18 +166,18 @@ export function shareKey(userId: string, shareId: string): string {
  * data a share exists to hand to strangers.
  */
 export function accountPrefixes(userId: string): string[] {
-  return [`rec/${userId}/`, `share/${userId}/`];
+  return [`rec/${userId}/`, `share/${userId}/`]
 }
 
 /* ------------------------------------------------------------------ requests */
 
 export class ObjectStoreError extends Error {
-  readonly status: number;
+  readonly status: number
 
   constructor(operation: string, status: number, detail: string) {
-    super(`${operation} failed: ${status}${detail ? ` ${detail}` : ""}`);
-    this.name = "ObjectStoreError";
-    this.status = status;
+    super(`${operation} failed: ${status}${detail ? ` ${detail}` : ""}`)
+    this.name = "ObjectStoreError"
+    this.status = status
   }
 }
 
@@ -194,13 +194,13 @@ function urlFor(
   key: string,
   query?: Record<string, string>,
 ): { url: string; path: string } {
-  const path = `/${store.bucket}${encodePath(key)}`;
+  const path = `/${store.bucket}${encodePath(key)}`
   const search = query
     ? `?${Object.entries(query)
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
         .join("&")}`
-    : "";
-  return { url: `${store.endpoint.origin}${path}${search}`, path };
+    : ""
+  return { url: `${store.endpoint.origin}${path}${search}`, path }
 }
 
 async function send(
@@ -210,20 +210,20 @@ async function send(
   key: string,
   options: { query?: Record<string, string>; body?: Buffer; contentType?: string } = {},
 ): Promise<Response> {
-  const body = options.body ?? Buffer.alloc(0);
-  const { url, path } = urlFor(store, key, options.query);
+  const body = options.body ?? Buffer.alloc(0)
+  const { url, path } = urlFor(store, key, options.query)
 
-  const headers: Record<string, string> = { host: store.endpoint.host };
-  if (options.contentType) headers["content-type"] = options.contentType;
-  if (body.length > 0) headers["content-length"] = String(body.length);
+  const headers: Record<string, string> = { host: store.endpoint.host }
+  if (options.contentType) headers["content-type"] = options.contentType
+  if (body.length > 0) headers["content-length"] = String(body.length)
 
   const signed = signRequest(
     { method, path, query: options.query, headers, body },
     store.credentials,
     new Date(),
-  );
+  )
 
-  let response: Response;
+  let response: Response
   try {
     response = await fetch(url, {
       method,
@@ -231,23 +231,23 @@ async function send(
       body: body.length > 0 ? new Uint8Array(body) : undefined,
       // The bucket is a backing store, not an upstream to be cached in front of.
       cache: "no-store",
-    });
+    })
   } catch (e) {
     // A DNS failure, a refused connection, a TLS error. Status 0 says "the
     // request never got an answer", which callers distinguish from a 404.
-    throw new ObjectStoreError(operation, 0, e instanceof Error ? e.message : "unreachable");
+    throw new ObjectStoreError(operation, 0, e instanceof Error ? e.message : "unreachable")
   }
-  return response;
+  return response
 }
 
 /** The first line of an S3 error, for a log. Never the whole XML. */
 async function detailOf(response: Response): Promise<string> {
   try {
-    const text = await response.text();
-    const code = /<Code>([^<]{0,64})<\/Code>/.exec(text);
-    return code ? code[1] : "";
+    const text = await response.text()
+    const code = /<Code>([^<]{0,64})<\/Code>/.exec(text)
+    return code ? code[1] : ""
   } catch {
-    return "";
+    return ""
   }
 }
 
@@ -257,11 +257,11 @@ export async function putObject(
   body: Buffer,
   contentType = "application/octet-stream",
 ): Promise<void> {
-  const response = await send(store, "put", "PUT", key, { body, contentType });
-  if (!response.ok) throw new ObjectStoreError("put", response.status, await detailOf(response));
+  const response = await send(store, "put", "PUT", key, { body, contentType })
+  if (!response.ok) throw new ObjectStoreError("put", response.status, await detailOf(response))
   // The body is drained rather than left dangling: an unread response keeps the
   // socket out of the pool until it is collected, and this runs on every save.
-  await response.arrayBuffer();
+  await response.arrayBuffer()
 }
 
 /**
@@ -273,13 +273,13 @@ export async function putObject(
  * 500 that says nothing.
  */
 export async function getObject(store: ObjectStore, key: string): Promise<Buffer | null> {
-  const response = await send(store, "get", "GET", key);
+  const response = await send(store, "get", "GET", key)
   if (response.status === 404) {
-    await response.arrayBuffer();
-    return null;
+    await response.arrayBuffer()
+    return null
   }
-  if (!response.ok) throw new ObjectStoreError("get", response.status, await detailOf(response));
-  return Buffer.from(await response.arrayBuffer());
+  if (!response.ok) throw new ObjectStoreError("get", response.status, await detailOf(response))
+  return Buffer.from(await response.arrayBuffer())
 }
 
 /**
@@ -291,11 +291,11 @@ export async function getObject(store: ObjectStore, key: string): Promise<Buffer
  * attempt got to.
  */
 export async function deleteObject(store: ObjectStore, key: string): Promise<void> {
-  const response = await send(store, "delete", "DELETE", key);
+  const response = await send(store, "delete", "DELETE", key)
   if (!response.ok && response.status !== 404) {
-    throw new ObjectStoreError("delete", response.status, await detailOf(response));
+    throw new ObjectStoreError("delete", response.status, await detailOf(response))
   }
-  await response.arrayBuffer();
+  await response.arrayBuffer()
 }
 
 /* ------------------------------------------------------------------- listing */
@@ -307,7 +307,7 @@ function unescapeXml(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&");
+    .replace(/&amp;/g, "&")
 }
 
 /**
@@ -328,33 +328,33 @@ function unescapeXml(value: string): string {
  * behind while reporting success.
  */
 export interface StoredObject {
-  key: string;
+  key: string
   /** Epoch milliseconds. Zero when the bucket did not say, which no S3 does. */
-  lastModified: number;
+  lastModified: number
 }
 
 export async function listObjects(store: ObjectStore, prefix: string): Promise<StoredObject[]> {
-  const objects: StoredObject[] = [];
-  let token: string | undefined;
+  const objects: StoredObject[] = []
+  let token: string | undefined
 
   for (;;) {
-    const query: Record<string, string> = { "list-type": "2", prefix, "max-keys": "1000" };
-    if (token) query["continuation-token"] = token;
+    const query: Record<string, string> = { "list-type": "2", prefix, "max-keys": "1000" }
+    if (token) query["continuation-token"] = token
 
     // The bucket itself is the resource, so the key is empty and the path is
     // `/<bucket>`.
-    const response = await send(store, "list", "GET", "", { query });
-    if (!response.ok) throw new ObjectStoreError("list", response.status, await detailOf(response));
-    const xml = await response.text();
+    const response = await send(store, "list", "GET", "", { query })
+    if (!response.ok) throw new ObjectStoreError("list", response.status, await detailOf(response))
+    const xml = await response.text()
 
     // Read as a pair from inside one <Contents>, so a key can never be matched
     // against a different object's timestamp — which would be the one way the
     // orphan sweep could delete something it had no business deleting.
     for (const item of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
-      const key = /<Key>([\s\S]*?)<\/Key>/.exec(item[1]);
-      if (!key) continue;
-      const at = /<LastModified>([\s\S]*?)<\/LastModified>/.exec(item[1]);
-      const parsed = at ? Date.parse(at[1]) : Number.NaN;
+      const key = /<Key>([\s\S]*?)<\/Key>/.exec(item[1])
+      if (!key) continue
+      const at = /<LastModified>([\s\S]*?)<\/LastModified>/.exec(item[1])
+      const parsed = at ? Date.parse(at[1]) : Number.NaN
       objects.push({
         key: unescapeXml(key[1]),
         // Zero, not "now", when a timestamp is unreadable. The sweep treats an
@@ -363,25 +363,25 @@ export async function listObjects(store: ObjectStore, prefix: string): Promise<S
         // merits rather than as a permanent reprieve; an object nothing claims
         // and whose age cannot be established is still an orphan.
         lastModified: Number.isNaN(parsed) ? 0 : parsed,
-      });
+      })
     }
 
-    const truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml);
-    const next = /<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/.exec(xml);
-    if (!truncated || !next) break;
-    token = unescapeXml(next[1]);
+    const truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml)
+    const next = /<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/.exec(xml)
+    if (!truncated || !next) break
+    token = unescapeXml(next[1])
   }
 
-  return objects;
+  return objects
 }
 
 /** Just the keys, for callers that do not care when an object was written. */
 export async function listPrefix(store: ObjectStore, prefix: string): Promise<string[]> {
-  return (await listObjects(store, prefix)).map((object) => object.key);
+  return (await listObjects(store, prefix)).map((object) => object.key)
 }
 
 /** How many at a time. Enough to not be slow, few enough to not look like abuse. */
-const DELETE_CONCURRENCY = 8;
+const DELETE_CONCURRENCY = 8
 
 /**
  * Deletes everything under a prefix, and says how much it got.
@@ -400,18 +400,18 @@ export async function deletePrefix(
   store: ObjectStore,
   prefix: string,
 ): Promise<{ deleted: number; failed: number }> {
-  const keys = await listPrefix(store, prefix);
-  let deleted = 0;
-  let failed = 0;
+  const keys = await listPrefix(store, prefix)
+  let deleted = 0
+  let failed = 0
 
   for (let i = 0; i < keys.length; i += DELETE_CONCURRENCY) {
-    const batch = keys.slice(i, i + DELETE_CONCURRENCY);
-    const results = await Promise.allSettled(batch.map((key) => deleteObject(store, key)));
+    const batch = keys.slice(i, i + DELETE_CONCURRENCY)
+    const results = await Promise.allSettled(batch.map((key) => deleteObject(store, key)))
     for (const result of results) {
-      if (result.status === "fulfilled") deleted += 1;
-      else failed += 1;
+      if (result.status === "fulfilled") deleted += 1
+      else failed += 1
     }
   }
 
-  return { deleted, failed };
+  return { deleted, failed }
 }

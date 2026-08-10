@@ -1,12 +1,12 @@
-"use client";
+"use client"
 
-import { useSyncExternalStore } from "react";
-import { createAuthClient } from "better-auth/react";
-import { twoFactorClient } from "better-auth/plugins/two-factor";
-import { passkeyClient } from "@better-auth/passkey/client";
+import { useSyncExternalStore } from "react"
+import { createAuthClient } from "better-auth/react"
+import { twoFactorClient } from "better-auth/plugins/two-factor"
+import { passkeyClient } from "@better-auth/passkey/client"
 
-import { registerDevice } from "@/lib/device";
-import { deriveSecrets } from "@/lib/vault/kdf";
+import { registerDevice } from "@/lib/device"
+import { deriveSecrets } from "@/lib/vault/kdf"
 
 /**
  * Two plugins, both of which authenticate the ACCOUNT and neither of which
@@ -26,9 +26,9 @@ import { deriveSecrets } from "@/lib/vault/kdf";
  */
 export const authClient = createAuthClient({
   plugins: [twoFactorClient(), passkeyClient()],
-});
+})
 
-export const { useSession, signOut } = authClient;
+export const { useSession, signOut } = authClient
 
 /* --------------------------------------------- how this tab got its session */
 
@@ -46,10 +46,10 @@ export const { useSession, signOut } = authClient;
  * reload, not the sign-in that happened before it. lib/vault/session.ts already
  * says so about the key itself, and this has to age out at the same rate.
  */
-export type PasswordlessSignIn = "passkey" | "github";
+export type PasswordlessSignIn = "passkey" | "github"
 
-let lastPasswordlessSignIn: PasswordlessSignIn | null = null;
-const signInListeners = new Set<() => void>();
+let lastPasswordlessSignIn: PasswordlessSignIn | null = null
+const signInListeners = new Set<() => void>()
 
 /**
  * Records how this tab got its session, including "with a password", which
@@ -61,16 +61,16 @@ const signInListeners = new Set<() => void>();
  * not happen — a small lie, but the kind this codebase does not ship.
  */
 function noteSignInMethod(method: PasswordlessSignIn | null) {
-  lastPasswordlessSignIn = method;
-  for (const fn of signInListeners) fn();
+  lastPasswordlessSignIn = method
+  for (const fn of signInListeners) fn()
 }
 
 const subscribeSignInMethod = (fn: () => void) => {
-  signInListeners.add(fn);
+  signInListeners.add(fn)
   return () => {
-    signInListeners.delete(fn);
-  };
-};
+    signInListeners.delete(fn)
+  }
+}
 
 /** Reactive: which passwordless route, if any, produced this tab's session. */
 export function usePasswordlessSignIn(): PasswordlessSignIn | null {
@@ -80,7 +80,7 @@ export function usePasswordlessSignIn(): PasswordlessSignIn | null {
     // Server render: nothing has signed in here, and the dialog this drives is
     // only ever rendered in the browser.
     () => null,
-  );
+  )
 }
 
 /**
@@ -89,17 +89,17 @@ export function usePasswordlessSignIn(): PasswordlessSignIn | null {
  * memory only — persisting it anywhere would undo the point.
  */
 export async function signUpWithVault(email: string, password: string, name: string) {
-  const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password);
+  const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password)
   const res = await authClient.signUp.email({
     email,
     password: authToken,
     name,
-  });
-  if (res.error) throw new Error(res.error.message ?? "sign up failed");
+  })
+  if (res.error) throw new Error(res.error.message ?? "sign up failed")
   // Best-effort: a device that fails to register can still work, it just
   // won't appear in "where am I signed in".
-  void registerDevice();
-  return { vaultKey, auditKey, user: res.data?.user };
+  void registerDevice()
+  return { vaultKey, auditKey, user: res.data?.user }
 }
 
 export async function signInWithVault(email: string, password: string) {
@@ -108,12 +108,12 @@ export async function signInWithVault(email: string, password: string) {
   // below; what stays here is this function's shape, which callers depend on.
   // A sign-in that stops at a second-factor challenge has no user yet, which is
   // exactly what `user: undefined` already meant.
-  const outcome = await signInWithVaultAndSecondFactor(email, password);
+  const outcome = await signInWithVaultAndSecondFactor(email, password)
   return {
     vaultKey: outcome.vaultKey,
     auditKey: outcome.auditKey,
     user: outcome.status === "signed-in" ? outcome.user : undefined,
-  };
+  }
 }
 
 /**
@@ -134,20 +134,20 @@ export async function signInWithVault(email: string, password: string) {
  */
 export type SignInOutcome =
   | {
-      status: "signed-in";
-      vaultKey: CryptoKey;
-      auditKey: CryptoKey;
+      status: "signed-in"
+      vaultKey: CryptoKey
+      auditKey: CryptoKey
       user:
         | NonNullable<Awaited<ReturnType<typeof authClient.signIn.email>>["data"]>["user"]
-        | undefined;
+        | undefined
     }
   | {
-      status: "two-factor-required";
-      vaultKey: CryptoKey;
-      auditKey: CryptoKey;
+      status: "two-factor-required"
+      vaultKey: CryptoKey
+      auditKey: CryptoKey
       /** Which factors the server will accept, e.g. ["totp"]. */
-      methods: string[];
-    };
+      methods: string[]
+    }
 
 /**
  * A shape Better Auth's client does not type.
@@ -160,36 +160,36 @@ export type SignInOutcome =
  * as a completed sign-in, which is what it is.
  */
 function twoFactorChallenge(data: unknown): { methods: string[] } | null {
-  if (typeof data !== "object" || data === null) return null;
-  const body = data as { twoFactorRedirect?: unknown; twoFactorMethods?: unknown };
-  if (body.twoFactorRedirect !== true) return null;
+  if (typeof data !== "object" || data === null) return null
+  const body = data as { twoFactorRedirect?: unknown; twoFactorMethods?: unknown }
+  if (body.twoFactorRedirect !== true) return null
   const methods = Array.isArray(body.twoFactorMethods)
     ? body.twoFactorMethods.filter((m): m is string => typeof m === "string")
-    : [];
-  return { methods };
+    : []
+  return { methods }
 }
 
 export async function signInWithVaultAndSecondFactor(
   email: string,
   password: string,
 ): Promise<SignInOutcome> {
-  const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password);
-  const res = await authClient.signIn.email({ email, password: authToken });
-  if (res.error) throw new Error(res.error.message ?? "sign in failed");
+  const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password)
+  const res = await authClient.signIn.email({ email, password: authToken })
+  if (res.error) throw new Error(res.error.message ?? "sign in failed")
 
-  const challenge = twoFactorChallenge(res.data);
+  const challenge = twoFactorChallenge(res.data)
   if (challenge) {
     // No device registration yet: there is no session to attach it to, and the
     // challenge may never be answered. It happens on the way through
     // completeTwoFactorSignIn instead.
-    return { status: "two-factor-required", vaultKey, auditKey, methods: challenge.methods };
+    return { status: "two-factor-required", vaultKey, auditKey, methods: challenge.methods }
   }
 
   // A password was typed, so whatever this tab last recorded about a
   // passwordless route is no longer the reason for anything.
-  noteSignInMethod(null);
-  void registerDevice();
-  return { status: "signed-in", vaultKey, auditKey, user: res.data?.user };
+  noteSignInMethod(null)
+  void registerDevice()
+  return { status: "signed-in", vaultKey, auditKey, user: res.data?.user }
 }
 
 /**
@@ -209,11 +209,11 @@ export async function completeTwoFactorSignIn(
   const res =
     factor === "totp"
       ? await authClient.twoFactor.verifyTotp({ code: code.trim() })
-      : await authClient.twoFactor.verifyBackupCode({ code: code.trim() });
-  if (res.error) throw new Error(res.error.message ?? "that code was not accepted");
+      : await authClient.twoFactor.verifyBackupCode({ code: code.trim() })
+  if (res.error) throw new Error(res.error.message ?? "that code was not accepted")
   // Reached only from a password sign-in, so the same clearing applies.
-  noteSignInMethod(null);
-  void registerDevice();
+  noteSignInMethod(null)
+  void registerDevice()
 }
 
 /* ------------------------------------------------------------------ GitHub */
@@ -229,7 +229,7 @@ export async function completeTwoFactorSignIn(
  * a password here (nothing else on the OAuth path would do it), and there is one
  * landing page to reason about instead of two.
  */
-const OAUTH_LANDING = "/set-vault-password";
+const OAUTH_LANDING = "/set-vault-password"
 
 /**
  * Start the GitHub redirect.
@@ -252,9 +252,9 @@ export async function signInWithGithub() {
     // AuthForm turns into a sentence. Without this they land on Better Auth's
     // own /error page, which is a route this app does not have.
     errorCallbackURL: "/sign-in",
-  });
+  })
   if (res.error) {
-    throw new Error(res.error.message ?? "GitHub sign-in could not be started");
+    throw new Error(res.error.message ?? "GitHub sign-in could not be started")
   }
 }
 
@@ -268,11 +268,11 @@ export async function signInWithGithub() {
  * provider ids and timestamps; there is no secret in the answer.
  */
 export async function hasVaultPassword(): Promise<boolean> {
-  const res = await authClient.listAccounts();
+  const res = await authClient.listAccounts()
   if (res.error) {
-    throw new Error(res.error.message ?? "could not read the linked sign-in methods");
+    throw new Error(res.error.message ?? "could not read the linked sign-in methods")
   }
-  return (res.data ?? []).some((a) => a.providerId === "credential");
+  return (res.data ?? []).some((a) => a.providerId === "credential")
 }
 
 /**
@@ -285,12 +285,12 @@ export async function hasVaultPassword(): Promise<boolean> {
  * am I signed in".
  */
 export function registerDeviceAfterOAuth() {
-  void registerDevice();
+  void registerDevice()
   // Also the moment this tab learns it got its session without a password, which
   // is what the unlock dialog needs in order to explain itself. This is the only
   // client code that runs on the OAuth return path, so it is the only place the
   // fact is available.
-  noteSignInMethod("github");
+  noteSignInMethod("github")
 }
 
 /* ---------------------------------------------------------------- passkeys */
@@ -312,16 +312,16 @@ export function registerDeviceAfterOAuth() {
 /** The browser prompt was dismissed, or no credential matched. Not an error. */
 export class PasskeyCancelledError extends Error {
   constructor() {
-    super("The passkey prompt was closed before a credential was chosen.");
-    this.name = "PasskeyCancelledError";
+    super("The passkey prompt was closed before a credential was chosen.")
+    this.name = "PasskeyCancelledError"
   }
 }
 
-const CANCELLATION_CODES = new Set(["AUTH_CANCELLED", "REGISTRATION_CANCELLED"]);
+const CANCELLATION_CODES = new Set(["AUTH_CANCELLED", "REGISTRATION_CANCELLED"])
 
 function throwPasskeyError(error: { code?: string; message?: string }, fallback: string): never {
-  if (error.code && CANCELLATION_CODES.has(error.code)) throw new PasskeyCancelledError();
-  throw new Error(error.message ?? fallback);
+  if (error.code && CANCELLATION_CODES.has(error.code)) throw new PasskeyCancelledError()
+  throw new Error(error.message ?? fallback)
 }
 
 /**
@@ -333,21 +333,21 @@ function throwPasskeyError(error: { code?: string; message?: string }, fallback:
  * dialog say so in those words instead of appearing without explanation.
  */
 export async function signInWithPasskey(): Promise<void> {
-  const res = await authClient.signIn.passkey();
-  if (res.error) throwPasskeyError(res.error, "passkey sign-in failed");
-  noteSignInMethod("passkey");
-  void registerDevice();
+  const res = await authClient.signIn.passkey()
+  if (res.error) throwPasskeyError(res.error, "passkey sign-in failed")
+  noteSignInMethod("passkey")
+  void registerDevice()
 }
 
 /** One registered credential, as the settings list shows it. */
 export type PasskeySummary = NonNullable<
   Awaited<ReturnType<typeof authClient.passkey.listUserPasskeys>>["data"]
->[number];
+>[number]
 
 export async function listPasskeys(): Promise<PasskeySummary[]> {
-  const res = await authClient.passkey.listUserPasskeys();
-  if (res.error) throw new Error(res.error.message ?? "could not read your passkeys");
-  return res.data ?? [];
+  const res = await authClient.passkey.listUserPasskeys()
+  if (res.error) throw new Error(res.error.message ?? "could not read your passkeys")
+  return res.data ?? []
 }
 
 /**
@@ -359,14 +359,14 @@ export async function listPasskeys(): Promise<PasskeySummary[]> {
  * than a raw code.
  */
 export async function addPasskey(name: string): Promise<void> {
-  const trimmed = name.trim();
-  const res = await authClient.passkey.addPasskey(trimmed ? { name: trimmed } : {});
-  if (res?.error) throwPasskeyError(res.error, "the passkey was not registered");
+  const trimmed = name.trim()
+  const res = await authClient.passkey.addPasskey(trimmed ? { name: trimmed } : {})
+  if (res?.error) throwPasskeyError(res.error, "the passkey was not registered")
 }
 
 export async function renamePasskey(id: string, name: string): Promise<void> {
-  const res = await authClient.passkey.updatePasskey({ id, name: name.trim() });
-  if (res.error) throw new Error(res.error.message ?? "the passkey was not renamed");
+  const res = await authClient.passkey.updatePasskey({ id, name: name.trim() })
+  if (res.error) throw new Error(res.error.message ?? "the passkey was not renamed")
 }
 
 /**
@@ -375,8 +375,8 @@ export async function renamePasskey(id: string, name: string): Promise<void> {
  * UNAUTHORIZED rather than being silently ignored.
  */
 export async function removePasskey(id: string): Promise<void> {
-  const res = await authClient.passkey.deletePasskey({ id });
-  if (res.error) throw new Error(res.error.message ?? "the passkey was not removed");
+  const res = await authClient.passkey.deletePasskey({ id })
+  if (res.error) throw new Error(res.error.message ?? "the passkey was not removed")
 }
 
 /* -------------------------------------------------------------------- TOTP */
@@ -398,11 +398,11 @@ export async function removePasskey(id: string): Promise<void> {
  */
 export interface TotpEnrolment {
   /** The otpauth:// URI, for the QR code. */
-  totpURI: string;
+  totpURI: string
   /** The shared secret on its own, for anyone who cannot scan. */
-  secret: string;
+  secret: string
   /** Shown once. Nothing can show them again. */
-  backupCodes: string[];
+  backupCodes: string[]
 }
 
 /**
@@ -415,31 +415,31 @@ export interface TotpEnrolment {
  */
 function secretFromTotpUri(uri: string): string {
   try {
-    return new URL(uri).searchParams.get("secret") ?? "";
+    return new URL(uri).searchParams.get("secret") ?? ""
   } catch {
-    return "";
+    return ""
   }
 }
 
 export async function beginTotpEnrolment(email: string, password: string): Promise<TotpEnrolment> {
-  const { authToken } = await deriveSecrets(email, password);
-  const res = await authClient.twoFactor.enable({ password: authToken });
-  if (res.error) throw new Error(res.error.message ?? "two-factor could not be set up");
-  const totpURI = res.data?.totpURI ?? "";
-  const secret = secretFromTotpUri(totpURI);
+  const { authToken } = await deriveSecrets(email, password)
+  const res = await authClient.twoFactor.enable({ password: authToken })
+  if (res.error) throw new Error(res.error.message ?? "two-factor could not be set up")
+  const totpURI = res.data?.totpURI ?? ""
+  const secret = secretFromTotpUri(totpURI)
   if (!totpURI || !secret) {
     // Neither half of the enrolment is usable without both, and a card showing a
     // QR code with no fallback secret is a control that fails for anyone who
     // cannot scan. Refusing is the honest answer.
-    throw new Error("The server did not return a usable enrolment secret, so nothing was set up.");
+    throw new Error("The server did not return a usable enrolment secret, so nothing was set up.")
   }
-  return { totpURI, secret, backupCodes: res.data?.backupCodes ?? [] };
+  return { totpURI, secret, backupCodes: res.data?.backupCodes ?? [] }
 }
 
 /** Turns the factor on, and only if the authenticator is genuinely in step. */
 export async function confirmTotpEnrolment(code: string): Promise<void> {
-  const res = await authClient.twoFactor.verifyTotp({ code: code.trim() });
-  if (res.error) throw new Error(res.error.message ?? "that code was not accepted");
+  const res = await authClient.twoFactor.verifyTotp({ code: code.trim() })
+  if (res.error) throw new Error(res.error.message ?? "that code was not accepted")
 }
 
 /**
@@ -448,9 +448,9 @@ export async function confirmTotpEnrolment(code: string): Promise<void> {
  * it is treated as a sensitive operation, which it is.
  */
 export async function disableTotp(email: string, password: string): Promise<void> {
-  const { authToken } = await deriveSecrets(email, password);
-  const res = await authClient.twoFactor.disable({ password: authToken });
-  if (res.error) throw new Error(res.error.message ?? "two-factor was not turned off");
+  const { authToken } = await deriveSecrets(email, password)
+  const res = await authClient.twoFactor.disable({ password: authToken })
+  if (res.error) throw new Error(res.error.message ?? "two-factor was not turned off")
 }
 
 /**
@@ -458,14 +458,14 @@ export async function disableTotp(email: string, password: string): Promise<void
  * is the point: it is the only way back if the old list leaked or was lost.
  */
 export async function reissueBackupCodes(email: string, password: string): Promise<string[]> {
-  const { authToken } = await deriveSecrets(email, password);
-  const res = await authClient.twoFactor.generateBackupCodes({ password: authToken });
-  if (res.error) throw new Error(res.error.message ?? "the backup codes were not replaced");
-  const codes = res.data?.backupCodes ?? [];
+  const { authToken } = await deriveSecrets(email, password)
+  const res = await authClient.twoFactor.generateBackupCodes({ password: authToken })
+  if (res.error) throw new Error(res.error.message ?? "the backup codes were not replaced")
+  const codes = res.data?.backupCodes ?? []
   if (codes.length === 0) {
-    throw new Error("The server reported success but returned no codes. Nothing was shown.");
+    throw new Error("The server reported success but returned no codes. Nothing was shown.")
   }
-  return codes;
+  return codes
 }
 
 /**
@@ -482,8 +482,8 @@ export async function reissueBackupCodes(email: string, password: string): Promi
  * accidentally send one to the server.
  */
 export async function signInWithRecoveredToken(email: string, authToken: string) {
-  const res = await authClient.signIn.email({ email, password: authToken });
-  if (res.error) throw new Error(res.error.message ?? "sign in failed");
+  const res = await authClient.signIn.email({ email, password: authToken })
+  if (res.error) throw new Error(res.error.message ?? "sign in failed")
 
   /**
    * A recovery code does not bypass the second factor, and the recovery page
@@ -512,11 +512,11 @@ export async function signInWithRecoveredToken(email: string, authToken: string)
         "the sign-in stopped at the second factor, which this page cannot ask for. The code you " +
         "just used has been spent. Sign in at /sign-in with your password and your authenticator " +
         "code, or turn two-factor off from Settings first.",
-    );
+    )
   }
 
-  void registerDevice();
-  return { user: res.data?.user };
+  void registerDevice()
+  return { user: res.data?.user }
 }
 
 /**
@@ -531,7 +531,7 @@ export async function signInWithRecoveredToken(email: string, authToken: string)
  * we cannot restore from a backup either.
  */
 export async function deleteAccountWithVault(email: string, password: string) {
-  const { authToken } = await deriveSecrets(email, password);
-  const res = await authClient.deleteUser({ password: authToken });
-  if (res.error) throw new Error(res.error.message ?? "account deletion failed");
+  const { authToken } = await deriveSecrets(email, password)
+  const res = await authClient.deleteUser({ password: authToken })
+  if (res.error) throw new Error(res.error.message ?? "account deletion failed")
 }

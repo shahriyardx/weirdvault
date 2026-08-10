@@ -1,33 +1,33 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowsLeftRightIcon,
   PlugsConnectedIcon,
   TerminalWindowIcon,
   XIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { RemoteEditor } from "@/components/editor";
-import { FileExplorer } from "@/components/file-explorer";
-import { Button } from "@/components/ui/button";
+import { RemoteEditor } from "@/components/editor"
+import { FileExplorer } from "@/components/file-explorer"
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import type { SftpHandle, SshSession } from "@/lib/ssh/types";
+} from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useSshSession } from "@/lib/ssh/session-provider"
+import type { SftpHandle, SshSession } from "@/lib/ssh/types"
 
 /** The pair a cross-host copy needs: a shell for tar, a channel for bytes. */
 interface Endpoint {
-  session: SshSession;
-  sftp: SftpHandle;
+  session: SshSession
+  sftp: SftpHandle
 }
 
 /**
@@ -48,8 +48,8 @@ interface Endpoint {
  * width leaves every filename truncated.
  */
 export default function FilesPage() {
-  const router = useRouter();
-  const { sessions, activeId, setActive, sftpFor, sessionFor, write } = useSshSession();
+  const router = useRouter()
+  const { sessions, activeId, setActive, sftpFor, sessionFor, write } = useSshSession()
 
   /**
    * Which session each pane is browsing, as a preference rather than the source
@@ -58,29 +58,29 @@ export default function FilesPage() {
    * closed, and a second render to correct it. Falling back here means a closed
    * session degrades on the very same paint.
    */
-  const [chosen, setChosen] = useState<[string | null, string | null]>([null, null]);
-  const [split, setSplit] = useState(false);
-  const [editing, setEditing] = useState<{ pane: 0 | 1; path: string } | null>(null);
+  const [chosen, setChosen] = useState<[string | null, string | null]>([null, null])
+  const [split, setSplit] = useState(false)
+  const [editing, setEditing] = useState<{ pane: 0 | 1; path: string } | null>(null)
 
   function resolve(index: 0 | 1): string | null {
-    const preferred = chosen[index];
-    if (preferred && sessions.some((s) => s.id === preferred)) return preferred;
-    if (index === 0) return activeId ?? sessions[0]?.id ?? null;
+    const preferred = chosen[index]
+    if (preferred && sessions.some((s) => s.id === preferred)) return preferred
+    if (index === 0) return activeId ?? sessions[0]?.id ?? null
     // The right pane defaults to a session the left one is not showing, since
     // two panes on the same host is a thing you might want but never the thing
     // you wanted by default.
-    const left = resolve(0);
-    return sessions.find((s) => s.id !== left)?.id ?? sessions[0]?.id ?? null;
+    const left = resolve(0)
+    return sessions.find((s) => s.id !== left)?.id ?? sessions[0]?.id ?? null
   }
 
   function choose(index: 0 | 1, id: string) {
     setChosen((prev) => {
-      const next: [string | null, string | null] = [...prev];
-      next[index] = id;
-      return next;
-    });
+      const next: [string | null, string | null] = [...prev]
+      next[index] = id
+      return next
+    })
     // The editor is showing a file on the pane that just changed hosts.
-    if (editing?.pane === index) setEditing(null);
+    if (editing?.pane === index) setEditing(null)
   }
 
   if (sessions.length === 0) {
@@ -100,11 +100,11 @@ export default function FilesPage() {
           </Button>
         </div>
       </div>
-    );
+    )
   }
 
-  const leftId = resolve(0);
-  const rightId = split ? resolve(1) : null;
+  const leftId = resolve(0)
+  const rightId = split ? resolve(1) : null
 
   /**
    * Resolves a session id to the pair a copy needs.
@@ -114,10 +114,10 @@ export default function FilesPage() {
    * the receiving pane reports rather than throwing.
    */
   const endpointFor = (id: string) => {
-    const s = sessionFor(id);
-    const f = sftpFor(id);
-    return s && f ? { session: s, sftp: f } : null;
-  };
+    const s = sessionFor(id)
+    const f = sftpFor(id)
+    return s && f ? { session: s, sftp: f } : null
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -148,9 +148,9 @@ export default function FilesPage() {
                 size="sm"
                 aria-pressed={split}
                 onClick={() => {
-                  setSplit((v) => !v);
+                  setSplit((v) => !v)
                   // Closing the split takes the right pane's editor with it.
-                  if (split && editing?.pane === 1) setEditing(null);
+                  if (split && editing?.pane === 1) setEditing(null)
                 }}
               >
                 <ArrowsLeftRightIcon />
@@ -187,10 +187,10 @@ export default function FilesPage() {
             endpointFor={endpointFor}
             onEdit={(path) => setEditing({ pane: 0, path })}
             onOpenTerminalAt={(dir) => {
-              if (!leftId) return;
-              write(leftId, `cd ${JSON.stringify(dir)}\n`);
-              setActive(leftId);
-              router.push("/dashboard/terminal");
+              if (!leftId) return
+              write(leftId, `cd ${JSON.stringify(dir)}\n`)
+              setActive(leftId)
+              router.push("/dashboard/terminal")
             }}
           />
         </div>
@@ -210,10 +210,10 @@ export default function FilesPage() {
               endpointFor={endpointFor}
               onEdit={(path) => setEditing({ pane: 1, path })}
               onOpenTerminalAt={(dir) => {
-                if (!rightId) return;
-                write(rightId, `cd ${JSON.stringify(dir)}\n`);
-                setActive(rightId);
-                router.push("/dashboard/terminal");
+                if (!rightId) return
+                write(rightId, `cd ${JSON.stringify(dir)}\n`)
+                setActive(rightId)
+                router.push("/dashboard/terminal")
               }}
             />
           ) : (
@@ -224,7 +224,7 @@ export default function FilesPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 function PanePicker({
@@ -234,11 +234,11 @@ function PanePicker({
   activeId,
   onChange,
 }: {
-  label: string;
-  value: string | null;
-  sessions: { id: string; label: string; target: { port: number } }[];
-  activeId: string | null;
-  onChange: (id: string) => void;
+  label: string
+  value: string | null
+  sessions: { id: string; label: string; target: { port: number } }[]
+  activeId: string | null
+  onChange: (id: string) => void
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -257,7 +257,7 @@ function PanePicker({
         </SelectContent>
       </Select>
     </div>
-  );
+  )
 }
 
 /**
@@ -274,23 +274,23 @@ function Pane({
   onEdit,
   onOpenTerminalAt,
 }: {
-  index: 0 | 1;
-  sessionId: string | null;
-  endpointFor: (id: string) => Endpoint | null;
-  onEdit: (path: string) => void;
-  onOpenTerminalAt: (dir: string) => void;
+  index: 0 | 1
+  sessionId: string | null
+  endpointFor: (id: string) => Endpoint | null
+  onEdit: (path: string) => void
+  onOpenTerminalAt: (dir: string) => void
 }) {
-  const { sessions, sftpFor, sessionFor } = useSshSession();
-  const sftp = sessionId ? sftpFor(sessionId) : null;
-  const session = sessionId ? sessionFor(sessionId) : null;
-  const entry = sessions.find((s) => s.id === sessionId) ?? null;
+  const { sessions, sftpFor, sessionFor } = useSshSession()
+  const sftp = sessionId ? sftpFor(sessionId) : null
+  const session = sessionId ? sessionFor(sessionId) : null
+  const entry = sessions.find((s) => s.id === sessionId) ?? null
 
   if (!sftp || !session || !sessionId) {
     return (
       <div className="text-muted-foreground grid h-full place-items-center p-6 text-sm">
         {entry ? `Opening SFTP on ${entry.label}…` : "No session selected."}
       </div>
-    );
+    )
   }
 
   return (
@@ -306,7 +306,7 @@ function Pane({
       onEdit={onEdit}
       onOpenTerminalAt={onOpenTerminalAt}
     />
-  );
+  )
 }
 
 function EditorPane({
@@ -315,12 +315,12 @@ function EditorPane({
   sftpFor,
   onClose,
 }: {
-  path: string;
-  sessionId: string | null;
-  sftpFor: (id: string) => SftpHandle | null;
-  onClose: () => void;
+  path: string
+  sessionId: string | null
+  sftpFor: (id: string) => SftpHandle | null
+  onClose: () => void
 }) {
-  const sftp = sessionId ? sftpFor(sessionId) : null;
+  const sftp = sessionId ? sftpFor(sessionId) : null
   if (!sftp) {
     return (
       <div className="text-muted-foreground grid h-full place-items-center gap-2 p-6 text-sm">
@@ -330,7 +330,7 @@ function EditorPane({
           Close
         </Button>
       </div>
-    );
+    )
   }
-  return <RemoteEditor sftp={sftp} path={path} onClose={onClose} />;
+  return <RemoteEditor sftp={sftp} path={path} onClose={onClose} />
 }

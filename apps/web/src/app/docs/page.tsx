@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import type { Metadata } from "next"
+import Link from "next/link"
 import {
   ArchiveIcon,
   ArrowRightIcon,
@@ -15,14 +15,14 @@ import {
   RocketLaunchIcon,
   TerminalWindowIcon,
   WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { PageHeader, PageShell } from "@/components/shell/page-shell";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers";
-import { formatBytes } from "@/lib/usage";
-import { cn } from "@/lib/utils";
+import { PageHeader, PageShell } from "@/components/shell/page-shell"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers"
+import { formatBytes } from "@/lib/usage"
+import { cn } from "@/lib/utils"
 
 /**
  * Imported so the troubleshooting entry cannot name a cap the code does not use.
@@ -32,15 +32,15 @@ import { cn } from "@/lib/utils";
  * as their own would conclude the server had cut them off at a fifth of what
  * they pay for.
  */
-const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free);
-const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro);
+const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free)
+const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro)
 
 export const metadata: Metadata = {
   title: "Docs",
   description:
     "Getting started with webxterm: authorise a key on stock sshd, understand portable and " +
     "device-bound keys, move files over SFTP, and read the errors when a connection fails.",
-};
+}
 
 const SECTIONS = [
   { id: "quickstart", label: "Quickstart" },
@@ -49,10 +49,10 @@ const SECTIONS = [
   { id: "files", label: "Files and editing" },
   { id: "hosts", label: "Hosts and sync" },
   { id: "troubleshooting", label: "Troubleshooting" },
-] as const;
+] as const
 
 const PUBLIC_KEY_LINE =
-  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHk2mQ1r7ZC9tRfV0oXqK3nB8sJyLwDpE6uNaG4vTcXi webxterm@laptop";
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHk2mQ1r7ZC9tRfV0oXqK3nB8sJyLwDpE6uNaG4vTcXi webxterm@laptop"
 
 export default function Docs() {
   return (
@@ -574,7 +574,7 @@ export default function Docs() {
         </article>
       </div>
     </PageShell>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ layout */
@@ -605,7 +605,7 @@ function TableOfContents() {
         </ul>
       </nav>
     </aside>
-  );
+  )
 }
 
 function Section({
@@ -614,10 +614,10 @@ function Section({
   title,
   children,
 }: {
-  id: string;
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
+  id: string
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
 }) {
   return (
     <section id={id} className="scroll-mt-20">
@@ -629,11 +629,11 @@ function Section({
       </div>
       {children}
     </section>
-  );
+  )
 }
 
 function H3({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <h3 className={cn("font-heading text-sm font-medium", className)}>{children}</h3>;
+  return <h3 className={cn("font-heading text-sm font-medium", className)}>{children}</h3>
 }
 
 function P({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -641,12 +641,12 @@ function P({ className, children }: { className?: string; children: React.ReactN
     <p className={cn("max-w-2xl text-sm leading-relaxed text-muted-foreground", className)}>
       {children}
     </p>
-  );
+  )
 }
 
 function A({ href, children }: { href: string; children: React.ReactNode }) {
   const className =
-    "text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-primary";
+    "text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-primary"
   return href.startsWith("#") ? (
     <a href={href} className={className}>
       {children}
@@ -655,7 +655,7 @@ function A({ href, children }: { href: string; children: React.ReactNode }) {
     <Link href={href} className={className}>
       {children}
     </Link>
-  );
+  )
 }
 
 function Code({ children }: { children: React.ReactNode }) {
@@ -663,7 +663,7 @@ function Code({ children }: { children: React.ReactNode }) {
     <code className="rounded-sm bg-secondary px-1 py-0.5 text-[0.85em] text-foreground">
       {children}
     </code>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- primitives */
@@ -677,9 +677,9 @@ function CodeBlock({
   className,
   children,
 }: {
-  label?: string;
-  className?: string;
-  children: React.ReactNode;
+  label?: string
+  className?: string
+  children: React.ReactNode
 }) {
   return (
     <div className={cn("max-w-2xl overflow-hidden rounded-md border border-border", className)}>
@@ -693,7 +693,7 @@ function CodeBlock({
         {children}
       </pre>
     </div>
-  );
+  )
 }
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
@@ -710,7 +710,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{children}</p>
       </div>
     </li>
-  );
+  )
 }
 
 function Bullet({ title, children }: { title: string; children: React.ReactNode }) {
@@ -719,7 +719,7 @@ function Bullet({ title, children }: { title: string; children: React.ReactNode 
       <p className="text-sm font-medium text-foreground">{title}</p>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{children}</p>
     </li>
-  );
+  )
 }
 
 function Row({
@@ -727,9 +727,9 @@ function Row({
   title,
   children,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
 }) {
   return (
     <div className="flex max-w-2xl gap-3.5">
@@ -741,7 +741,7 @@ function Row({
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{children}</p>
       </div>
     </div>
-  );
+  )
 }
 
 function Callout({
@@ -750,10 +750,10 @@ function Callout({
   title,
   children,
 }: {
-  tone: "warning" | "destructive";
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
+  tone: "warning" | "destructive"
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
 }) {
   return (
     <div
@@ -772,7 +772,7 @@ function Callout({
       </div>
       <div className="text-sm leading-relaxed text-muted-foreground">{children}</div>
     </div>
-  );
+  )
 }
 
 function Problem({
@@ -780,9 +780,9 @@ function Problem({
   summary,
   children,
 }: {
-  code: string;
-  summary: string;
-  children: React.ReactNode;
+  code: string
+  summary: string
+  children: React.ReactNode
 }) {
   return (
     <div className="max-w-2xl border border-border p-4">
@@ -794,5 +794,5 @@ function Problem({
       <p className="mt-2.5 text-sm font-medium text-foreground">{summary}</p>
       <div className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</div>
     </div>
-  );
+  )
 }

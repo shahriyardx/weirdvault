@@ -29,10 +29,10 @@
  */
 export type RelayUsageEntry = {
   /** A user id, or `anon:<uuid>` for a signed-out visitor. */
-  subject: string;
-  bytesUp: number;
-  bytesDown: number;
-};
+  subject: string
+  bytesUp: number
+  bytesDown: number
+}
 
 /**
  * The largest byte count one flush window may carry.
@@ -41,10 +41,10 @@ export type RelayUsageEntry = {
  * a forgery rather than traffic — and accepting one would poison a month's
  * total permanently, since the row is a running sum with no way to walk it back.
  */
-export const MAX_BYTES_PER_ENTRY = 1_000_000_000_000_000;
+export const MAX_BYTES_PER_ENTRY = 1_000_000_000_000_000
 
 /** The most accounts one POST may carry. Matches MAX_ENTRIES_PER_BATCH in apps/relay/src/reporter.rs. */
-export const MAX_ENTRIES_PER_BATCH = 500;
+export const MAX_ENTRIES_PER_BATCH = 500
 
 /**
  * Validates one entry off the wire.
@@ -56,8 +56,8 @@ export const MAX_ENTRIES_PER_BATCH = 500;
  * and nobody can explain.
  */
 export function isRelayUsageEntry(value: unknown): value is RelayUsageEntry {
-  if (typeof value !== "object" || value === null) return false;
-  const e = value as Record<string, unknown>;
+  if (typeof value !== "object" || value === null) return false
+  const e = value as Record<string, unknown>
   return (
     typeof e.subject === "string" &&
     e.subject.length > 0 &&
@@ -70,7 +70,7 @@ export function isRelayUsageEntry(value: unknown): value is RelayUsageEntry {
     e.bytesDown >= 0 &&
     e.bytesUp <= MAX_BYTES_PER_ENTRY &&
     e.bytesDown <= MAX_BYTES_PER_ENTRY
-  );
+  )
 }
 
 /**
@@ -83,7 +83,7 @@ export function isRelayUsageEntry(value: unknown): value is RelayUsageEntry {
  * connection cap and its port allowlist, as the token route already says.
  */
 export function isAnonymousSubject(subject: string): boolean {
-  return subject.startsWith("anon:");
+  return subject.startsWith("anon:")
 }
 
 /* ------------------------------------------------- control plane → browser */
@@ -104,7 +104,7 @@ export function isAnonymousSubject(subject: string): boolean {
  * export nothing but its handlers, and because the code is only useful to the
  * client that has to render it.
  */
-export const RELAY_QUOTA_EXCEEDED = "relay_allowance_exhausted";
+export const RELAY_QUOTA_EXCEEDED = "relay_allowance_exhausted"
 
 /**
  * The body that comes back with it. `resetsAt` is what turns "refused" into
@@ -112,36 +112,36 @@ export const RELAY_QUOTA_EXCEEDED = "relay_allowance_exhausted";
  * owed the date.
  */
 export type RelayQuotaRefusal = {
-  error: string;
-  code: typeof RELAY_QUOTA_EXCEEDED;
-  usedBytes: number;
-  allowanceBytes: number;
+  error: string
+  code: typeof RELAY_QUOTA_EXCEEDED
+  usedBytes: number
+  allowanceBytes: number
   /** ISO 8601, midnight UTC on the first of next month. */
-  resetsAt: string;
-};
+  resetsAt: string
+}
 
 /** Exactly what GET /api/relay/usage returns. */
 export type RelayUsage = {
   /** "YYYY-MM", UTC. */
-  period: string;
+  period: string
   /** Midnight UTC on the first of next month, ISO 8601. */
-  resetsAt: string;
-  bytesUp: number;
-  bytesDown: number;
-  bytesTotal: number;
-  allowanceBytes: number;
+  resetsAt: string
+  bytesUp: number
+  bytesDown: number
+  bytesTotal: number
+  allowanceBytes: number
   /** Display name of the plan the allowance came from. */
-  tier: string;
+  tier: string
   /**
    * False when no relay can report into this deployment, which makes the totals
    * structurally zero rather than genuinely small. The meter has to say so:
    * "0 bytes used" and "nothing is counting" look identical and mean opposite
    * things.
    */
-  reportingConfigured: boolean;
+  reportingConfigured: boolean
   /** Null until a relay has reported anything for this account this period. */
-  updatedAt: string | null;
-};
+  updatedAt: string | null
+}
 
 /**
  * How the meter should read.
@@ -150,30 +150,30 @@ export type RelayUsage = {
  * one that has to be phrased as a present-tense consequence rather than a
  * warning about the future.
  */
-export type UsageState = "ok" | "approaching" | "over";
+export type UsageState = "ok" | "approaching" | "over"
 
 /**
  * Warn at four fifths. Early enough that a person who moves data on a schedule
  * can plan around it, late enough that it is not shouting at somebody who has
  * used a fifth of a month's allowance in the first week and will use no more.
  */
-export const APPROACHING_FRACTION = 0.8;
+export const APPROACHING_FRACTION = 0.8
 
 export function usageState(usage: RelayUsage): UsageState {
-  if (usage.allowanceBytes <= 0) return "ok";
-  const used = usage.bytesTotal / usage.allowanceBytes;
-  if (used >= 1) return "over";
-  return used >= APPROACHING_FRACTION ? "approaching" : "ok";
+  if (usage.allowanceBytes <= 0) return "ok"
+  const used = usage.bytesTotal / usage.allowanceBytes
+  if (used >= 1) return "over"
+  return used >= APPROACHING_FRACTION ? "approaching" : "ok"
 }
 
 /** Clamped, because a bar past 100% renders as a lie about the remainder. */
 export function usagePercent(usage: RelayUsage): number {
-  if (usage.allowanceBytes <= 0) return 0;
-  return Math.min(100, Math.round((usage.bytesTotal / usage.allowanceBytes) * 100));
+  if (usage.allowanceBytes <= 0) return 0
+  return Math.min(100, Math.round((usage.bytesTotal / usage.allowanceBytes) * 100))
 }
 
 export function bytesRemaining(usage: RelayUsage): number {
-  return Math.max(0, usage.allowanceBytes - usage.bytesTotal);
+  return Math.max(0, usage.allowanceBytes - usage.bytesTotal)
 }
 
 /**
@@ -183,15 +183,15 @@ export function bytesRemaining(usage: RelayUsage): number {
  * put a 7% gap between the meter and the refusal.
  */
 export function formatBytes(n: number): string {
-  const units = ["B", "kB", "MB", "GB", "TB"];
-  let value = n;
-  let unit = 0;
+  const units = ["B", "kB", "MB", "GB", "TB"]
+  let value = n
+  let unit = 0
   while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
+    value /= 1000
+    unit += 1
   }
-  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Number(value.toFixed(1));
-  return `${rounded} ${units[unit]}`;
+  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Number(value.toFixed(1))
+  return `${rounded} ${units[unit]}`
 }
 
 /**
@@ -202,8 +202,8 @@ export function formatBytes(n: number): string {
  * syntactically hard to swallow.
  */
 export class RelayQuotaError extends Error {
-  readonly code = RELAY_QUOTA_EXCEEDED;
-  readonly refusal: RelayQuotaRefusal | null;
+  readonly code = RELAY_QUOTA_EXCEEDED
+  readonly refusal: RelayQuotaRefusal | null
 
   constructor(refusal: RelayQuotaRefusal | null) {
     super(
@@ -212,9 +212,9 @@ export class RelayQuotaError extends Error {
             `New connections through our relay are refused until it resets on ${refusal.resetsAt.slice(0, 10)}; sessions already open are unaffected. ` +
             `Running your own relay removes the limit entirely.`
         : "You have used this month's relay transfer allowance. New connections through our relay are refused until it resets; sessions already open are unaffected.",
-    );
-    this.name = "RelayQuotaError";
-    this.refusal = refusal;
+    )
+    this.name = "RelayQuotaError"
+    this.refusal = refusal
   }
 }
 
@@ -227,12 +227,12 @@ export class RelayQuotaError extends Error {
  * fall-through this exists to prevent.
  */
 export async function relayQuotaError(res: Response): Promise<RelayQuotaError | null> {
-  if (res.status !== 402) return null;
+  if (res.status !== 402) return null
   try {
-    const body = (await res.json()) as RelayQuotaRefusal;
-    return new RelayQuotaError(body.code === RELAY_QUOTA_EXCEEDED ? body : null);
+    const body = (await res.json()) as RelayQuotaRefusal
+    return new RelayQuotaError(body.code === RELAY_QUOTA_EXCEEDED ? body : null)
   } catch {
-    return new RelayQuotaError(null);
+    return new RelayQuotaError(null)
   }
 }
 
@@ -244,8 +244,8 @@ export async function relayQuotaError(res: Response): Promise<RelayQuotaError | 
  * one that shows nothing, since it reads as reassurance.
  */
 export async function fetchRelayUsage(): Promise<RelayUsage> {
-  const res = await fetch("/api/relay/usage", { cache: "no-store" });
-  if (res.status === 401) throw new Error("Session expired. Sign in again.");
-  if (!res.ok) throw new Error(`The server returned ${res.status}.`);
-  return (await res.json()) as RelayUsage;
+  const res = await fetch("/api/relay/usage", { cache: "no-store" })
+  if (res.status === 401) throw new Error("Session expired. Sign in again.")
+  if (!res.ok) throw new Error(`The server returned ${res.status}.`)
+  return (await res.json()) as RelayUsage
 }

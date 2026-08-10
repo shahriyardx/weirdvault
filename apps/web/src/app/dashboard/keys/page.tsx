@@ -1,12 +1,12 @@
-"use client";
+"use client"
 
 // Client component: keys live in this browser's IndexedDB as non-extractable
 // WebCrypto handles, and the vault key exists only in this tab's memory. The
 // server holds ciphertext it has no key for, so there is nothing to render on
 // it — the list can only be read after the browser has decrypted it.
 
-import * as React from "react";
-import Link from "next/link";
+import * as React from "react"
+import Link from "next/link"
 import {
   CheckIcon,
   CloudArrowUpIcon,
@@ -19,10 +19,10 @@ import {
   TrashIcon,
   UploadSimpleIcon,
   WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { PageHeader } from "@/components/shell/page-shell";
+import { PageHeader } from "@/components/shell/page-shell"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,11 +32,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+} from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogClose,
@@ -45,11 +45,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   authorizedKeysLine,
   deleteKey,
@@ -62,13 +62,13 @@ import {
   type KeyMode,
   type KeyPreview,
   type StoredKey,
-} from "@/lib/keys";
-import { loadSSH, type SshLoadProgress } from "@/lib/ssh/wasm";
-import type { SshKeyType } from "@/lib/ssh/types";
-import { getVaultKey, useVaultUnlocked } from "@/lib/vault/session";
-import { syncVault } from "@/lib/vault/sync";
-import { cn } from "@/lib/utils";
-import { noAutofillSecret } from "@/lib/no-autofill";
+} from "@/lib/keys"
+import { loadSSH, type SshLoadProgress } from "@/lib/ssh/wasm"
+import type { SshKeyType } from "@/lib/ssh/types"
+import { getVaultKey, useVaultUnlocked } from "@/lib/vault/session"
+import { syncVault } from "@/lib/vault/sync"
+import { cn } from "@/lib/utils"
+import { noAutofillSecret } from "@/lib/no-autofill"
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -77,12 +77,12 @@ function lineFor(key: StoredKey): string {
   return authorizedKeysLine({
     publicKeyRaw: new Uint8Array(key.publicKeyRaw),
     label: key.label,
-  });
+  })
 }
 
 /** What we put on the clipboard: the whole command, not just the key. */
 function installCommand(line: string): string {
-  return `echo '${line}' >> ~/.ssh/authorized_keys`;
+  return `echo '${line}' >> ~/.ssh/authorized_keys`
 }
 
 function formatDate(ts: number) {
@@ -90,78 +90,78 @@ function formatDate(ts: number) {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  })
 }
 
 /* --------------------------------------------------------------------- page */
 
 export default function KeysPage() {
-  const [keys, setKeys] = React.useState<StoredKey[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const unlocked = useVaultUnlocked();
+  const [keys, setKeys] = React.useState<StoredKey[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const unlocked = useVaultUnlocked()
   // Ids of portable keys the current vault key does not open. Empty while
   // locked, because "cannot open it" and "have no key to try" are different
   // facts and only the first is a broken key.
-  const [broken, setBroken] = React.useState<Set<string>>(new Set());
+  const [broken, setBroken] = React.useState<Set<string>>(new Set())
 
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [importOpen, setImportOpen] = React.useState(false);
-  const [label, setLabel] = React.useState("webxterm");
-  const [mode, setMode] = React.useState<KeyMode>("device-bound");
-  const [generating, setGenerating] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [importOpen, setImportOpen] = React.useState(false)
+  const [label, setLabel] = React.useState("webxterm")
+  const [mode, setMode] = React.useState<KeyMode>("device-bound")
+  const [generating, setGenerating] = React.useState(false)
 
-  const [pendingDelete, setPendingDelete] = React.useState<StoredKey | null>(null);
+  const [pendingDelete, setPendingDelete] = React.useState<StoredKey | null>(null)
 
   React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    let cancelled = false
+    ;(async () => {
       try {
-        const stored = await listStoredKeys();
-        if (cancelled) return;
-        setKeys(stored);
+        const stored = await listStoredKeys()
+        if (cancelled) return
+        setKeys(stored)
       } catch {
-        if (!cancelled) toast.error("Could not read the local key store.");
+        if (!cancelled) toast.error("Could not read the local key store.")
       } finally {
         if (!cancelled) {
           // The vault key is held in memory only, so this is a per-tab fact and
           // can only be read after mount.
-          setLoading(false);
+          setLoading(false)
         }
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   // Re-run whenever the list or the unlock state changes: unwrapping is the only
   // way to answer the question, and it needs both.
   React.useEffect(() => {
-    let cancelled = false;
-    const vaultKey = getVaultKey();
+    let cancelled = false
+    const vaultKey = getVaultKey()
     // One code path, resolved rather than branched, so the state update always
     // happens in a callback: a synchronous setState in an effect body is a
     // cascading render, and the "nothing to check" case would otherwise take it.
     const probe =
       unlocked && vaultKey && keys.length > 0
         ? listUnwrappableKeyIds(vaultKey)
-        : Promise.resolve(new Set<string>());
+        : Promise.resolve(new Set<string>())
     void probe.then((ids) => {
-      if (!cancelled) setBroken(ids);
-    });
+      if (!cancelled) setBroken(ids)
+    })
     return () => {
-      cancelled = true;
-    };
-  }, [keys, unlocked]);
+      cancelled = true
+    }
+  }, [keys, unlocked])
 
   /** Best-effort push of the encrypted vault; never blocks the local write. */
   const pushVault = React.useCallback(async () => {
-    const vaultKey = getVaultKey();
-    if (!vaultKey) return;
+    const vaultKey = getVaultKey()
+    if (!vaultKey) return
     try {
-      const result = await syncVault(vaultKey);
+      const result = await syncVault(vaultKey)
       if (result.status === "offline") {
-        toast.message("Saved on this device. The server could not be reached.");
+        toast.message("Saved on this device. The server could not be reached.")
       } else if (result.keysWithheld > 0) {
         // Not a failure of this write, but the user has to hear it from
         // somewhere and this page is where the affected keys are.
@@ -171,68 +171,68 @@ export default function KeysPage() {
             description:
               "Their wrapping does not open with your current vault key, so uploading them would copy unusable ciphertext to every device. They are marked below.",
           },
-        );
+        )
       }
     } catch {
-      toast.message("Saved on this device. The vault will sync on the next attempt.");
+      toast.message("Saved on this device. The vault will sync on the next attempt.")
     }
-  }, []);
+  }, [])
 
   function openDialog() {
     // `unlocked` is reactive, so it is already current here.
-    setMode(unlocked ? "portable" : "device-bound");
-    setLabel("webxterm");
-    setDialogOpen(true);
+    setMode(unlocked ? "portable" : "device-bound")
+    setLabel("webxterm")
+    setDialogOpen(true)
   }
 
   /** Shared by both dialogs: land the new key in the list and push it. */
   const afterCreated = React.useCallback(
     async (created: { label: string; mode: KeyMode }, verb: "Generated" | "Imported") => {
-      setKeys(await listStoredKeys());
-      toast.success(`${verb} ${created.label}. Add its line to your server.`);
-      if (created.mode === "portable") await pushVault();
+      setKeys(await listStoredKeys())
+      toast.success(`${verb} ${created.label}. Add its line to your server.`)
+      if (created.mode === "portable") await pushVault()
     },
     [pushVault],
-  );
+  )
 
   async function handleGenerate(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const vaultKey = getVaultKey();
+    event.preventDefault()
+    const vaultKey = getVaultKey()
 
     if (mode === "portable" && !vaultKey) {
-      toast.error("The vault is locked, so a portable key cannot be wrapped.");
-      return;
+      toast.error("The vault is locked, so a portable key cannot be wrapped.")
+      return
     }
 
-    setGenerating(true);
+    setGenerating(true)
     try {
-      const created = await generateKey(label.trim() || "webxterm", mode, vaultKey ?? undefined);
-      setDialogOpen(false);
-      await afterCreated(created, "Generated");
+      const created = await generateKey(label.trim() || "webxterm", mode, vaultKey ?? undefined)
+      setDialogOpen(false)
+      await afterCreated(created, "Generated")
     } catch (error) {
       // generateKey refuses a portable key without a vault key; surface its
       // message rather than a generic failure.
-      toast.error(String((error as Error).message ?? error));
+      toast.error(String((error as Error).message ?? error))
     } finally {
-      setGenerating(false);
+      setGenerating(false)
     }
   }
 
   async function handleDelete() {
-    if (!pendingDelete) return;
-    const { id, label: name } = pendingDelete;
-    setPendingDelete(null);
+    if (!pendingDelete) return
+    const { id, label: name } = pendingDelete
+    setPendingDelete(null)
     try {
-      await deleteKey(id);
-      setKeys(await listStoredKeys());
-      toast.success(`Deleted ${name}. Remove its line from your servers.`);
-      await pushVault();
+      await deleteKey(id)
+      setKeys(await listStoredKeys())
+      toast.success(`Deleted ${name}. Remove its line from your servers.`)
+      await pushVault()
     } catch {
-      toast.error("Could not delete the key from the local store.");
+      toast.error("Could not delete the key from the local store.")
     }
   }
 
-  const deviceBoundCount = keys.filter((k) => k.mode === "device-bound").length;
+  const deviceBoundCount = keys.filter((k) => k.mode === "device-bound").length
 
   return (
     <>
@@ -429,7 +429,7 @@ export default function KeysPage() {
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- import key */
@@ -439,9 +439,9 @@ const SSH_NAME: Record<SshKeyType, string> = {
   ed25519: "ssh-ed25519",
   "ecdsa-p256": "ecdsa-sha2-nistp256",
   rsa: "ssh-rsa",
-};
+}
 
-const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
+const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
 
 /**
  * A file name makes a good default label — id_ed25519 is more use than
@@ -449,8 +449,8 @@ const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
  * rejects anything outside [A-Za-z0-9@._-].
  */
 function labelFromFileName(name: string): string {
-  const base = name.replace(/\.(pem|key|txt|priv)$/i, "").replace(/[^A-Za-z0-9@._-]/g, "-");
-  return base || "imported";
+  const base = name.replace(/\.(pem|key|txt|priv)$/i, "").replace(/[^A-Za-z0-9@._-]/g, "-")
+  return base || "imported"
 }
 
 /**
@@ -465,33 +465,33 @@ function ImportKeyDialog({
   vaultUnlocked,
   onImported,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  vaultUnlocked: boolean;
-  onImported: (created: { label: string; mode: KeyMode }) => Promise<void>;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  vaultUnlocked: boolean
+  onImported: (created: { label: string; mode: KeyMode }) => Promise<void>
 }) {
-  const [pem, setPem] = React.useState("");
-  const [fileName, setFileName] = React.useState("");
-  const [passphrase, setPassphrase] = React.useState("");
-  const [askPassphrase, setAskPassphrase] = React.useState(false);
-  const [preview, setPreview] = React.useState<KeyPreview | null>(null);
-  const [label, setLabel] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [core, setCore] = React.useState<SshLoadProgress | null>(null);
-  const [coreError, setCoreError] = React.useState<string | null>(null);
+  const [pem, setPem] = React.useState("")
+  const [fileName, setFileName] = React.useState("")
+  const [passphrase, setPassphrase] = React.useState("")
+  const [askPassphrase, setAskPassphrase] = React.useState(false)
+  const [preview, setPreview] = React.useState<KeyPreview | null>(null)
+  const [label, setLabel] = React.useState("")
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [core, setCore] = React.useState<SshLoadProgress | null>(null)
+  const [coreError, setCoreError] = React.useState<string | null>(null)
   // Bumped by the retry button. loadSSH() forgets a failed attempt, so calling
   // it again is a genuine second try rather than a replay of the same rejection.
-  const [coreAttempt, setCoreAttempt] = React.useState(0);
-  const passphraseRef = React.useRef<HTMLInputElement>(null);
+  const [coreAttempt, setCoreAttempt] = React.useState(0)
+  const passphraseRef = React.useRef<HTMLInputElement>(null)
 
   // Left null until someone picks, so the default tracks the vault as it is
   // now rather than as it was when this component last reset itself.
-  const [chosenMode, setChosenMode] = React.useState<KeyMode | null>(null);
-  const mode: KeyMode = chosenMode ?? (vaultUnlocked ? "portable" : "device-bound");
+  const [chosenMode, setChosenMode] = React.useState<KeyMode | null>(null)
+  const mode: KeyMode = chosenMode ?? (vaultUnlocked ? "portable" : "device-bound")
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) return
     // Start the 6 MB core downloading the moment the dialog opens rather than
     // on the first click, and watch it so the wait is visible instead of the
     // button appearing to do nothing.
@@ -499,22 +499,22 @@ function ImportKeyDialog({
     // — closing the dialog, or the retry button — not from here. Clearing it
     // in the effect body would be a state write on every open that renders a
     // second time for no new information.
-    let cancelled = false;
+    let cancelled = false
     void loadSSH((p) => {
-      if (!cancelled) setCore(p);
+      if (!cancelled) setCore(p)
     }).catch((failure: unknown) => {
-      if (cancelled) return;
+      if (cancelled) return
       // Dropping the progress matters as much as showing the error. Nothing is
       // downloading any more, and a byte count left sitting on screen says the
       // opposite — the usual cause is being offline, which is precisely when a
       // stalled-looking bar is read as "still trying".
-      setCore(null);
-      setCoreError(String((failure as Error).message ?? failure));
-    });
+      setCore(null)
+      setCoreError(String((failure as Error).message ?? failure))
+    })
     return () => {
-      cancelled = true;
-    };
-  }, [open, coreAttempt]);
+      cancelled = true
+    }
+  }, [open, coreAttempt])
 
   /**
    * Everything typed here is dropped when the dialog closes, not when it next
@@ -523,90 +523,90 @@ function ImportKeyDialog({
    */
   function handleOpenChange(next: boolean) {
     if (!next) {
-      setPem("");
-      setPassphrase("");
-      setFileName("");
-      setAskPassphrase(false);
-      setPreview(null);
-      setLabel("");
-      setChosenMode(null);
-      setError(null);
-      setCoreError(null);
+      setPem("")
+      setPassphrase("")
+      setFileName("")
+      setAskPassphrase(false)
+      setPreview(null)
+      setLabel("")
+      setChosenMode(null)
+      setError(null)
+      setCoreError(null)
     }
-    onOpenChange(next);
+    onOpenChange(next)
   }
 
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const file = event.target.files?.[0]
     // Reset the input so choosing the same file twice still fires a change.
-    event.target.value = "";
-    if (!file) return;
+    event.target.value = ""
+    if (!file) return
 
     if (file.size > 64_000) {
       setError(
         `${file.name} is ${megabytes(file.size)}. No SSH private key is that large — ` +
           "this is probably not the file you meant.",
-      );
-      return;
+      )
+      return
     }
-    setError(null);
-    setPreview(null);
-    setFileName(file.name);
-    setPem(await file.text());
+    setError(null)
+    setPreview(null)
+    setFileName(file.name)
+    setPem(await file.text())
   }
 
   async function handleRead(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
     try {
-      const found = await inspectImportedKey(pem, passphrase);
-      setPreview(found);
-      setLabel(found.comment ?? (fileName ? labelFromFileName(fileName) : "imported"));
+      const found = await inspectImportedKey(pem, passphrase)
+      setPreview(found)
+      setLabel(found.comment ?? (fileName ? labelFromFileName(fileName) : "imported"))
     } catch (failure) {
       if (failure instanceof KeyPassphraseError) {
         // An encrypted key is a question, not a failure: show the field and put
         // the cursor in it rather than printing the parser's error.
-        setAskPassphrase(true);
-        setError(failure.message);
-        requestAnimationFrame(() => passphraseRef.current?.focus());
+        setAskPassphrase(true)
+        setError(failure.message)
+        requestAnimationFrame(() => passphraseRef.current?.focus())
       } else {
-        setError(String((failure as Error).message ?? failure));
+        setError(String((failure as Error).message ?? failure))
       }
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
   async function handleSave(event: React.FormEvent) {
-    event.preventDefault();
-    const vaultKey = getVaultKey();
+    event.preventDefault()
+    const vaultKey = getVaultKey()
     if (mode === "portable" && !vaultKey) {
-      setError("The vault is locked, so a portable key cannot be wrapped.");
-      return;
+      setError("The vault is locked, so a portable key cannot be wrapped.")
+      return
     }
 
-    setBusy(true);
-    setError(null);
+    setBusy(true)
+    setError(null)
     try {
       const stored = await importKey(pem, {
         label: label.trim() || "imported",
         mode,
         passphrase,
         vaultKey: vaultKey ?? undefined,
-      });
-      handleOpenChange(false);
-      await onImported({ label: stored.label, mode });
+      })
+      handleOpenChange(false)
+      await onImported({ label: stored.label, mode })
     } catch (failure) {
-      setError(String((failure as Error).message ?? failure));
+      setError(String((failure as Error).message ?? failure))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
-  const loadingCore = core !== null && !core.done;
+  const loadingCore = core !== null && !core.done
   const percent =
-    core && core.total > 0 ? Math.min(100, Math.round((core.loaded / core.total) * 100)) : null;
+    core && core.total > 0 ? Math.min(100, Math.round((core.loaded / core.total) * 100)) : null
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -744,6 +744,8 @@ function ImportKeyDialog({
                   <p>
                     It is parsed, imported into WebCrypto as a non-extractable handle, and the
                     plaintext copy is zeroed immediately after. What survives is that handle
+                    {/* biome-ignore lint/suspicious/noSuspiciousSemicolonInJsx: prose punctuation — the
+                        semicolon ends the clause the conditional above completes, and is meant to render */}
                     {mode === "portable" ? ", plus a copy encrypted with your vault key" : ""};
                     neither can be read back out.
                   </p>
@@ -806,8 +808,8 @@ function ImportKeyDialog({
                     variant="outline"
                     size="xs"
                     onClick={() => {
-                      setCoreError(null);
-                      setCoreAttempt((n) => n + 1);
+                      setCoreError(null)
+                      setCoreAttempt((n) => n + 1)
                     }}
                   >
                     Try again
@@ -839,10 +841,10 @@ function ImportKeyDialog({
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setPreview(null);
-                  setPassphrase("");
-                  setAskPassphrase(false);
-                  setError(null);
+                  setPreview(null)
+                  setPassphrase("")
+                  setAskPassphrase(false)
+                  setError(null)
                 }}
               >
                 Back
@@ -861,7 +863,7 @@ function ImportKeyDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 /* ----------------------------------------------------------------- key card */
@@ -872,14 +874,14 @@ function KeyCard({
   unwrappable,
   onDelete,
 }: {
-  storedKey: StoredKey;
-  vaultUnlocked: boolean;
+  storedKey: StoredKey
+  vaultUnlocked: boolean
   /** The vault is unlocked and this key's wrapping still does not open. */
-  unwrappable: boolean;
-  onDelete: () => void;
+  unwrappable: boolean
+  onDelete: () => void
 }) {
-  const line = React.useMemo(() => lineFor(storedKey), [storedKey]);
-  const deviceBound = storedKey.mode === "device-bound";
+  const line = React.useMemo(() => lineFor(storedKey), [storedKey])
+  const deviceBound = storedKey.mode === "device-bound"
 
   return (
     <Card>
@@ -972,29 +974,29 @@ function KeyCard({
         )}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- copy button */
 
 function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copied, setCopied] = React.useState(false)
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   React.useEffect(() => {
     return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, []);
+      if (timer.current) clearTimeout(timer.current)
+    }
+  }, [])
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error("The browser refused clipboard access. Select the line and copy it by hand.");
+      toast.error("The browser refused clipboard access. Select the line and copy it by hand.")
     }
   }
 
@@ -1003,7 +1005,7 @@ function CopyButton({ value }: { value: string }) {
       {copied ? <CheckIcon className="text-success" /> : <CopyIcon />}
       {copied ? "Copied" : "Copy command"}
     </Button>
-  );
+  )
 }
 
 /* -------------------------------------------------------------- mode option */
@@ -1018,15 +1020,15 @@ function ModeOption({
   title,
   body,
 }: {
-  id: string;
+  id: string
   /** Radio group name: the generate and import dialogs must not share one. */
-  name: string;
-  checked: boolean;
-  disabled?: boolean;
-  onSelect: () => void;
-  icon: React.ReactNode;
-  title: string;
-  body: string;
+  name: string
+  checked: boolean
+  disabled?: boolean
+  onSelect: () => void
+  icon: React.ReactNode
+  title: string
+  body: string
 }) {
   return (
     <label
@@ -1060,7 +1062,7 @@ function ModeOption({
         <span className="mt-1 block leading-relaxed text-muted-foreground">{body}</span>
       </span>
     </label>
-  );
+  )
 }
 
 /* ------------------------------------------------------- empty and loading */
@@ -1102,7 +1104,7 @@ function EmptyState({ onGenerate, onImport }: { onGenerate: () => void; onImport
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function LoadingCards() {
@@ -1121,5 +1123,5 @@ function LoadingCards() {
         </Card>
       ))}
     </div>
-  );
+  )
 }

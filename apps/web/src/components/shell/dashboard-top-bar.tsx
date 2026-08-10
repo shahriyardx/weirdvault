@@ -1,15 +1,15 @@
-"use client";
+"use client"
 
-import { LockKeyIcon, LockKeyOpenIcon, SignOutIcon } from "@phosphor-icons/react/dist/ssr";
+import { LockKeyIcon, LockKeyOpenIcon, SignOutIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { signOut } from "@/lib/auth-client";
-import { lock, requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
+import { Button } from "@/components/ui/button"
+import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { signOut } from "@/lib/auth-client"
+import { lock, requestUnlock, useVaultUnlocked } from "@/lib/vault/session"
 
 export function DashboardTopBar() {
-  const vaultUnlocked = useVaultUnlocked();
+  const vaultUnlocked = useVaultUnlocked()
 
   return (
     <header className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
@@ -61,5 +61,5 @@ export function DashboardTopBar() {
         </Tooltip>
       </div>
     </header>
-  );
+  )
 }

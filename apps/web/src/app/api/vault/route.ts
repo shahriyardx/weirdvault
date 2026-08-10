@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
-import { eq } from "drizzle-orm";
+import { headers } from "next/headers"
+import { eq } from "drizzle-orm"
 
-import { auth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
+import { auth } from "@/lib/auth"
+import { db, schema } from "@/lib/db"
 
 /**
  * Vault blob sync.
@@ -13,62 +13,62 @@ import { db, schema } from "@/lib/db";
  * would all require plaintext, and the model forbids it (THREAT-MODEL.md §10).
  */
 
-const MAX_BLOB_BYTES = 4 * 1024 * 1024;
+const MAX_BLOB_BYTES = 4 * 1024 * 1024
 
 async function requireUser() {
   // Next.js 16: headers() is async-only.
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user ?? null;
+  const session = await auth.api.getSession({ headers: await headers() })
+  return session?.user ?? null
 }
 
 export async function GET() {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   const [row] = await db
     .select()
     .from(schema.vaultBlob)
     .where(eq(schema.vaultBlob.userId, user.id))
-    .limit(1);
+    .limit(1)
 
-  if (!row) return Response.json({ version: 0, blob: null });
+  if (!row) return Response.json({ version: 0, blob: null })
 
   return Response.json({
     version: row.version,
     blob: row.ciphertext.toString("utf8"),
     updatedAt: row.updatedAt,
-  });
+  })
 }
 
 export async function PUT(request: Request) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  let body: { blob?: unknown; baseVersion?: unknown };
+  let body: { blob?: unknown; baseVersion?: unknown }
   try {
-    body = await request.json();
+    body = await request.json()
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { blob, baseVersion } = body;
+  const { blob, baseVersion } = body
   if (typeof blob !== "string" || typeof baseVersion !== "number") {
     return Response.json(
       { error: "blob (string) and baseVersion (number) required" },
       { status: 400 },
-    );
+    )
   }
   if (Buffer.byteLength(blob, "utf8") > MAX_BLOB_BYTES) {
-    return Response.json({ error: "vault too large" }, { status: 413 });
+    return Response.json({ error: "vault too large" }, { status: 413 })
   }
 
-  const ciphertext = Buffer.from(blob, "utf8");
+  const ciphertext = Buffer.from(blob, "utf8")
 
   const [existing] = await db
     .select({ version: schema.vaultBlob.version })
     .from(schema.vaultBlob)
     .where(eq(schema.vaultBlob.userId, user.id))
-    .limit(1);
+    .limit(1)
 
   // Optimistic concurrency: a stale writer is told to re-read and merge rather
   // than silently clobbering another device's changes.
@@ -76,24 +76,24 @@ export async function PUT(request: Request) {
     return Response.json(
       { error: "version conflict", currentVersion: existing.version },
       { status: 409 },
-    );
+    )
   }
 
-  const version = (existing?.version ?? 0) + 1;
+  const version = (existing?.version ?? 0) + 1
 
   if (existing) {
     await db
       .update(schema.vaultBlob)
       .set({ ciphertext, version, updatedAt: new Date() })
-      .where(eq(schema.vaultBlob.userId, user.id));
+      .where(eq(schema.vaultBlob.userId, user.id))
   } else {
     await db.insert(schema.vaultBlob).values({
       id: crypto.randomUUID(),
       userId: user.id,
       ciphertext,
       version,
-    });
+    })
   }
 
-  return Response.json({ version });
+  return Response.json({ version })
 }

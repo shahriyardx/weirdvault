@@ -1,10 +1,10 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { InfoIcon, LockKeyIcon } from "@phosphor-icons/react/dist/ssr";
+import { useState } from "react"
+import { InfoIcon, LockKeyIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -12,18 +12,18 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { usePasswordlessSignIn, useSession } from "@/lib/auth-client";
-import { deriveSecrets } from "@/lib/vault/kdf";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { usePasswordlessSignIn, useSession } from "@/lib/auth-client"
+import { deriveSecrets } from "@/lib/vault/kdf"
 import {
   dismissUnlock,
   setVaultKey,
   useUnlockRequested,
   useVaultUnlocked,
-} from "@/lib/vault/session";
-import { useSshSession } from "@/lib/ssh/session-provider";
+} from "@/lib/vault/session"
+import { useSshSession } from "@/lib/ssh/session-provider"
 
 /**
  * Why a session can be signed in and still locked, said in one place.
@@ -57,7 +57,7 @@ const PASSWORDLESS_REASON: Record<string, { title: string; body: string }> = {
       "your data, and neither has anything else, which is the point. Your hosts and " +
       "keys are still there — they are ciphertext until this is filled in.",
   },
-};
+}
 
 /**
  * Re-unlocking after a page load.
@@ -70,41 +70,40 @@ const PASSWORDLESS_REASON: Record<string, { title: string; body: string }> = {
  * The password is stretched here exactly as at sign-in; nothing is sent.
  */
 export function VaultUnlock() {
-  const { data: session, isPending } = useSession();
-  const unlocked = useVaultUnlocked();
-  const requested = useUnlockRequested();
-  const passwordless = usePasswordlessSignIn();
-  const { refreshKeys } = useSshSession();
-  const reason = passwordless ? PASSWORDLESS_REASON[passwordless] : undefined;
+  const { data: session, isPending } = useSession()
+  const unlocked = useVaultUnlocked()
+  const requested = useUnlockRequested()
+  const passwordless = usePasswordlessSignIn()
+  const { refreshKeys } = useSshSession()
+  const reason = passwordless ? PASSWORDLESS_REASON[passwordless] : undefined
 
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [password, setPassword] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState(false)
 
   // Show on arrival, and again whenever something actually needs the vault —
   // "dismissed" only silences the automatic prompt, never an explicit request.
-  const needsUnlock =
-    !isPending && Boolean(session?.user) && !unlocked && (requested || !dismissed);
+  const needsUnlock = !isPending && Boolean(session?.user) && !unlocked && (requested || !dismissed)
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!session?.user.email) return;
-    setBusy(true);
-    setError(null);
+    e.preventDefault()
+    if (!session?.user.email) return
+    setBusy(true)
+    setError(null)
     try {
-      const { vaultKey, auditKey } = await deriveSecrets(session.user.email, password);
+      const { vaultKey, auditKey } = await deriveSecrets(session.user.email, password)
       // There is no server round trip to check this against, so a wrong
       // password produces a key that simply fails to decrypt. Sync surfaces
       // that; we cannot verify it here without weakening the model.
-      setVaultKey(vaultKey, auditKey);
-      setPassword("");
+      setVaultKey(vaultKey, auditKey)
+      setPassword("")
       // Portable keys only become usable once the vault is open.
-      await refreshKeys();
+      await refreshKeys()
     } catch (err) {
-      setError(String((err as Error).message ?? err));
+      setError(String((err as Error).message ?? err))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
@@ -113,8 +112,8 @@ export function VaultUnlock() {
       open={needsUnlock}
       onOpenChange={(open) => {
         if (!open) {
-          setDismissed(true);
-          dismissUnlock();
+          setDismissed(true)
+          dismissUnlock()
         }
       }}
     >
@@ -169,8 +168,8 @@ export function VaultUnlock() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                setDismissed(true);
-                dismissUnlock();
+                setDismissed(true)
+                dismissUnlock()
               }}
             >
               Continue locked
@@ -182,5 +181,5 @@ export function VaultUnlock() {
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

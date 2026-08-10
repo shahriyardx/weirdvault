@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Deletion records.
@@ -13,20 +13,20 @@
  * importing the sync engine, which imports them.
  */
 
-import { idbGet, idbPut } from "@/lib/idb";
+import { idbGet, idbPut } from "@/lib/idb"
 
-const KEY = "tombstones";
+const KEY = "tombstones"
 
 export async function getTombstones(): Promise<Record<string, number>> {
-  return (await idbGet<Record<string, number>>("vault", KEY)) ?? {};
+  return (await idbGet<Record<string, number>>("vault", KEY)) ?? {}
 }
 
 export async function recordDeletion(id: string): Promise<void> {
-  const t = await getTombstones();
-  t[id] = Date.now();
-  await idbPut("vault", KEY, t);
+  const t = await getTombstones()
+  t[id] = Date.now()
+  await idbPut("vault", KEY, t)
 }
 
 export async function setTombstones(t: Record<string, number>): Promise<void> {
-  await idbPut("vault", KEY, t);
+  await idbPut("vault", KEY, t)
 }

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Pinned SSH host keys.
@@ -13,29 +13,29 @@
  * pin is a separate, explicit action.
  */
 
-import { idbGet, idbPut, idbDelete, idbGetAll } from "./idb";
-import { recordDeletion } from "./vault/tombstones";
+import { idbGet, idbPut, idbDelete, idbGetAll } from "./idb"
+import { recordDeletion } from "./vault/tombstones"
 
 export interface PinnedHostKey {
   /** host:port */
-  id: string;
-  key: string; // base64 of the marshaled SSH public key
-  fingerprint: string;
-  type: string;
-  pinnedAt: number;
-  lastSeenAt: number;
+  id: string
+  key: string // base64 of the marshaled SSH public key
+  fingerprint: string
+  type: string
+  pinnedAt: number
+  lastSeenAt: number
 }
 
-const STORE = "hostkeys";
+const STORE = "hostkeys"
 
-const idFor = (host: string, port: number) => `${host}:${port}`;
+const idFor = (host: string, port: number) => `${host}:${port}`
 
 export async function getPin(host: string, port: number): Promise<PinnedHostKey | undefined> {
-  return idbGet<PinnedHostKey>(STORE, idFor(host, port));
+  return idbGet<PinnedHostKey>(STORE, idFor(host, port))
 }
 
 export async function listPins(): Promise<PinnedHostKey[]> {
-  return idbGetAll<PinnedHostKey>(STORE);
+  return idbGetAll<PinnedHostKey>(STORE)
 }
 
 export async function pin(
@@ -43,26 +43,26 @@ export async function pin(
   port: number,
   info: { key: string; fingerprint: string; type: string },
 ): Promise<PinnedHostKey> {
-  const now = Date.now();
+  const now = Date.now()
   const record: PinnedHostKey = {
     id: idFor(host, port),
     ...info,
     pinnedAt: now,
     lastSeenAt: now,
-  };
-  await idbPut(STORE, record.id, record);
-  return record;
+  }
+  await idbPut(STORE, record.id, record)
+  return record
 }
 
 /** Used by vault sync to land a pin from another device. */
 export async function putPin(record: PinnedHostKey): Promise<void> {
-  await idbPut(STORE, record.id, record);
+  await idbPut(STORE, record.id, record)
 }
 
 export async function touchPin(host: string, port: number): Promise<void> {
-  const existing = await getPin(host, port);
+  const existing = await getPin(host, port)
   if (existing) {
-    await idbPut(STORE, existing.id, { ...existing, lastSeenAt: Date.now() });
+    await idbPut(STORE, existing.id, { ...existing, lastSeenAt: Date.now() })
   }
 }
 
@@ -72,11 +72,11 @@ export async function touchPin(host: string, port: number): Promise<void> {
  * the mismatch warning.
  */
 export async function unpin(host: string, port: number): Promise<void> {
-  const id = idFor(host, port);
-  await idbDelete(STORE, id);
+  const id = idFor(host, port)
+  await idbDelete(STORE, id)
   // Tombstone it, or the next device to sync an older copy would restore the
   // pin and keep rejecting a server the user legitimately rebuilt.
-  await recordDeletion(id);
+  await recordDeletion(id)
 }
 
 export class HostKeyMismatchError extends Error {
@@ -89,7 +89,7 @@ export class HostKeyMismatchError extends Error {
     super(
       `Host key mismatch for ${host}:${port}. Expected ${expected.type} ` +
         `${expected.fingerprint}, got ${presented.type} ${presented.fingerprint}.`,
-    );
-    this.name = "HostKeyMismatchError";
+    )
+    this.name = "HostKeyMismatchError"
   }
 }

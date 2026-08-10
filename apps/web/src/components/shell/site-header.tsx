@@ -1,26 +1,26 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ListIcon } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { ListIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { Brand } from "@/components/shell/brand";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
+import { Brand } from "@/components/shell/brand"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { cn } from "@/lib/utils"
 
 const NAV = [
   { href: "/pricing", label: "Pricing" },
   { href: "/security", label: "Security" },
   { href: "/docs", label: "Docs" },
-] as const;
+] as const
 
 /**
  * Top bar for public pages. The dashboard reuses it above its sidebar, so the
  * two never drift apart visually.
  */
 export function SiteHeader({ authed = false }: { authed?: boolean }) {
-  const pathname = usePathname();
+  const pathname = usePathname()
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
@@ -95,5 +95,5 @@ export function SiteHeader({ authed = false }: { authed?: boolean }) {
         </div>
       </div>
     </header>
-  );
+  )
 }

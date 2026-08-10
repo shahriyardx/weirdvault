@@ -1,6 +1,6 @@
-import { lt, sql } from "drizzle-orm";
+import { lt, sql } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
+import { db, schema } from "@/lib/db"
 
 /**
  * Deleting rate-limit counters whose window closed long ago.
@@ -19,25 +19,25 @@ import { db, schema } from "@/lib/db";
  */
 
 /** Comfortably longer than the longest window in use. */
-const KEEP_MS = 24 * 60 * 60 * 1000;
+const KEEP_MS = 24 * 60 * 60 * 1000
 
 export interface CounterPruneResult {
-  deleted: number;
-  stale: number;
+  deleted: number
+  stale: number
 }
 
 export async function clearStaleCounters(dryRun: boolean): Promise<CounterPruneResult> {
-  const cutoff = Date.now() - KEEP_MS;
-  const expired = lt(schema.rateLimit.windowStart, cutoff);
+  const cutoff = Date.now() - KEEP_MS
+  const expired = lt(schema.rateLimit.windowStart, cutoff)
 
   const counted = await db
     .select({ n: sql<string>`count(*)::bigint` })
     .from(schema.rateLimit)
-    .where(expired);
-  const stale = Number(counted[0]?.n ?? 0);
+    .where(expired)
+  const stale = Number(counted[0]?.n ?? 0)
 
-  if (dryRun || stale === 0) return { deleted: 0, stale };
+  if (dryRun || stale === 0) return { deleted: 0, stale }
 
-  const result = await db.delete(schema.rateLimit).where(expired);
-  return { deleted: result.rowCount ?? 0, stale };
+  const result = await db.delete(schema.rateLimit).where(expired)
+  return { deleted: result.rowCount ?? 0, stale }
 }

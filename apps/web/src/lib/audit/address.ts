@@ -43,14 +43,14 @@
  * module exists to stop.
  */
 const TRUSTED_HOPS = (() => {
-  const raw = process.env.TRUSTED_PROXY_HOPS;
-  if (!raw) return 0;
-  const n = Number.parseInt(raw, 10);
-  return Number.isInteger(n) && n >= 1 && n <= 8 ? n : 0;
-})();
+  const raw = process.env.TRUSTED_PROXY_HOPS
+  if (!raw) return 0
+  const n = Number.parseInt(raw, 10)
+  return Number.isInteger(n) && n >= 1 && n <= 8 ? n : 0
+})()
 
 /** True when a proxy is configured, so callers can say why an address is null. */
-export const proxyConfigured = TRUSTED_HOPS > 0;
+export const proxyConfigured = TRUSTED_HOPS > 0
 
 /**
  * The client address, or null when it cannot be established.
@@ -61,19 +61,19 @@ export const proxyConfigured = TRUSTED_HOPS > 0;
  * two.
  */
 export function clientAddress(h: Headers): string | null {
-  if (TRUSTED_HOPS === 0) return null;
+  if (TRUSTED_HOPS === 0) return null
 
-  const forwarded = h.get("x-forwarded-for");
-  if (!forwarded) return null;
+  const forwarded = h.get("x-forwarded-for")
+  if (!forwarded) return null
 
   const hops = forwarded
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
 
   // Fewer entries than proxies means the chain is not what the configuration
   // says it is. Guessing at that point would hand back a client-written value,
   // so it answers null instead.
-  const index = hops.length - TRUSTED_HOPS;
-  return index >= 0 ? (hops[index] ?? null) : null;
+  const index = hops.length - TRUSTED_HOPS
+  return index >= 0 ? (hops[index] ?? null) : null
 }

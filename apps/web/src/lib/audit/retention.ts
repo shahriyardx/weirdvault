@@ -38,7 +38,7 @@
  * would produce one on the first Pro account.
  */
 
-import type { Tier } from "@/lib/billing/tiers";
+import type { Tier } from "@/lib/billing/tiers"
 
 /**
  * The tier a retention window is chosen by — the app-wide tier, aliased rather
@@ -50,13 +50,13 @@ import type { Tier } from "@/lib/billing/tiers";
  * third tier existed, and a tier that means one thing to the transfer cap and
  * another to the audit window is worse than no tier at all.
  */
-export type AuditRetentionTier = Tier;
+export type AuditRetentionTier = Tier
 
 /** Days of history each tier keeps. Twelve months is expressed as 365 days. */
 export const AUDIT_RETENTION_DAYS: Record<AuditRetentionTier, number> = {
   free: 30,
   pro: 365,
-};
+}
 
 /**
  * How to say each window in a sentence. "12 months" rather than "365 days":
@@ -66,7 +66,7 @@ export const AUDIT_RETENTION_DAYS: Record<AuditRetentionTier, number> = {
 export const AUDIT_RETENTION_LABEL: Record<AuditRetentionTier, string> = {
   free: "30 days",
   pro: "12 months",
-};
+}
 
 /**
  * The retention block /api/audit states on every response.
@@ -76,18 +76,18 @@ export const AUDIT_RETENTION_LABEL: Record<AuditRetentionTier, string> = {
  * has no other source for these three values and must not invent one.
  */
 export interface AuditRetentionWindow {
-  tier: AuditRetentionTier;
-  days: number;
+  tier: AuditRetentionTier
+  days: number
   /** ISO timestamp: the oldest event the query will return, as of that response. */
-  since: string;
+  since: string
 }
 
 /** Days kept for a tier. */
 export function auditRetentionDays(tier: AuditRetentionTier): number {
-  return AUDIT_RETENTION_DAYS[tier];
+  return AUDIT_RETENTION_DAYS[tier]
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /**
  * The oldest timestamp still inside the window. Events at or after this instant
@@ -99,5 +99,5 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * on the first, which is the behaviour "30 days" describes to a reader.
  */
 export function auditRetentionCutoff(tier: AuditRetentionTier, now: Date = new Date()): Date {
-  return new Date(now.getTime() - auditRetentionDays(tier) * DAY_MS);
+  return new Date(now.getTime() - auditRetentionDays(tier) * DAY_MS)
 }

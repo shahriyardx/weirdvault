@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { createHmac } from "node:crypto";
+import { describe, expect, test } from "bun:test"
+import { createHmac } from "node:crypto"
 
 import {
   canonicalRequest,
@@ -9,7 +9,7 @@ import {
   signRequest,
   signingKey,
   timestamps,
-} from "./sigv4";
+} from "./sigv4"
 
 /**
  * A signing bug here does not fail as a type error or a crash. It fails as a
@@ -46,7 +46,7 @@ const SUITE = {
   secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
   region: "us-east-1",
   service: "service",
-};
+}
 
 /** The suite's own signing step, so a vector's published signature is reachable. */
 function suiteSignature(canonical: string): string {
@@ -55,13 +55,13 @@ function suiteSignature(canonical: string): string {
     "20150830T123600Z",
     "20150830/us-east-1/service/aws4_request",
     sha256Hex(canonical),
-  ].join("\n");
+  ].join("\n")
   return createHmac(
     "sha256",
     signingKey(SUITE.secretAccessKey, "20150830", SUITE.region, SUITE.service),
   )
     .update(stringToSign, "utf8")
-    .digest("hex");
+    .digest("hex")
 }
 
 describe("signing key derivation", () => {
@@ -73,15 +73,15 @@ describe("signing key derivation", () => {
         "us-east-1",
         "iam",
       ).toString("hex"),
-    ).toBe("f4780e2d9f65fa895f9c67b32ce1baf0b0d8a43505a000a1a9e090d414db404d");
-  });
+    ).toBe("f4780e2d9f65fa895f9c67b32ce1baf0b0d8a43505a000a1a9e090d414db404d")
+  })
 
   test("the scope is part of the key, so a wrong region cannot sign", () => {
-    const east = signingKey(SUITE.secretAccessKey, "20150830", "us-east-1", "s3");
-    const auto = signingKey(SUITE.secretAccessKey, "20150830", "auto", "s3");
-    expect(east.equals(auto)).toBe(false);
-  });
-});
+    const east = signingKey(SUITE.secretAccessKey, "20150830", "us-east-1", "s3")
+    const auto = signingKey(SUITE.secretAccessKey, "20150830", "auto", "s3")
+    expect(east.equals(auto)).toBe(false)
+  })
+})
 
 describe("AWS SigV4 test suite", () => {
   test("get-vanilla", () => {
@@ -93,18 +93,18 @@ describe("AWS SigV4 test suite", () => {
         body: Buffer.alloc(0),
       },
       sha256Hex(Buffer.alloc(0)),
-    );
+    )
 
-    expect(signedHeaders).toBe("host;x-amz-date");
+    expect(signedHeaders).toBe("host;x-amz-date")
     expect(request).toBe(
       "GET\n/\n\nhost:example.amazonaws.com\nx-amz-date:20150830T123600Z\n\n" +
         "host;x-amz-date\n" +
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    );
+    )
     expect(suiteSignature(request)).toBe(
       "5fa00fa31553b73ebf1942676e86291e8372ff2a2260956d9b8aae1d763fbf31",
-    );
-  });
+    )
+  })
 
   test("get-vanilla-query-order-key-case sorts by the encoded name", () => {
     // Passed out of order on purpose: the vector's whole point is that the
@@ -118,42 +118,42 @@ describe("AWS SigV4 test suite", () => {
         body: Buffer.alloc(0),
       },
       sha256Hex(Buffer.alloc(0)),
-    );
+    )
 
-    expect(request.split("\n")[2]).toBe("Param1=value1&Param2=value2");
+    expect(request.split("\n")[2]).toBe("Param1=value1&Param2=value2")
     expect(suiteSignature(request)).toBe(
       "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500",
-    );
-  });
-});
+    )
+  })
+})
 
 describe("percent-encoding", () => {
   test("encodes what encodeURIComponent leaves alone", () => {
     // These five are the entire difference between the two, and they are the
     // reason this function exists rather than a one-line delegation.
-    expect(encodeRfc3986("!'()*")).toBe("%21%27%28%29%2A");
-    expect(encodeURIComponent("!'()*")).toBe("!'()*");
-  });
+    expect(encodeRfc3986("!'()*")).toBe("%21%27%28%29%2A")
+    expect(encodeURIComponent("!'()*")).toBe("!'()*")
+  })
 
   test("leaves the unreserved set alone", () => {
-    expect(encodeRfc3986("aZ09-_.~")).toBe("aZ09-_.~");
-  });
+    expect(encodeRfc3986("aZ09-_.~")).toBe("aZ09-_.~")
+  })
 
   test("encodes over UTF-8 bytes, not code units", () => {
-    expect(encodeRfc3986("é")).toBe("%C3%A9");
-    expect(encodeRfc3986(" ")).toBe("%20");
-    expect(encodeRfc3986("/")).toBe("%2F");
-  });
+    expect(encodeRfc3986("é")).toBe("%C3%A9")
+    expect(encodeRfc3986(" ")).toBe("%20")
+    expect(encodeRfc3986("/")).toBe("%2F")
+  })
 
   test("a path keeps its separators and encodes each segment", () => {
-    expect(encodePath("rec/user-1/rec-2")).toBe("/rec/user-1/rec-2");
+    expect(encodePath("rec/user-1/rec-2")).toBe("/rec/user-1/rec-2")
     // The separator survives; the space inside a segment does not.
-    expect(encodePath("rec/a b/c")).toBe("/rec/a%20b/c");
-  });
-});
+    expect(encodePath("rec/a b/c")).toBe("/rec/a%20b/c")
+  })
+})
 
 describe("signRequest", () => {
-  const now = new Date("2025-08-10T13:45:00.123Z");
+  const now = new Date("2025-08-10T13:45:00.123Z")
 
   test("always signs the payload hash, because S3 requires it", () => {
     const headers = signRequest(
@@ -165,16 +165,16 @@ describe("signRequest", () => {
       },
       { ...SUITE, service: "s3" },
       now,
-    );
+    )
 
     expect(headers["x-amz-content-sha256"]).toBe(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    );
-    expect(headers.authorization).toContain("SignedHeaders=host;x-amz-content-sha256;x-amz-date");
+    )
+    expect(headers.authorization).toContain("SignedHeaders=host;x-amz-content-sha256;x-amz-date")
     expect(headers.authorization).toContain(
       "Credential=AKIDEXAMPLE/20250810/us-east-1/s3/aws4_request",
-    );
-  });
+    )
+  })
 
   test("the body is covered, so a changed byte changes the signature", () => {
     const sign = (body: Buffer) =>
@@ -182,10 +182,10 @@ describe("signRequest", () => {
         { method: "PUT", path: "/bucket/key", headers: { host: "s3.example.com" }, body },
         { ...SUITE, service: "s3" },
         now,
-      ).authorization;
+      ).authorization
 
-    expect(sign(Buffer.from("payload"))).not.toBe(sign(Buffer.from("payloae")));
-  });
+    expect(sign(Buffer.from("payload"))).not.toBe(sign(Buffer.from("payloae")))
+  })
 
   test("the caller's headers are returned, so nothing can be added unsigned", () => {
     const headers = signRequest(
@@ -197,13 +197,13 @@ describe("signRequest", () => {
       },
       { ...SUITE, service: "s3" },
       now,
-    );
+    )
 
-    expect(headers["content-type"]).toBe("application/octet-stream");
-    expect(headers.authorization).toContain("SignedHeaders=content-type;host;");
-  });
+    expect(headers["content-type"]).toBe("application/octet-stream")
+    expect(headers.authorization).toContain("SignedHeaders=content-type;host;")
+  })
 
   test("timestamps have no punctuation and no milliseconds", () => {
-    expect(timestamps(now)).toEqual({ amzDate: "20250810T134500Z", dateStamp: "20250810" });
-  });
-});
+    expect(timestamps(now)).toEqual({ amzDate: "20250810T134500Z", dateStamp: "20250810" })
+  })
+})

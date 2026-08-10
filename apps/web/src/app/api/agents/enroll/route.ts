@@ -1,15 +1,15 @@
-import { randomUUID } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto"
+import { and, eq, gt, isNull } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
+import { db, schema } from "@/lib/db"
 import {
   agentRelayUrl,
   agentReleaseUrl,
   hashEnrollmentToken,
   looksLikeEnrollmentToken,
-} from "@/lib/agents/enrollment";
-import { fingerprintFor } from "@/lib/agents/verify";
-import { enforce } from "@/lib/rate-limit";
+} from "@/lib/agents/enrollment"
+import { fingerprintFor } from "@/lib/agents/verify"
+import { enforce } from "@/lib/rate-limit"
 
 /**
  * Where a machine becomes an agent.
@@ -36,17 +36,18 @@ import { enforce } from "@/lib/rate-limit";
  * space to search.
  */
 
-const MAX_FIELD = 200;
+const MAX_FIELD = 200
 
 function cleanString(value: unknown, max = MAX_FIELD): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") return null
   // Control characters stripped, not escaped. This is self-reported by the
   // machine and lands in a dashboard beside a fingerprint the user is being
   // asked to read carefully — a hostname carrying a newline or an ANSI escape
   // is either a bug or an attempt to make that comparison harder to do.
-  const trimmed = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
-  if (!trimmed) return null;
-  return trimmed.slice(0, max);
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
+  const trimmed = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim()
+  if (!trimmed) return null
+  return trimmed.slice(0, max)
 }
 
 function isBase64Key(value: unknown): value is string {
@@ -56,7 +57,7 @@ function isBase64Key(value: unknown): value is string {
     value.length === 44 &&
     /^[A-Za-z0-9+/]+={0,2}$/.test(value) &&
     Buffer.from(value, "base64").length === 32
-  );
+  )
 }
 
 /**
@@ -73,47 +74,47 @@ function isBase64Key(value: unknown): value is string {
  * rather than two: enrolling three machines from one office should not lock out
  * the fourth.
  */
-const ENROLL_LIMIT = { max: 10, windowSeconds: 3600 };
+const ENROLL_LIMIT = { max: 10, windowSeconds: 3600 }
 
 export async function POST(request: Request) {
   const limited = await enforce("agent-enroll", request, ENROLL_LIMIT, {
     message:
       "Too many enrollment attempts from this network in the last hour. The token you have is " +
       "unaffected — wait, then run the installer again.",
-  });
-  if (limited) return limited;
+  })
+  if (limited) return limited
 
-  const releaseUrl = agentReleaseUrl(new URL(request.url).origin);
-  const relayUrl = agentRelayUrl();
+  const releaseUrl = agentReleaseUrl(new URL(request.url).origin)
+  const relayUrl = agentRelayUrl()
   if (!relayUrl) {
-    return Response.json({ error: "this deployment has no relay configured" }, { status: 503 });
+    return Response.json({ error: "this deployment has no relay configured" }, { status: 503 })
   }
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown>
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
   if (!looksLikeEnrollmentToken(body.token)) {
-    return Response.json({ error: "enrollment refused" }, { status: 401 });
+    return Response.json({ error: "enrollment refused" }, { status: 401 })
   }
   if (!isBase64Key(body.publicKey)) {
     return Response.json(
       { error: "publicKey must be a base64 Ed25519 public key" },
       { status: 400 },
-    );
+    )
   }
 
-  const hostname = cleanString(body.hostname) ?? "unknown";
-  const os = cleanString(body.os, 32);
-  const arch = cleanString(body.arch, 32);
-  const agentVersion = cleanString(body.version, 32);
-  const publicKey = body.publicKey;
+  const hostname = cleanString(body.hostname) ?? "unknown"
+  const os = cleanString(body.os, 32)
+  const arch = cleanString(body.arch, 32)
+  const agentVersion = cleanString(body.version, 32)
+  const publicKey = body.publicKey
 
-  const now = new Date();
-  const agentId = randomUUID();
+  const now = new Date()
+  const agentId = randomUUID()
 
   /**
    * Claim, insert, link — all three or none.
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
    * and no agent exists — which previously needed a hand-written "release the
    * token" write that was itself a thing that could fail.
    */
-  let outcome: { ok: true } | { ok: false; status: number; error: string };
+  let outcome: { ok: true } | { ok: false; status: number; error: string }
   try {
     outcome = await db.transaction(async (tx) => {
       const claimed = await tx
@@ -144,16 +145,16 @@ export async function POST(request: Request) {
             gt(schema.agentEnrollment.expiresAt, now),
           ),
         )
-        .returning({ userId: schema.agentEnrollment.userId, id: schema.agentEnrollment.id });
+        .returning({ userId: schema.agentEnrollment.userId, id: schema.agentEnrollment.id })
 
       if (claimed.length === 0) {
         // Returned rather than thrown: there is nothing to roll back, and a
         // throw here would be indistinguishable from a database failure one
         // catch block later.
-        return { ok: false as const, status: 401, error: "enrollment refused" };
+        return { ok: false as const, status: 401, error: "enrollment refused" }
       }
 
-      const { userId, id: enrollmentId } = claimed[0];
+      const { userId, id: enrollmentId } = claimed[0]
 
       await tx.insert(schema.agent).values({
         id: agentId,
@@ -165,21 +166,21 @@ export async function POST(request: Request) {
         os,
         arch,
         agentVersion,
-      });
+      })
 
       await tx
         .update(schema.agentEnrollment)
         .set({ agentId })
-        .where(eq(schema.agentEnrollment.id, enrollmentId));
+        .where(eq(schema.agentEnrollment.id, enrollmentId))
 
-      return { ok: true as const };
-    });
+      return { ok: true as const }
+    })
   } catch (e) {
     // The insert is what fails here, and almost always on the unique index over
     // public_key: a machine re-enrolling with a config it still has, or a cloned
     // disk image carrying somebody else's key into a second VM. The token is
     // untouched — the rollback saw to that — so the same command can be retried.
-    console.warn("agent enrollment failed", e);
+    console.warn("agent enrollment failed", e)
     // Deliberately does NOT say "revoke the old agent first". Revoking keeps the
     // row, and the row is what holds the unique index on public_key — so that
     // advice sent people round in a circle. A retired key stays retired; the
@@ -192,14 +193,14 @@ export async function POST(request: Request) {
           "key. If the old machine is listed as revoked, use Forget to remove it entirely.",
       },
       { status: 409 },
-    );
+    )
   }
 
   if (!outcome.ok) {
-    return Response.json({ error: outcome.error }, { status: outcome.status });
+    return Response.json({ error: outcome.error }, { status: outcome.status })
   }
 
-  return Response.json({ agentId, relayUrl, releaseUrl });
+  return Response.json({ agentId, relayUrl, releaseUrl })
 }
 
 /** Not a browser endpoint; a GET here is a misconfiguration worth naming. */
@@ -207,5 +208,5 @@ export function GET() {
   return Response.json(
     { error: "POST an enrollment token here; this is the agent's endpoint" },
     { status: 405, headers: { Allow: "POST" } },
-  );
+  )
 }

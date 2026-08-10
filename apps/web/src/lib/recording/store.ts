@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Reading and writing recordings.
@@ -21,11 +21,11 @@
  * counting is not a quota.
  */
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react"
 
-import { decryptVault, encryptVault, type VaultEnvelope } from "@/lib/vault/crypto";
-import { decodeCast, encodeCast, type Cast } from "./format";
-import { RECORDING_REQUIRES_PRO } from "./limits";
+import { decryptVault, encryptVault, type VaultEnvelope } from "@/lib/vault/crypto"
+import { decodeCast, encodeCast, type Cast } from "./format"
+import { RECORDING_REQUIRES_PRO } from "./limits"
 
 /**
  * The envelope's plaintext. Versioned separately from the cast itself so the
@@ -33,28 +33,28 @@ import { RECORDING_REQUIRES_PRO } from "./limits";
  * the format every stored recording is written in.
  */
 interface RecordingPayload {
-  v: 1;
-  cast: string;
+  v: 1
+  cast: string
 }
 
 /** One row as the list route returns it. Never includes the ciphertext. */
 export interface RecordingSummary {
-  id: string;
+  id: string
   /** HMAC(auditKey, host|port), resolved to a name locally or not at all. */
-  targetRef: string | null;
-  deviceId: string | null;
+  targetRef: string | null
+  deviceId: string | null
   /** Bytes of ciphertext on the server, as the server counted them. */
-  sizeBytes: number;
-  durationMs: number;
+  sizeBytes: number
+  durationMs: number
   /** Milliseconds since the epoch. */
-  startedAt: number;
-  createdAt: number;
+  startedAt: number
+  createdAt: number
 }
 
 export interface NewRecording {
-  cast: Cast;
-  targetRef: string | null;
-  deviceId: string | null;
+  cast: Cast
+  targetRef: string | null
+  deviceId: string | null
 }
 
 /**
@@ -68,15 +68,15 @@ export interface NewRecording {
  * a reload destroys it, so the difference between "try again" and "this will
  * never work until you subscribe" decides whether somebody reloads the page.
  */
-export type RecordingFailure = "unauthorized" | "network" | "plan" | "server";
+export type RecordingFailure = "unauthorized" | "network" | "plan" | "server"
 
 export class RecordingRequestError extends Error {
-  readonly kind: RecordingFailure;
+  readonly kind: RecordingFailure
 
   constructor(kind: RecordingFailure, message: string) {
-    super(message);
-    this.name = "RecordingRequestError";
-    this.kind = kind;
+    super(message)
+    this.name = "RecordingRequestError"
+    this.kind = kind
   }
 }
 
@@ -89,20 +89,20 @@ export class RecordingRequestError extends Error {
  * give one. A stale badge after another tab records something is the accepted
  * cost; there is no push channel here to fix it with.
  */
-let cachedCount: number | null = null;
-const listeners = new Set<() => void>();
+let cachedCount: number | null = null
+const listeners = new Set<() => void>()
 
 function publish(count: number) {
-  if (cachedCount === count) return;
-  cachedCount = count;
-  for (const fn of listeners) fn();
+  if (cachedCount === count) return
+  cachedCount = count
+  for (const fn of listeners) fn()
 }
 
 function subscribe(fn: () => void) {
-  listeners.add(fn);
+  listeners.add(fn)
   return () => {
-    listeners.delete(fn);
-  };
+    listeners.delete(fn)
+  }
 }
 
 export function useRecordingCount(): number {
@@ -112,57 +112,57 @@ export function useRecordingCount(): number {
     // Server render: the count comes from an authenticated fetch this browser
     // makes, so there is nothing to render on the server but zero.
     () => 0,
-  );
+  )
 
   useEffect(() => {
-    if (cachedCount === null) void listRecordings().catch(() => {});
-  }, []);
+    if (cachedCount === null) void listRecordings().catch(() => {})
+  }, [])
 
-  return count;
+  return count
 }
 
 /* ------------------------------------------------------------------ fetches */
 
 export interface RecordingPage {
   /** The most recent page of recordings, newest first. */
-  recordings: RecordingSummary[];
+  recordings: RecordingSummary[]
   /**
    * How many the account has in total, which is not the same as how many came
    * back. The badge and the footer both read this rather than counting the page.
    */
-  total: number;
+  total: number
   /**
    * Ciphertext held by the whole account, against the ceiling the route refuses
    * new saves at. Both come from the server rather than being summed over the
    * page, because the page is not the account and the ceiling is not this
    * browser's to decide. Null when a response predates them.
    */
-  storedBytes: number | null;
-  storageLimitBytes: number | null;
+  storedBytes: number | null
+  storageLimitBytes: number | null
 }
 
 export async function listRecordings(): Promise<RecordingPage> {
-  const res = await request("/api/recordings");
+  const res = await request("/api/recordings")
   const body = (await res.json()) as {
-    recordings?: unknown;
-    total?: unknown;
-    storedBytes?: unknown;
-    storageLimitBytes?: unknown;
-  };
-  const storedBytes = typeof body.storedBytes === "number" ? body.storedBytes : null;
+    recordings?: unknown
+    total?: unknown
+    storedBytes?: unknown
+    storageLimitBytes?: unknown
+  }
+  const storedBytes = typeof body.storedBytes === "number" ? body.storedBytes : null
   const storageLimitBytes =
-    typeof body.storageLimitBytes === "number" ? body.storageLimitBytes : null;
+    typeof body.storageLimitBytes === "number" ? body.storageLimitBytes : null
   if (!Array.isArray(body.recordings)) {
-    return { recordings: [], total: 0, storedBytes, storageLimitBytes };
+    return { recordings: [], total: 0, storedBytes, storageLimitBytes }
   }
 
   const rows = body.recordings.flatMap((raw) => {
-    const row = toSummary(raw);
-    return row ? [row] : [];
-  });
-  const total = typeof body.total === "number" ? body.total : rows.length;
-  publish(total);
-  return { recordings: rows, total, storedBytes, storageLimitBytes };
+    const row = toSummary(raw)
+    return row ? [row] : []
+  })
+  const total = typeof body.total === "number" ? body.total : rows.length
+  publish(total)
+  return { recordings: rows, total, storedBytes, storageLimitBytes }
 }
 
 /**
@@ -173,27 +173,24 @@ export async function listRecordings(): Promise<RecordingPage> {
  * decrypt failure instead of a locked-vault message.
  */
 export async function loadCast(id: string, vaultKey: CryptoKey): Promise<Cast> {
-  const res = await request(`/api/recordings/${encodeURIComponent(id)}`);
-  const body = (await res.json()) as { blob?: unknown };
-  if (typeof body.blob !== "string") throw new Error("The server returned no recording data.");
+  const res = await request(`/api/recordings/${encodeURIComponent(id)}`)
+  const body = (await res.json()) as { blob?: unknown }
+  if (typeof body.blob !== "string") throw new Error("The server returned no recording data.")
 
-  let payload: RecordingPayload;
+  let payload: RecordingPayload
   try {
-    payload = await decryptVault<RecordingPayload>(
-      vaultKey,
-      JSON.parse(body.blob) as VaultEnvelope,
-    );
+    payload = await decryptVault<RecordingPayload>(vaultKey, JSON.parse(body.blob) as VaultEnvelope)
   } catch {
     // A failure here is almost always the wrong key — a recording made before a
     // password change, on a vault that was re-keyed without it. Saying "corrupt"
     // would send someone looking for a bug that is not there.
     throw new Error(
       "This recording could not be decrypted with the key this tab holds. It was encrypted under a different vault key.",
-    );
+    )
   }
 
-  if (payload.v !== 1) throw new Error(`Unsupported recording container v${String(payload.v)}.`);
-  return decodeCast(payload.cast);
+  if (payload.v !== 1) throw new Error(`Unsupported recording container v${String(payload.v)}.`)
+  return decodeCast(payload.cast)
 }
 
 export async function saveRecording(
@@ -203,7 +200,7 @@ export async function saveRecording(
   const envelope = await encryptVault(vaultKey, {
     v: 1,
     cast: encodeCast(recording.cast),
-  } satisfies RecordingPayload);
+  } satisfies RecordingPayload)
 
   const res = await request("/api/recordings", {
     method: "POST",
@@ -215,36 +212,36 @@ export async function saveRecording(
       targetRef: recording.targetRef,
       deviceId: recording.deviceId,
     }),
-  });
+  })
 
-  const body = (await res.json()) as { recording?: unknown };
-  const summary = toSummary(body.recording);
-  if (!summary) throw new Error("The recording was stored but the server described it oddly.");
-  publish((cachedCount ?? 0) + 1);
-  return summary;
+  const body = (await res.json()) as { recording?: unknown }
+  const summary = toSummary(body.recording)
+  if (!summary) throw new Error("The recording was stored but the server described it oddly.")
+  publish((cachedCount ?? 0) + 1)
+  return summary
 }
 
 export async function deleteRecording(id: string): Promise<void> {
-  await request(`/api/recordings/${encodeURIComponent(id)}`, { method: "DELETE" });
-  publish(Math.max(0, (cachedCount ?? 1) - 1));
+  await request(`/api/recordings/${encodeURIComponent(id)}`, { method: "DELETE" })
+  publish(Math.max(0, (cachedCount ?? 1) - 1))
 }
 
 /* ------------------------------------------------------------------ plumbing */
 
 async function request(url: string, init?: RequestInit): Promise<Response> {
-  let res: Response;
+  let res: Response
   try {
-    res = await fetch(url, { cache: "no-store", ...init });
+    res = await fetch(url, { cache: "no-store", ...init })
   } catch {
     throw new RecordingRequestError(
       "network",
       "The request never reached the server. You may be offline.",
-    );
+    )
   }
-  if (res.ok) return res;
+  if (res.ok) return res
 
   if (res.status === 401) {
-    throw new RecordingRequestError("unauthorized", "This browser is no longer signed in.");
+    throw new RecordingRequestError("unauthorized", "This browser is no longer signed in.")
   }
   // The routes answer with a readable `error`; passing it through is how a
   // limit the user could not see — an oversized blob, say — arrives as an
@@ -254,21 +251,21 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
   const body = await res
     .json()
     .then((b: { error?: unknown; code?: unknown }) => b)
-    .catch(() => ({}) as { error?: unknown; code?: unknown });
-  const detail = typeof body.error === "string" ? body.error : null;
+    .catch(() => ({}) as { error?: unknown; code?: unknown })
+  const detail = typeof body.error === "string" ? body.error : null
   const kind: RecordingFailure =
-    body.code === RECORDING_REQUIRES_PRO || res.status === 402 ? "plan" : "server";
-  throw new RecordingRequestError(kind, detail ?? `The server returned ${res.status}.`);
+    body.code === RECORDING_REQUIRES_PRO || res.status === 402 ? "plan" : "server"
+  throw new RecordingRequestError(kind, detail ?? `The server returned ${res.status}.`)
 }
 
 function toSummary(raw: unknown): RecordingSummary | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  if (typeof r.id !== "string") return null;
+  if (!raw || typeof raw !== "object") return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.id !== "string") return null
 
-  const startedAt = typeof r.startedAt === "string" ? Date.parse(r.startedAt) : Number.NaN;
-  const createdAt = typeof r.createdAt === "string" ? Date.parse(r.createdAt) : Number.NaN;
-  if (Number.isNaN(startedAt) || Number.isNaN(createdAt)) return null;
+  const startedAt = typeof r.startedAt === "string" ? Date.parse(r.startedAt) : Number.NaN
+  const createdAt = typeof r.createdAt === "string" ? Date.parse(r.createdAt) : Number.NaN
+  if (Number.isNaN(startedAt) || Number.isNaN(createdAt)) return null
 
   return {
     id: r.id,
@@ -278,5 +275,5 @@ function toSummary(raw: unknown): RecordingSummary | null {
     durationMs: typeof r.durationMs === "number" ? r.durationMs : 0,
     startedAt,
     createdAt,
-  };
+  }
 }

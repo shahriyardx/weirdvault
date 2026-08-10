@@ -1,6 +1,6 @@
-import { and, isNull, lt, sql } from "drizzle-orm";
+import { and, isNull, lt, sql } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
+import { db, schema } from "@/lib/db"
 
 /**
  * Deleting enrollment tokens that were minted and never used.
@@ -31,16 +31,16 @@ import { db, schema } from "@/lib/db";
  */
 
 /** How long an expired, unused row is kept so the UI can explain itself. */
-const GRACE_MS = 24 * 60 * 60 * 1000;
+const GRACE_MS = 24 * 60 * 60 * 1000
 
 export interface EnrollmentPruneResult {
-  deleted: number;
+  deleted: number
   /** Abandoned rows old enough to remove, counted before anything was removed. */
-  abandoned: number;
+  abandoned: number
 }
 
 export async function pruneAbandonedEnrollments(dryRun: boolean): Promise<EnrollmentPruneResult> {
-  const cutoff = new Date(Date.now() - GRACE_MS);
+  const cutoff = new Date(Date.now() - GRACE_MS)
 
   // Both `used_at IS NULL` and the cutoff, together. Without the first this
   // would delete the row that ties a live agent to the enrollment it came from;
@@ -49,16 +49,16 @@ export async function pruneAbandonedEnrollments(dryRun: boolean): Promise<Enroll
   const abandoned = and(
     isNull(schema.agentEnrollment.usedAt),
     lt(schema.agentEnrollment.expiresAt, cutoff),
-  );
+  )
 
   const counted = await db
     .select({ n: sql<string>`count(*)::bigint` })
     .from(schema.agentEnrollment)
-    .where(abandoned);
-  const total = Number(counted[0]?.n ?? 0);
+    .where(abandoned)
+  const total = Number(counted[0]?.n ?? 0)
 
-  if (dryRun || total === 0) return { deleted: 0, abandoned: total };
+  if (dryRun || total === 0) return { deleted: 0, abandoned: total }
 
-  const result = await db.delete(schema.agentEnrollment).where(abandoned);
-  return { deleted: result.rowCount ?? 0, abandoned: total };
+  const result = await db.delete(schema.agentEnrollment).where(abandoned)
+  return { deleted: result.rowCount ?? 0, abandoned: total }
 }

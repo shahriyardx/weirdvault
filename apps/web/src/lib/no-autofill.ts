@@ -53,7 +53,7 @@ export const noAutofillText = {
   "data-lpignore": "true",
   "data-bwignore": true,
   "data-form-type": "other",
-} as const;
+} as const
 
 /**
  * Secret fields belonging to a remote host: an SSH password, a key passphrase.
@@ -70,4 +70,4 @@ export const noAutofillSecret = {
   "data-lpignore": "true",
   "data-bwignore": true,
   "data-form-type": "other",
-} as const;
+} as const

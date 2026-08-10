@@ -1,6 +1,6 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import {
   ArrowClockwiseIcon,
@@ -21,7 +21,7 @@ import {
   TrashIcon,
   UploadSimpleIcon,
   XIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
 import {
   AlertDialog,
@@ -32,22 +32,22 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -55,47 +55,47 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import {
   REMOTE_DRAG_TYPE,
   beginRemoteDrag,
   currentRemoteDrag,
   endRemoteDrag,
   type RemoteDrag,
-} from "@/lib/transfers/drag";
-import { downloadFile, supportsFileSystemAccess } from "@/lib/transfers/download";
-import { copyBetweenHosts } from "@/lib/transfers/remote";
+} from "@/lib/transfers/drag"
+import { downloadFile, supportsFileSystemAccess } from "@/lib/transfers/download"
+import { copyBetweenHosts } from "@/lib/transfers/remote"
 import {
   chooseStrategy,
   itemsFromDataTransfer,
   itemsFromInput,
   upload,
   type UploadItem,
-} from "@/lib/transfers/upload";
-import type { SftpEntry, SftpHandle, SshSession } from "@/lib/ssh/types";
+} from "@/lib/transfers/upload"
+import type { SftpEntry, SftpHandle, SshSession } from "@/lib/ssh/types"
 
 export interface Transfer {
-  id: string;
-  kind: "upload" | "download";
-  label: string;
-  done: number;
-  total: number;
-  state: "running" | "complete" | "failed" | "cancelled";
-  detail?: string;
-  controller: AbortController;
+  id: string
+  kind: "upload" | "download"
+  label: string
+  done: number
+  total: number
+  state: "running" | "complete" | "failed" | "cancelled"
+  detail?: string
+  controller: AbortController
 }
 
 interface Props {
-  sftp: SftpHandle;
-  session: SshSession;
-  onEdit: (path: string) => void;
-  onOpenTerminalAt?: (dir: string) => void;
+  sftp: SftpHandle
+  session: SshSession
+  onEdit: (path: string) => void
+  onOpenTerminalAt?: (dir: string) => void
   /**
    * Identifies this pane among the ones on screen.
    *
@@ -103,11 +103,11 @@ interface Props {
    * into the pane it came from would be a copy of a directory into itself, and
    * `tar -c` reading a tree that `tar -x` is writing into does not terminate.
    */
-  paneId?: string;
+  paneId?: string
   /** Which session this pane is browsing, for the same reason. */
-  sessionId?: string;
+  sessionId?: string
   /** Resolves the other pane's endpoint when something is dropped from it. */
-  endpointFor?: (sessionId: string) => { session: SshSession; sftp: SftpHandle } | null;
+  endpointFor?: (sessionId: string) => { session: SshSession; sftp: SftpHandle } | null
 }
 
 /**
@@ -120,11 +120,11 @@ interface Props {
 type EntryAction =
   | "separator"
   | {
-      label: string;
-      icon: ReactNode;
-      destructive?: boolean;
-      run: () => void;
-    };
+      label: string
+      icon: ReactNode
+      destructive?: boolean
+      run: () => void
+    }
 
 /**
  * A question this component is waiting on an answer to.
@@ -142,7 +142,7 @@ type Ask =
   | { kind: "rename"; entry: SftpEntry }
   | { kind: "chmod"; entry: SftpEntry }
   | { kind: "mkdir" }
-  | { kind: "delete"; entry: SftpEntry };
+  | { kind: "delete"; entry: SftpEntry }
 
 /**
  * What a drop on this pane would do.
@@ -151,7 +151,7 @@ type Ask =
  * contents — only its type names — and the indicator has to say which of the two
  * very different things is about to happen.
  */
-type DropIntent = { kind: "upload" } | { kind: "remote"; from: string; entries: SftpEntry[] };
+type DropIntent = { kind: "upload" } | { kind: "remote"; from: string; entries: SftpEntry[] }
 
 /**
  * Whether this pane should offer to accept the drag, and as what.
@@ -162,24 +162,24 @@ type DropIntent = { kind: "upload" } | { kind: "remote"; from: string; entries: 
  */
 function intentFor(dt: DataTransfer, paneId: string | undefined): DropIntent | null {
   if (dt.types.includes(REMOTE_DRAG_TYPE)) {
-    const drag = currentRemoteDrag();
-    if (!drag || drag.paneId === paneId) return null;
-    return { kind: "remote", from: drag.cwd, entries: drag.entries };
+    const drag = currentRemoteDrag()
+    if (!drag || drag.paneId === paneId) return null
+    return { kind: "remote", from: drag.cwd, entries: drag.entries }
   }
   // "Files" is what a drag from the desktop announces. Text dragged out of a
   // document also lands here otherwise, and uploading a text selection as a file
   // is nobody's intention.
-  return dt.types.includes("Files") ? { kind: "upload" } : null;
+  return dt.types.includes("Files") ? { kind: "upload" } : null
 }
 
 function describe(entries: SftpEntry[]): string {
-  if (entries.length === 1) return entries[0].name;
-  return `${entries.length} items`;
+  if (entries.length === 1) return entries[0].name
+  return `${entries.length} items`
 }
 
 /** Joins a remote directory and a name. Absolute paths only reach here. */
 function joinRemote(dir: string, name: string): string {
-  return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
+  return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`
 }
 
 /** The wording for each question that takes a typed answer. */
@@ -201,7 +201,7 @@ const ASK_FIELDS: Record<
     submit: "Create",
     placeholder: "deploy",
   },
-};
+}
 
 /**
  * One directory listing, with no React in it.
@@ -216,10 +216,10 @@ async function readDir(
   sftp: SftpHandle,
   dir: string,
 ): Promise<{ cwd: string; entries: SftpEntry[] }> {
-  const listing = await sftp.list(dir);
+  const listing = await sftp.list(dir)
   // Resolve to an absolute path so ".." navigation stays sane.
-  const cwd = await sftp.realpath(listing.path);
-  return { cwd, entries: listing.entries };
+  const cwd = await sftp.realpath(listing.path)
+  return { cwd, entries: listing.entries }
 }
 
 export function FileExplorer({
@@ -231,14 +231,14 @@ export function FileExplorer({
   sessionId,
   endpointFor,
 }: Props) {
-  const [cwd, setCwd] = useState<string>(".");
-  const [entries, setEntries] = useState<SftpEntry[]>([]);
-  const [showHidden, setShowHidden] = useState(false);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dirInputRef = useRef<HTMLInputElement>(null);
+  const [cwd, setCwd] = useState<string>(".")
+  const [entries, setEntries] = useState<SftpEntry[]>([])
+  const [showHidden, setShowHidden] = useState(false)
+  const [busy, setBusy] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dirInputRef = useRef<HTMLInputElement>(null)
 
   /**
    * What a drop here would do, or null when nothing is over the pane.
@@ -248,16 +248,16 @@ export function FileExplorer({
    * and getting it wrong in either direction is how somebody uploads their
    * Downloads folder to production.
    */
-  const [dropIntent, setDropIntent] = useState<DropIntent | null>(null);
+  const [dropIntent, setDropIntent] = useState<DropIntent | null>(null)
   /**
    * dragenter and dragleave fire for every child element the pointer crosses, so
    * a naive handler clears the indicator the moment the cursor moves from the
    * listing onto a row inside it. Counting enters and leaves is the standard fix.
    */
-  const dragDepth = useRef(0);
+  const dragDepth = useRef(0)
 
   /** Selected entry names. Names, not indices: a refresh reorders the list. */
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
   /**
    * Where a shift-click measures from.
    *
@@ -267,15 +267,15 @@ export function FileExplorer({
    * exactly the pattern that goes wrong when the function is later called from
    * somewhere other than a click.
    */
-  const [anchor, setAnchor] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState<string | null>(null)
 
   /** The open dialog, and what has been typed into it so far. */
-  const [ask, setAsk] = useState<Ask | null>(null);
-  const [answer, setAnswer] = useState("");
+  const [ask, setAsk] = useState<Ask | null>(null)
+  const [answer, setAnswer] = useState("")
 
   function openAsk(next: Ask, initial = "") {
-    setAsk(next);
-    setAnswer(initial);
+    setAsk(next)
+    setAnswer(initial)
   }
 
   /**
@@ -286,53 +286,53 @@ export function FileExplorer({
    */
   const refresh = useCallback(
     async (dir = cwd) => {
-      setBusy(true);
-      setError(null);
+      setBusy(true)
+      setError(null)
       try {
-        const listing = await readDir(sftp, dir);
-        setCwd(listing.cwd);
-        setEntries(listing.entries);
+        const listing = await readDir(sftp, dir)
+        setCwd(listing.cwd)
+        setEntries(listing.entries)
         // A selection is a set of names, which mean something else in another
         // directory. Carrying it across a navigation would leave rows
         // highlighted that were never chosen.
         if (listing.cwd !== cwd) {
-          setSelected(new Set());
-          setAnchor(null);
+          setSelected(new Set())
+          setAnchor(null)
         }
       } catch (e) {
-        setError(String((e as Error).message ?? e));
+        setError(String((e as Error).message ?? e))
       } finally {
-        setBusy(false);
+        setBusy(false)
       }
     },
     [sftp, cwd],
-  );
+  )
 
   useEffect(() => {
     // A new connection always opens at the remote home directory, so `busy`
     // starts true: the component genuinely mounts into a listing that is
     // already in flight, and saying so costs no extra render.
-    let cancelled = false;
+    let cancelled = false
     readDir(sftp, ".").then(
       (listing) => {
-        if (cancelled) return;
-        setCwd(listing.cwd);
-        setEntries(listing.entries);
-        setBusy(false);
+        if (cancelled) return
+        setCwd(listing.cwd)
+        setEntries(listing.entries)
+        setBusy(false)
       },
       (e: unknown) => {
-        if (cancelled) return;
-        setError(String((e as Error).message ?? e));
-        setBusy(false);
+        if (cancelled) return
+        setError(String((e as Error).message ?? e))
+        setBusy(false)
       },
-    );
+    )
     // The connection can be torn down mid-listing — closing the last session
     // while the home directory is still being read is the ordinary case — and
     // the answer that arrives afterwards belongs to nobody.
     return () => {
-      cancelled = true;
-    };
-  }, [sftp]);
+      cancelled = true
+    }
+  }, [sftp])
 
   function track(kind: Transfer["kind"], label: string, total: number): Transfer {
     const t: Transfer = {
@@ -343,44 +343,44 @@ export function FileExplorer({
       total,
       state: "running",
       controller: new AbortController(),
-    };
-    setTransfers((prev) => [t, ...prev].slice(0, 8));
-    return t;
+    }
+    setTransfers((prev) => [t, ...prev].slice(0, 8))
+    return t
   }
 
   const patch = (id: string, fields: Partial<Transfer>) =>
-    setTransfers((prev) => prev.map((t) => (t.id === id ? { ...t, ...fields } : t)));
+    setTransfers((prev) => prev.map((t) => (t.id === id ? { ...t, ...fields } : t)))
 
   async function doDownload(entry: SftpEntry) {
-    const path = join(cwd, entry.name);
-    const t = track("download", entry.name, entry.size);
+    const path = join(cwd, entry.name)
+    const t = track("download", entry.name, entry.size)
     try {
       const { strategy } = await downloadFile(sftp, path, entry.size, {
         signal: t.controller.signal,
         onProgress: (bytes) => patch(t.id, { done: bytes }),
-      });
-      patch(t.id, { state: "complete", done: entry.size, detail: strategy });
+      })
+      patch(t.id, { state: "complete", done: entry.size, detail: strategy })
     } catch (e) {
-      const msg = String((e as Error).message ?? e);
-      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg });
+      const msg = String((e as Error).message ?? e)
+      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg })
     }
   }
 
   async function doUpload(items: UploadItem[]) {
-    if (items.length === 0) return;
-    const total = items.reduce((n, i) => n + i.file.size, 0);
-    const label = items.length === 1 ? items[0].path : `${items.length} files`;
-    const t = track("upload", label, total);
+    if (items.length === 0) return
+    const total = items.reduce((n, i) => n + i.file.size, 0)
+    const label = items.length === 1 ? items[0].path : `${items.length} files`
+    const t = track("upload", label, total)
     try {
       const { strategy } = await upload(session, sftp, cwd, items, {
         signal: t.controller.signal,
         onProgress: (done, _total, current) => patch(t.id, { done, detail: current }),
-      });
-      patch(t.id, { state: "complete", done: total, detail: `via ${strategy}` });
-      await refresh();
+      })
+      patch(t.id, { state: "complete", done: total, detail: `via ${strategy}` })
+      await refresh()
     } catch (e) {
-      const msg = String((e as Error).message ?? e);
-      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg });
+      const msg = String((e as Error).message ?? e)
+      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg })
     }
   }
 
@@ -394,25 +394,25 @@ export function FileExplorer({
    * a rude thing to do without being asked.
    */
   async function doRemoteCopy(drag: RemoteDrag) {
-    const source = endpointFor?.(drag.sessionId);
+    const source = endpointFor?.(drag.sessionId)
     if (!source) {
-      setError("That session is no longer open, so there is nothing to copy from.");
-      return;
+      setError("That session is no longer open, so there is nothing to copy from.")
+      return
     }
 
-    const label = drag.entries.length === 1 ? drag.entries[0].name : `${drag.entries.length} items`;
+    const label = drag.entries.length === 1 ? drag.entries[0].name : `${drag.entries.length} items`
     // The denominator is only honest for files; a directory's size is not known
     // until tar has finished producing it.
     const known = drag.entries.every((e) => !e.isDir)
       ? drag.entries.reduce((n, e) => n + e.size, 0)
-      : 0;
-    const t = track("download", `${label} → here`, known);
+      : 0
+    const t = track("download", `${label} → here`, known)
 
-    let carried = 0;
+    let carried = 0
     try {
       for (const entry of drag.entries) {
-        if (t.controller.signal.aborted) throw new Error("cancelled");
-        const before = carried;
+        if (t.controller.signal.aborted) throw new Error("cancelled")
+        const before = carried
         await copyBetweenHosts(
           source,
           { session, sftp },
@@ -423,30 +423,30 @@ export function FileExplorer({
             signal: t.controller.signal,
             onProgress: (bytes) => patch(t.id, { done: before + bytes, detail: entry.name }),
           },
-        );
-        carried = before + (entry.isDir ? 0 : entry.size);
+        )
+        carried = before + (entry.isDir ? 0 : entry.size)
       }
       patch(t.id, {
         state: "complete",
         done: known || carried,
         detail: `copied via ${drag.entries.some((e) => e.isDir) ? "tar" : "sftp"}`,
-      });
-      await refresh();
+      })
+      await refresh()
     } catch (e) {
-      const msg = String((e as Error).message ?? e);
-      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg });
+      const msg = String((e as Error).message ?? e)
+      patch(t.id, { state: msg === "cancelled" ? "cancelled" : "failed", detail: msg })
       // Part of a multi-item copy may have landed, so the listing is stale
       // either way.
-      await refresh();
+      await refresh()
     }
   }
 
   async function mutate(fn: () => Promise<unknown>) {
     try {
-      await fn();
-      await refresh();
+      await fn()
+      await refresh()
     } catch (e) {
-      setError(String((e as Error).message ?? e));
+      setError(String((e as Error).message ?? e))
     }
   }
 
@@ -457,32 +457,32 @@ export function FileExplorer({
    * has since 1995 — this is not a place to be inventive.
    */
   function selectOn(e: React.MouseEvent, entry: SftpEntry, list: SftpEntry[]) {
-    const additive = e.ctrlKey || e.metaKey;
-    const ranged = e.shiftKey;
+    const additive = e.ctrlKey || e.metaKey
+    const ranged = e.shiftKey
 
     if (ranged && anchor) {
-      const from = list.findIndex((x) => x.name === anchor);
-      const to = list.findIndex((x) => x.name === entry.name);
+      const from = list.findIndex((x) => x.name === anchor)
+      const to = list.findIndex((x) => x.name === entry.name)
       if (from !== -1 && to !== -1) {
-        const [lo, hi] = from < to ? [from, to] : [to, from];
-        const range = list.slice(lo, hi + 1).map((x) => x.name);
+        const [lo, hi] = from < to ? [from, to] : [to, from]
+        const range = list.slice(lo, hi + 1).map((x) => x.name)
         // Extends rather than replaces when ctrl is also held, which is how you
         // pick two separate runs.
-        setSelected((prev) => new Set(additive ? [...prev, ...range] : range));
-        return;
+        setSelected((prev) => new Set(additive ? [...prev, ...range] : range))
+        return
       }
     }
 
-    setAnchor(entry.name);
+    setAnchor(entry.name)
     if (additive) {
       setSelected((prev) => {
-        const next = new Set(prev);
-        if (!next.delete(entry.name)) next.add(entry.name);
-        return next;
-      });
-      return;
+        const next = new Set(prev)
+        if (!next.delete(entry.name)) next.add(entry.name)
+        return next
+      })
+      return
     }
-    setSelected(new Set([entry.name]));
+    setSelected(new Set([entry.name]))
   }
 
   /**
@@ -492,8 +492,8 @@ export function FileExplorer({
    * at.
    */
   function dragPayload(entry: SftpEntry, list: SftpEntry[]): SftpEntry[] {
-    if (!selected.has(entry.name)) return [entry];
-    return list.filter((x) => selected.has(x.name));
+    if (!selected.has(entry.name)) return [entry]
+    return list.filter((x) => selected.has(x.name))
   }
 
   /**
@@ -505,38 +505,38 @@ export function FileExplorer({
    * join it onto the current directory, and a "/" in it would silently write
    * somewhere else.
    */
-  const trimmedAnswer = answer.trim();
+  const trimmedAnswer = answer.trim()
   const answerIsUsable =
     ask === null || ask.kind === "delete"
       ? false
       : ask.kind === "chmod"
         ? /^[0-7]{3,4}$/.test(trimmedAnswer)
-        : trimmedAnswer.length > 0 && !trimmedAnswer.includes("/");
+        : trimmedAnswer.length > 0 && !trimmedAnswer.includes("/")
 
   function submitAsk() {
-    if (!ask) return;
-    const current = ask;
-    setAsk(null);
+    if (!ask) return
+    const current = ask
+    setAsk(null)
 
     switch (current.kind) {
       case "rename":
-        void mutate(() => sftp.rename(join(cwd, current.entry.name), join(cwd, trimmedAnswer)));
-        return;
+        void mutate(() => sftp.rename(join(cwd, current.entry.name), join(cwd, trimmedAnswer)))
+        return
       case "chmod":
-        void mutate(() => sftp.chmod(join(cwd, current.entry.name), parseInt(trimmedAnswer, 8)));
-        return;
+        void mutate(() => sftp.chmod(join(cwd, current.entry.name), parseInt(trimmedAnswer, 8)))
+        return
       case "mkdir":
-        void mutate(() => sftp.mkdir(join(cwd, trimmedAnswer)));
-        return;
+        void mutate(() => sftp.mkdir(join(cwd, trimmedAnswer)))
+        return
       case "delete":
-        void mutate(() => sftp.remove(join(cwd, current.entry.name)));
-        return;
+        void mutate(() => sftp.remove(join(cwd, current.entry.name)))
+        return
     }
   }
 
-  const visible = showHidden ? entries : entries.filter((e) => !e.name.startsWith("."));
+  const visible = showHidden ? entries : entries.filter((e) => !e.name.startsWith("."))
   /** Transfers that are over, however they ended, and so can be cleared away. */
-  const finished = transfers.filter((t) => t.state !== "running");
+  const finished = transfers.filter((t) => t.state !== "running")
 
   /**
    * What you can do to one entry, as data rather than as markup.
@@ -549,99 +549,99 @@ export function FileExplorer({
    * time somebody added an action to one of them.
    */
   function actionsFor(entry: SftpEntry): EntryAction[] {
-    const path = join(cwd, entry.name);
-    const actions: EntryAction[] = [];
+    const path = join(cwd, entry.name)
+    const actions: EntryAction[] = []
 
     if (entry.isDir) {
       actions.push({
         label: "Open",
         icon: <FolderOpenIcon />,
         run: () => void refresh(path),
-      });
+      })
       if (onOpenTerminalAt) {
         actions.push({
           label: "Open terminal here",
           icon: <TerminalWindowIcon />,
           run: () => onOpenTerminalAt(path),
-        });
+        })
       }
     } else {
-      actions.push({ label: "Edit", icon: <PencilSimpleIcon />, run: () => onEdit(path) });
+      actions.push({ label: "Edit", icon: <PencilSimpleIcon />, run: () => onEdit(path) })
       actions.push({
         label: "Download",
         icon: <DownloadSimpleIcon />,
         run: () => void doDownload(entry),
-      });
+      })
     }
 
-    actions.push("separator");
+    actions.push("separator")
     actions.push({
       label: "Rename",
       icon: <TextAaIcon />,
       run: () => openAsk({ kind: "rename", entry }, entry.name),
-    });
+    })
     actions.push({
       label: "Copy path",
       icon: <CopyIcon />,
       run: () => {
         void navigator.clipboard.writeText(path).catch(() => {
-          setError("The clipboard was refused. Copy the path from the breadcrumb instead.");
-        });
+          setError("The clipboard was refused. Copy the path from the breadcrumb instead.")
+        })
       },
-    });
+    })
     actions.push({
       label: "Change permissions",
       icon: <LockKeyIcon />,
       run: () => openAsk({ kind: "chmod", entry }, "644"),
-    });
-    actions.push("separator");
+    })
+    actions.push("separator")
     actions.push({
       label: "Delete",
       icon: <TrashIcon />,
       destructive: true,
       run: () => openAsk({ kind: "delete", entry }),
-    });
+    })
 
-    return actions;
+    return actions
   }
 
   return (
     <div
       className="relative flex h-full flex-col"
       onDragEnter={(e) => {
-        dragDepth.current += 1;
-        const intent = intentFor(e.dataTransfer, paneId);
-        if (intent) setDropIntent(intent);
+        dragDepth.current += 1
+        const intent = intentFor(e.dataTransfer, paneId)
+        if (intent) setDropIntent(intent)
       }}
       onDragOver={(e) => {
         // Without preventDefault the browser refuses the drop and shows the
         // "no entry" cursor, whatever the dragover handler decided.
-        if (!dropIntent) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
+        if (!dropIntent) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "copy"
       }}
       onDragLeave={() => {
-        dragDepth.current -= 1;
+        dragDepth.current -= 1
         if (dragDepth.current <= 0) {
-          dragDepth.current = 0;
-          setDropIntent(null);
+          dragDepth.current = 0
+          setDropIntent(null)
         }
       }}
       onDrop={async (e) => {
-        const intent = dropIntent;
-        dragDepth.current = 0;
-        setDropIntent(null);
-        if (!intent) return;
-        e.preventDefault();
+        const intent = dropIntent
+        dragDepth.current = 0
+        setDropIntent(null)
+        if (!intent) return
+        e.preventDefault()
 
         if (intent.kind === "remote") {
           // Read now: the payload is cleared on dragend, which fires as soon as
           // this handler yields.
-          const drag = currentRemoteDrag();
-          if (drag) void doRemoteCopy(drag);
-          return;
+          const drag = currentRemoteDrag()
+          if (drag) void doRemoteCopy(drag)
+          return
         }
-        void doUpload(await itemsFromDataTransfer(e.dataTransfer));
+        void doUpload(await itemsFromDataTransfer(e.dataTransfer))
       }}
     >
       {/* The drop target is the whole pane, so the highlight has to be too.
@@ -684,8 +684,8 @@ export function FileExplorer({
             size="xs"
             className="text-muted-foreground shrink-0 font-normal"
             onClick={() => {
-              setSelected(new Set());
-              setAnchor(null);
+              setSelected(new Set())
+              setAnchor(null)
             }}
           >
             {selected.size} selected
@@ -737,8 +737,8 @@ export function FileExplorer({
       <ScrollArea className="min-h-0 flex-1">
         <div>
           {visible.map((entry) => {
-            const actions = actionsFor(entry);
-            const isSelected = selected.has(entry.name);
+            const actions = actionsFor(entry)
+            const isSelected = selected.has(entry.name)
             return (
               <ContextMenu key={entry.name}>
                 <ContextMenuTrigger asChild>
@@ -748,25 +748,25 @@ export function FileExplorer({
                     // the split would mean the gesture appears and disappears.
                     draggable
                     onDragStart={(e) => {
-                      const payload = dragPayload(entry, visible);
+                      const payload = dragPayload(entry, visible)
                       // Reflect the payload back into the selection, so what is
                       // highlighted is what is being carried.
-                      setSelected(new Set(payload.map((x) => x.name)));
+                      setSelected(new Set(payload.map((x) => x.name)))
                       beginRemoteDrag({
                         paneId: paneId ?? "",
                         sessionId: sessionId ?? "",
                         cwd,
                         entries: payload,
-                      });
-                      e.dataTransfer.effectAllowed = "copy";
+                      })
+                      e.dataTransfer.effectAllowed = "copy"
                       // The value is unused — the type's presence is the signal,
                       // since dragover cannot read data. Something has to be set
                       // or Firefox refuses to start the drag at all.
-                      e.dataTransfer.setData(REMOTE_DRAG_TYPE, String(payload.length));
+                      e.dataTransfer.setData(REMOTE_DRAG_TYPE, String(payload.length))
                       e.dataTransfer.setData(
                         "text/plain",
                         payload.map((x) => join(cwd, x.name)).join("\n"),
-                      );
+                      )
                     }}
                     onDragEnd={endRemoteDrag}
                     onClick={(e) => selectOn(e, entry, visible)}
@@ -847,7 +847,7 @@ export function FileExplorer({
                   )}
                 </ContextMenuContent>
               </ContextMenu>
-            );
+            )
           })}
           {visible.length === 0 && !busy && (
             <p className="text-muted-foreground px-2 py-3 text-[11px]">Empty directory.</p>
@@ -861,8 +861,8 @@ export function FileExplorer({
               aria-hidden
               className="min-h-16 flex-1"
               onClick={() => {
-                setSelected(new Set());
-                setAnchor(null);
+                setSelected(new Set())
+                setAnchor(null)
               }}
             />
           )}
@@ -919,11 +919,11 @@ export function FileExplorer({
                     aria-label={t.state === "running" ? `Cancel ${t.label}` : `Dismiss ${t.label}`}
                     onClick={() => {
                       if (t.state === "running") {
-                        t.controller.abort();
-                        patch(t.id, { state: "cancelled" });
-                        return;
+                        t.controller.abort()
+                        patch(t.id, { state: "cancelled" })
+                        return
                       }
-                      setTransfers((prev) => prev.filter((x) => x.id !== t.id));
+                      setTransfers((prev) => prev.filter((x) => x.id !== t.id))
                     }}
                   >
                     <XIcon />
@@ -961,8 +961,8 @@ export function FileExplorer({
           {ask && ask.kind !== "delete" && (
             <form
               onSubmit={(e) => {
-                e.preventDefault();
-                submitAsk();
+                e.preventDefault()
+                submitAsk()
               }}
             >
               <DialogHeader>
@@ -1020,8 +1020,8 @@ export function FileExplorer({
             <AlertDialogAction
               variant="destructive"
               onClick={(e) => {
-                e.preventDefault();
-                submitAsk();
+                e.preventDefault()
+                submitAsk()
               }}
             >
               Delete
@@ -1030,7 +1030,7 @@ export function FileExplorer({
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }
 
 /** A compact toolbar button with a tooltip, so the icons stay legible. */
@@ -1040,10 +1040,10 @@ function IconAction({
   onClick,
   active,
 }: {
-  children: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  active?: boolean;
+  children: React.ReactNode
+  label: string
+  onClick: () => void
+  active?: boolean
 }) {
   return (
     <Tooltip>
@@ -1060,27 +1060,27 @@ function IconAction({
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
-  );
+  )
 }
 
 function join(dir: string, name: string): string {
   if (name === "..") {
-    const trimmed = dir.replace(/\/+$/, "");
-    const i = trimmed.lastIndexOf("/");
-    if (i <= 0) return i === 0 ? "/" : ".";
-    return trimmed.slice(0, i);
+    const trimmed = dir.replace(/\/+$/, "")
+    const i = trimmed.lastIndexOf("/")
+    if (i <= 0) return i === 0 ? "/" : "."
+    return trimmed.slice(0, i)
   }
-  return dir === "/" ? `/${name}` : `${dir}/${name}`;
+  return dir === "/" ? `/${name}` : `${dir}/${name}`
 }
 
 function fmtSize(n: number): string {
-  const u = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
+  const u = ["B", "KB", "MB", "GB", "TB"]
+  let i = 0
   while (n >= 1024 && i < u.length - 1) {
-    n /= 1024;
-    i++;
+    n /= 1024
+    i++
   }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
+  return `${n.toFixed(i === 0 ? 0 : 1)} ${u[i]}`
 }
 
-export { chooseStrategy };
+export { chooseStrategy }

@@ -1,4 +1,4 @@
-"use server";
+"use server"
 
 /**
  * One question the Security tab cannot answer for itself.
@@ -15,16 +15,16 @@
  * settings surface rather than about signing in.
  */
 
-import { missingTwoFactorStorage, totpStorageReady } from "@/lib/auth";
+import { missingTwoFactorStorage, totpStorageReady } from "@/lib/auth"
 
 export interface TotpAvailability {
   /** Whether the enrolment endpoints can complete against this schema. */
-  ready: boolean;
+  ready: boolean
   /**
    * The columns that are missing, when it is not. Names rather than prose: the
    * only person who can act on this is writing a migration.
    */
-  missing: string[];
+  missing: string[]
 }
 
 /**
@@ -35,5 +35,5 @@ export interface TotpAvailability {
  * process, which is what makes it safe to render a decision from.
  */
 export async function totpAvailability(): Promise<TotpAvailability> {
-  return { ready: totpStorageReady(), missing: [...missingTwoFactorStorage()] };
+  return { ready: totpStorageReady(), missing: [...missingTwoFactorStorage()] }
 }

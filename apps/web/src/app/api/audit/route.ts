@@ -1,8 +1,8 @@
-import { and, desc, eq, gte, lt } from "drizzle-orm";
-import { headers } from "next/headers";
+import { and, desc, eq, gte, lt } from "drizzle-orm"
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { clientAddress } from "@/lib/audit/address";
+import { auth } from "@/lib/auth"
+import { clientAddress } from "@/lib/audit/address"
 import {
   AUDIT_EVENTS,
   CLIENT_REPORTABLE,
@@ -10,10 +10,10 @@ import {
   isAuditEventType,
   validateMetadata,
   type AuditEventType,
-} from "@/lib/audit/events";
-import { auditRetentionCutoff, auditRetentionDays } from "@/lib/audit/retention";
-import { tierFor } from "@/lib/billing/subscription";
-import { db, schema } from "@/lib/db";
+} from "@/lib/audit/events"
+import { auditRetentionCutoff, auditRetentionDays } from "@/lib/audit/retention"
+import { tierFor } from "@/lib/billing/subscription"
+import { db, schema } from "@/lib/db"
 
 /**
  * Audit ingest and query.
@@ -24,8 +24,8 @@ import { db, schema } from "@/lib/db";
  * send them, and the log should say so rather than imply completeness.
  */
 
-const MAX_PAGE = 200;
-const DEFAULT_PAGE = 50;
+const MAX_PAGE = 200
+const DEFAULT_PAGE = 50
 
 /**
  * A page size, clamped at both ends.
@@ -37,14 +37,14 @@ const DEFAULT_PAGE = 50;
  * refusing the request — the same rule /api/recordings uses.
  */
 function pageSize(raw: string | null): number {
-  const n = Math.trunc(Number(raw));
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE;
-  return Math.min(n, MAX_PAGE);
+  const n = Math.trunc(Number(raw))
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE
+  return Math.min(n, MAX_PAGE)
 }
 
 async function requireUser() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session ?? null;
+  const session = await auth.api.getSession({ headers: await headers() })
+  return session ?? null
 }
 
 /**
@@ -53,17 +53,17 @@ async function requireUser() {
  * record, which is worse on a page whose whole job is to be believed.
  */
 async function clientIp(): Promise<string | null> {
-  return clientAddress(await headers());
+  return clientAddress(await headers())
 }
 
 export async function GET(request: Request) {
-  const session = await requireUser();
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await requireUser()
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const url = new URL(request.url);
-  const limit = pageSize(url.searchParams.get("limit"));
-  const before = url.searchParams.get("before");
-  const type = url.searchParams.get("type");
+  const url = new URL(request.url)
+  const limit = pageSize(url.searchParams.get("limit"))
+  const before = url.searchParams.get("before")
+  const type = url.searchParams.get("type")
 
   /**
    * The retention window is enforced here as well as in the pruner.
@@ -84,21 +84,21 @@ export async function GET(request: Request) {
    * see the note at the top of scripts/prune-audit.mjs. Over-keeping means a row
    * on disk this query refuses to return, which is the survivable direction.
    */
-  const tier = await tierFor(session.user.id);
-  const cutoff = auditRetentionCutoff(tier);
+  const tier = await tierFor(session.user.id)
+  const cutoff = auditRetentionCutoff(tier)
 
   const conditions = [
     eq(schema.auditEvent.userId, session.user.id),
     gte(schema.auditEvent.createdAt, cutoff),
-  ];
+  ]
   if (before) {
-    const cursor = new Date(before);
+    const cursor = new Date(before)
     if (!Number.isNaN(cursor.valueOf())) {
-      conditions.push(lt(schema.auditEvent.createdAt, cursor));
+      conditions.push(lt(schema.auditEvent.createdAt, cursor))
     }
   }
   if (type && isAuditEventType(type)) {
-    conditions.push(eq(schema.auditEvent.eventType, type));
+    conditions.push(eq(schema.auditEvent.eventType, type))
   }
 
   /**
@@ -118,7 +118,7 @@ export async function GET(request: Request) {
     .from(schema.auditEvent)
     .where(and(...conditions))
     .orderBy(desc(schema.auditEvent.createdAt))
-    .limit(limit);
+    .limit(limit)
 
   return Response.json({
     events: rows,
@@ -143,34 +143,34 @@ export async function GET(request: Request) {
       days: auditRetentionDays(tier),
       since: cutoff.toISOString(),
     },
-  });
+  })
 }
 
 export async function POST(request: Request) {
-  const session = await requireUser();
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await requireUser()
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown>
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { eventType, targetRef, metadata, deviceId } = body;
+  const { eventType, targetRef, metadata, deviceId } = body
 
   if (!isAuditEventType(eventType)) {
-    return Response.json({ error: "unknown event type" }, { status: 400 });
+    return Response.json({ error: "unknown event type" }, { status: 400 })
   }
   // A browser may only report events it is the natural source of. Letting it
   // post connection.opened would let a compromised tab fabricate relay-grade
   // evidence, which is precisely what the source column exists to prevent.
   if (!CLIENT_REPORTABLE.includes(eventType as AuditEventType)) {
-    return Response.json({ error: `${eventType} is not client-reportable` }, { status: 403 });
+    return Response.json({ error: `${eventType} is not client-reportable` }, { status: 403 })
   }
 
-  const meta = validateMetadata(eventType, metadata);
-  if (!meta.ok) return Response.json({ error: meta.error }, { status: 400 });
+  const meta = validateMetadata(eventType, metadata)
+  if (!meta.ok) return Response.json({ error: meta.error }, { status: 400 })
 
   if (targetRef !== undefined && targetRef !== null) {
     // Opaque by contract; enforce the shape so a hostname cannot be smuggled in.
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "targetRef must be a blinded reference, not a hostname" },
         { status: 400 },
-      );
+      )
     }
   }
 
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
     targetRef: (targetRef as string) ?? null,
     ipPrefix: ipPrefix(await clientIp()),
     metadata: meta.value,
-  });
+  })
 
-  return Response.json({ ok: true }, { status: 201 });
+  return Response.json({ ok: true }, { status: 201 })
 }

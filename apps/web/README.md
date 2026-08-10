@@ -44,11 +44,20 @@ Without `ssh.wasm` in `public/` the app loads but cannot connect to anything.
 
 ```bash
 bun run typecheck    # tsc
+bun run lint         # biome: formatting and lint in one pass
+bun run lint:fix     # and apply what it can fix
 bun test             # audit event shapes, vault merge, recovery codes, recording
                      # format and capture, the share construction, retention
                      # constants, tier resolution, what a failed query is allowed
                      # to log — pure logic only, no database
 ```
+
+Biome does both formatting and linting; there is no ESLint and no Prettier.
+`biome.jsonc` is JSONC rather than JSON so that each disabled rule says why —
+a rule switched off with no reason is indistinguishable from one switched off to
+make a build pass. Two exclusions worth knowing: `src/components/ui` is shadcn
+output, regenerated rather than edited, so linting it only produces changes the
+generator will overwrite; and `public/` holds static assets rather than source.
 
 The browser path — connecting, SFTP, pinning, vault sync — has no automated
 coverage. Start a target with `bun run sshd` from the repo root and check it by

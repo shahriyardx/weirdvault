@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server"
 
 /**
  * Security headers, chiefly the Content-Security-Policy.
@@ -13,19 +13,19 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 const RELAY_ORIGIN = (() => {
-  const url = process.env.NEXT_PUBLIC_RELAY_URL;
-  if (!url) return "";
+  const url = process.env.NEXT_PUBLIC_RELAY_URL
+  if (!url) return ""
   try {
     // connect-src needs an origin, not the full ws:// path.
-    return new URL(url).origin;
+    return new URL(url).origin
   } catch {
-    return "";
+    return ""
   }
-})();
+})()
 
 export function proxy(request: NextRequest) {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const isDev = process.env.NODE_ENV === "development";
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64")
+  const isDev = process.env.NODE_ENV === "development"
 
   const csp = [
     `default-src 'self'`,
@@ -58,31 +58,31 @@ export function proxy(request: NextRequest) {
     `form-action 'self'`,
     `frame-ancestors 'none'`,
     `upgrade-insecure-requests`,
-  ].join("; ");
+  ].join("; ")
 
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
-  requestHeaders.set("Content-Security-Policy", csp);
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("x-nonce", nonce)
+  requestHeaders.set("Content-Security-Policy", csp)
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
 
-  response.headers.set("Content-Security-Policy", csp);
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("Content-Security-Policy", csp)
+  response.headers.set("X-Content-Type-Options", "nosniff")
+  response.headers.set("Referrer-Policy", "no-referrer")
   // No plausible use for any of these, and each is a way to reach the user.
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(), interest-cohort=()",
-  );
-  response.headers.set("X-Frame-Options", "DENY");
+  )
+  response.headers.set("X-Frame-Options", "DENY")
   if (!isDev) {
     response.headers.set(
       "Strict-Transport-Security",
       "max-age=63072000; includeSubDomains; preload",
-    );
+    )
   }
 
-  return response;
+  return response
 }
 
 export const config = {
@@ -94,4 +94,4 @@ export const config = {
       missing: [{ type: "header", key: "next-router-prefetch" }],
     },
   ],
-};
+}

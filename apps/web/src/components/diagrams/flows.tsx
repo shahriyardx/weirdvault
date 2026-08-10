@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 /**
  * Audit blinding: the server groups your activity by host without learning
@@ -89,5 +89,5 @@ export function AuditBlindingDiagram({ className }: { className?: string }) {
         The key is derived from your password and stays on this device.
       </text>
     </svg>
-  );
+  )
 }

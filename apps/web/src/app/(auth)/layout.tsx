@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link"
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { Brand } from "@/components/shell/brand";
+import { Brand } from "@/components/shell/brand"
 
 /**
  * Auth runs outside the site shell.
@@ -66,5 +66,5 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div aria-hidden className="py-5" />
       </div>
     </div>
-  );
+  )
 }

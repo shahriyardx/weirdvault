@@ -1,7 +1,7 @@
-import { sql } from "drizzle-orm";
+import { sql } from "drizzle-orm"
 
-import { AUDIT_RETENTION_DAYS } from "@/lib/audit/retention";
-import { db } from "@/lib/db";
+import { AUDIT_RETENTION_DAYS } from "@/lib/audit/retention"
+import { db } from "@/lib/db"
 
 /**
  * Deleting audit events that have aged out of their retention window.
@@ -34,7 +34,7 @@ import { db } from "@/lib/db";
  * do not shorten the window it applies.
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /**
  * Rows per DELETE.
@@ -45,7 +45,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * user was doing at the time, which is the one outcome a cleanup job must not
  * cause.
  */
-const BATCH = 5000;
+const BATCH = 5000
 
 /**
  * Batches per run.
@@ -56,14 +56,14 @@ const BATCH = 5000;
  * and stopping short is safe: the next run picks up where this one left off,
  * and the report says it was truncated rather than implying it finished.
  */
-const MAX_BATCHES = 20;
+const MAX_BATCHES = 20
 
 export interface AuditPruneResult {
-  deleted: number;
+  deleted: number
   /** True when the batch ceiling was reached and rows are still expired. */
-  truncated: boolean;
+  truncated: boolean
   /** How many rows were outside the window when the run started. */
-  expired: number;
+  expired: number
 }
 
 /**
@@ -76,28 +76,28 @@ export interface AuditPruneResult {
 function cutoffCase(freeCutoff: Date, proCutoff: Date) {
   return sql`case when exists (
     select 1 from "subscription" s where s.user_id = a.user_id
-  ) then ${proCutoff}::timestamptz else ${freeCutoff}::timestamptz end`;
+  ) then ${proCutoff}::timestamptz else ${freeCutoff}::timestamptz end`
 }
 
 export async function pruneAuditEvents(dryRun: boolean): Promise<AuditPruneResult> {
-  const now = Date.now();
-  const freeCutoff = new Date(now - AUDIT_RETENTION_DAYS.free * DAY_MS);
-  const proCutoff = new Date(now - AUDIT_RETENTION_DAYS.pro * DAY_MS);
-  const cutoff = cutoffCase(freeCutoff, proCutoff);
+  const now = Date.now()
+  const freeCutoff = new Date(now - AUDIT_RETENTION_DAYS.free * DAY_MS)
+  const proCutoff = new Date(now - AUDIT_RETENTION_DAYS.pro * DAY_MS)
+  const cutoff = cutoffCase(freeCutoff, proCutoff)
 
   const counted = await db.execute<{ n: string }>(sql`
     select count(*)::bigint as n from "audit_event" a where a.created_at < ${cutoff}
-  `);
-  const expired = Number(counted.rows[0]?.n ?? 0);
+  `)
+  const expired = Number(counted.rows[0]?.n ?? 0)
 
-  if (dryRun || expired === 0) return { deleted: 0, truncated: false, expired };
+  if (dryRun || expired === 0) return { deleted: 0, truncated: false, expired }
 
   // One statement per batch, each its own implicit transaction. Deliberately
   // not one transaction across batches: that would hold every row lock until
   // the end and undo the point of batching. Stopping part way leaves fewer
   // expired rows than it found, which is a fine place to stop.
-  let deleted = 0;
-  let batches = 0;
+  let deleted = 0
+  let batches = 0
   for (; batches < MAX_BATCHES; batches += 1) {
     const result = await db.execute(sql`
       delete from "audit_event" where id in (
@@ -106,11 +106,11 @@ export async function pruneAuditEvents(dryRun: boolean): Promise<AuditPruneResul
          order by a.created_at
          limit ${BATCH}
       )
-    `);
-    const removed = result.rowCount ?? 0;
-    if (removed === 0) break;
-    deleted += removed;
+    `)
+    const removed = result.rowCount ?? 0
+    if (removed === 0) break
+    deleted += removed
   }
 
-  return { deleted, truncated: batches === MAX_BATCHES, expired };
+  return { deleted, truncated: batches === MAX_BATCHES, expired }
 }

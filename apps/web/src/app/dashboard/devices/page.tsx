@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Registered devices.
@@ -17,8 +17,8 @@
  * so what you see is the state the server actually holds, not an optimistic guess.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import {
   AppleLogoIcon,
   ArrowsClockwiseIcon,
@@ -33,11 +33,11 @@ import {
   SignOutIcon,
   WarningCircleIcon,
   WindowsLogoIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { PageHeader } from "@/components/shell/page-shell";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PageHeader } from "@/components/shell/page-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,9 +48,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardAction,
@@ -58,15 +58,15 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { getCurrentDeviceId } from "@/lib/device";
-import { listStoredKeys } from "@/lib/keys";
-import { cn } from "@/lib/utils";
+} from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { getCurrentDeviceId } from "@/lib/device"
+import { listStoredKeys } from "@/lib/keys"
+import { cn } from "@/lib/utils"
 
 /* ------------------------------------------------------------------- model */
 
-type Platform = "macos" | "windows" | "linux" | "ios" | "android" | "other";
+type Platform = "macos" | "windows" | "linux" | "ios" | "android" | "other"
 
 /**
  * One row of GET /api/devices, exactly as it arrives. Timestamps cross the wire
@@ -75,31 +75,31 @@ type Platform = "macos" | "windows" | "linux" | "ios" | "android" | "other";
  * a client that did not send one.
  */
 interface ApiDevice {
-  id: string;
-  label: string;
-  platform: string | null;
-  lastSeenAt: string | null;
-  lastSeenIpPrefix: string | null;
-  createdAt: string | null;
-  revokedAt: string | null;
+  id: string
+  label: string
+  platform: string | null
+  lastSeenAt: string | null
+  lastSeenIpPrefix: string | null
+  createdAt: string | null
+  revokedAt: string | null
 }
 
 interface DeviceRecord {
-  id: string;
+  id: string
   /** Defaulted to "<browser> on <os>" when the device enrolled. */
-  label: string;
-  platform: Platform;
+  label: string
+  platform: Platform
   /** Epoch ms, or null when the server sent something unparseable. */
-  createdAt: number | null;
-  lastSeenAt: number | null;
+  createdAt: number | null
+  lastSeenAt: number | null
   /**
    * The network the device was last seen on, already truncated server-side: /24
    * for IPv4, /48 for IPv6. Null when the request reached the app without a
    * forwarded address, which happens on a local or non-proxied deployment.
    */
-  network: string | null;
+  network: string | null
   /** Set once revoked. The row is tombstoned, never deleted. */
-  revokedAt: number | null;
+  revokedAt: number | null
 }
 
 const PLATFORMS: Record<Platform, { label: string; Icon: typeof AppleLogoIcon }> = {
@@ -109,7 +109,7 @@ const PLATFORMS: Record<Platform, { label: string; Icon: typeof AppleLogoIcon }>
   ios: { label: "iOS", Icon: AppleLogoIcon },
   android: { label: "Android", Icon: GlobeIcon },
   other: { label: "Unknown platform", Icon: MonitorIcon },
-};
+}
 
 /**
  * The four things this page can be showing. Errors are kept as a state rather
@@ -120,17 +120,17 @@ type LoadState =
   | { status: "loading" }
   | { status: "ready"; devices: DeviceRecord[]; readAt: number }
   | { status: "unauthorized" }
-  | { status: "error"; reason: string };
+  | { status: "error"; reason: string }
 
 function toPlatform(value: string | null): Platform {
-  return value !== null && value in PLATFORMS ? (value as Platform) : "other";
+  return value !== null && value in PLATFORMS ? (value as Platform) : "other"
 }
 
 /** ISO string to epoch ms. A NaN would silently poison the relative formatter. */
 function toTime(value: string | null): number | null {
-  if (!value) return null;
-  const t = Date.parse(value);
-  return Number.isNaN(t) ? null : t;
+  if (!value) return null
+  const t = Date.parse(value)
+  return Number.isNaN(t) ? null : t
 }
 
 function parseDevice(row: ApiDevice): DeviceRecord {
@@ -142,15 +142,15 @@ function parseDevice(row: ApiDevice): DeviceRecord {
     lastSeenAt: toTime(row.lastSeenAt),
     network: row.lastSeenIpPrefix,
     revokedAt: toTime(row.revokedAt),
-  };
+  }
 }
 
 /* -------------------------------------------------------------------- page */
 
 export default function DevicesPage() {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [refreshing, setRefreshing] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [state, setState] = useState<LoadState>({ status: "loading" })
+  const [refreshing, setRefreshing] = useState(false)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
 
   /**
    * Both of these are browser-local and can only be read after mount. They stay
@@ -158,81 +158,81 @@ export default function DevicesPage() {
    * when this browser has simply never enrolled — in which case no row is marked
    * as "this device" and no key count is shown, which is the honest outcome.
    */
-  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
-  const [localBoundKeys, setLocalBoundKeys] = useState<number | null>(null);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null)
+  const [localBoundKeys, setLocalBoundKeys] = useState<number | null>(null)
 
   const load = useCallback(async (): Promise<"ok" | "unauthorized" | "error"> => {
     try {
-      const res = await fetch("/api/devices", { cache: "no-store" });
+      const res = await fetch("/api/devices", { cache: "no-store" })
       if (res.status === 401) {
-        setState({ status: "unauthorized" });
-        return "unauthorized";
+        setState({ status: "unauthorized" })
+        return "unauthorized"
       }
       if (!res.ok) {
-        setState({ status: "error", reason: await failure(res) });
-        return "error";
+        setState({ status: "error", reason: await failure(res) })
+        return "error"
       }
-      const payload = (await res.json()) as { devices?: ApiDevice[] };
+      const payload = (await res.json()) as { devices?: ApiDevice[] }
       setState({
         status: "ready",
         devices: (payload.devices ?? []).map(parseDevice),
         // Captured once so every relative timestamp on the page agrees.
         readAt: Date.now(),
-      });
-      return "ok";
+      })
+      return "ok"
     } catch (e) {
-      setState({ status: "error", reason: message(e) });
-      return "error";
+      setState({ status: "error", reason: message(e) })
+      return "error"
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     void (async () => {
-      await load();
-    })();
-  }, [load]);
+      await load()
+    })()
+  }, [load])
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    let cancelled = false
+    ;(async () => {
       try {
         // getCurrentDeviceId only reads; it does not enrol this browser, so
         // opening this page never creates a device record as a side effect.
-        const [id, keys] = await Promise.all([getCurrentDeviceId(), listStoredKeys()]);
-        if (cancelled) return;
-        setCurrentDeviceId(id ?? null);
-        setLocalBoundKeys(keys.filter((k) => k.mode === "device-bound").length);
+        const [id, keys] = await Promise.all([getCurrentDeviceId(), listStoredKeys()])
+        if (cancelled) return
+        setCurrentDeviceId(id ?? null)
+        setLocalBoundKeys(keys.filter((k) => k.mode === "device-bound").length)
       } catch {
         if (!cancelled) {
-          setCurrentDeviceId(null);
-          setLocalBoundKeys(null);
+          setCurrentDeviceId(null)
+          setLocalBoundKeys(null)
         }
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   async function refresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
   }
 
   async function revoke(device: DeviceRecord) {
-    const isCurrent = device.id === currentDeviceId;
-    setRevokingId(device.id);
+    const isCurrent = device.id === currentDeviceId
+    setRevokingId(device.id)
     try {
       const res = await fetch(`/api/devices?id=${encodeURIComponent(device.id)}`, {
         method: "DELETE",
-      });
+      })
 
       if (res.status === 401) {
         // Nothing was revoked, and the list on screen is no longer trustworthy
         // either, so drop to the signed-out view rather than leaving stale rows.
-        setState({ status: "unauthorized" });
-        throw new Error("The session has expired, so nothing was revoked. Sign in and try again.");
+        setState({ status: "unauthorized" })
+        throw new Error("The session has expired, so nothing was revoked. Sign in and try again.")
       }
       if (res.status === 404) {
         // The route answers 404 for "no such device, or already revoked". Either
@@ -240,16 +240,16 @@ export default function DevicesPage() {
         toast.error("Nothing was revoked", {
           description:
             "The server has no active device with that id — it may have been revoked already. Reloading the list.",
-        });
-        await load();
-        return;
+        })
+        await load()
+        return
       }
-      if (!res.ok) throw new Error(await failure(res));
+      if (!res.ok) throw new Error(await failure(res))
 
       // Re-read rather than patch local state: the server tombstones, so the row
       // must come back marked revoked instead of disappearing. Refetching is also
       // how we find out what revoking *this* browser did to this session.
-      const after = await load();
+      const after = await load()
 
       if (isCurrent) {
         toast.success(`Revoked ${device.label}`, {
@@ -259,34 +259,34 @@ export default function DevicesPage() {
               : after === "ok"
                 ? "The id is tombstoned, so this browser cannot re-register under it. The session row is deleted, but this reload was answered from the cached session cookie, so it stays usable for a few more minutes — sign out to end it now."
                 : "The id is tombstoned, so this browser cannot re-register under it. The list could not be re-read, so whether this session survived is unknown — sign out to be sure.",
-        });
+        })
       } else {
         toast.success(`Revoked ${device.label}`, {
           description: "The id is tombstoned, so that browser cannot register under it again.",
-        });
+        })
       }
     } catch (e) {
-      toast.error("Revoke failed", { description: message(e) });
+      toast.error("Revoke failed", { description: message(e) })
     } finally {
-      setRevokingId(null);
+      setRevokingId(null)
     }
   }
 
-  const devices = state.status === "ready" ? state.devices : null;
+  const devices = state.status === "ready" ? state.devices : null
 
   const rows = useMemo(() => {
-    if (!devices) return [];
+    if (!devices) return []
     // The API sorts by last seen. Revoked records are kept for reference rather
     // than for action, so they sink below the live ones; sort is stable, so the
     // server's ordering survives within each group.
-    return [...devices].sort((a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null));
-  }, [devices]);
+    return [...devices].sort((a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null))
+  }, [devices])
 
   const stats = useMemo(() => {
-    if (!devices) return null;
-    const active = devices.filter((d) => d.revokedAt === null).length;
-    return { total: devices.length, active, revoked: devices.length - active };
-  }, [devices]);
+    if (!devices) return null
+    const active = devices.filter((d) => d.revokedAt === null).length
+    return { total: devices.length, active, revoked: devices.length - active }
+  }, [devices])
 
   return (
     <div className="min-w-0">
@@ -404,7 +404,7 @@ export default function DevicesPage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
 
 /* --------------------------------------------------------------------- row */
@@ -417,17 +417,17 @@ function DeviceRow({
   busy,
   onRevoke,
 }: {
-  device: DeviceRecord;
-  now: number;
-  isCurrent: boolean;
+  device: DeviceRecord
+  now: number
+  isCurrent: boolean
   /** Device-bound keys in *this* browser; only meaningful on the current row. */
-  localBoundKeys: number | null;
-  busy: boolean;
-  onRevoke: () => void;
+  localBoundKeys: number | null
+  busy: boolean
+  onRevoke: () => void
 }) {
-  const { label, Icon } = PLATFORMS[device.platform];
-  const revoked = device.revokedAt !== null;
-  const boundKeys = isCurrent ? localBoundKeys : null;
+  const { label, Icon } = PLATFORMS[device.platform]
+  const revoked = device.revokedAt !== null
+  const boundKeys = isCurrent ? localBoundKeys : null
 
   return (
     <li
@@ -517,7 +517,7 @@ function DeviceRow({
         )}
       </div>
     </li>
-  );
+  )
 }
 
 function Field({
@@ -526,10 +526,10 @@ function Field({
   mono,
   title,
 }: {
-  term: string;
-  value: string;
-  mono?: boolean;
-  title?: string;
+  term: string
+  value: string
+  mono?: boolean
+  title?: string
 }) {
   return (
     <div className="min-w-0">
@@ -540,7 +540,7 @@ function Field({
         {value}
       </dd>
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ revoke */
@@ -552,11 +552,11 @@ function RevokeDialog({
   busy,
   onConfirm,
 }: {
-  device: DeviceRecord;
-  isCurrent: boolean;
-  localBoundKeys: number | null;
-  busy: boolean;
-  onConfirm: () => void;
+  device: DeviceRecord
+  isCurrent: boolean
+  localBoundKeys: number | null
+  busy: boolean
+  onConfirm: () => void
 }) {
   return (
     <AlertDialog>
@@ -626,7 +626,7 @@ function RevokeDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ states */
@@ -656,7 +656,7 @@ function LoadingState() {
         </ul>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -683,7 +683,7 @@ function UnauthorizedState() {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function ErrorState({
@@ -691,9 +691,9 @@ function ErrorState({
   onRetry,
   busy,
 }: {
-  reason: string;
-  onRetry: () => void;
-  busy: boolean;
+  reason: string
+  onRetry: () => void
+  busy: boolean
 }) {
   return (
     <Alert variant="destructive" className="mt-6">
@@ -710,7 +710,7 @@ function ErrorState({
         </Button>
       </AlertDescription>
     </Alert>
-  );
+  )
 }
 
 function EmptyState() {
@@ -733,7 +733,7 @@ function EmptyState() {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* -------------------------------------------------------------- formatting */
@@ -745,28 +745,28 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 24 * 60 * 60 * 1000],
   ["hour", 60 * 60 * 1000],
   ["minute", 60 * 1000],
-];
+]
 
-const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 /** Relative to the snapshot's read time, so every row on the page agrees. */
 function relative(at: number, now: number): string {
-  const delta = at - now;
-  const abs = Math.abs(delta);
-  if (abs < 60_000) return "just now";
+  const delta = at - now
+  const abs = Math.abs(delta)
+  if (abs < 60_000) return "just now"
   for (const [unit, ms] of UNITS) {
-    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit);
+    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit)
   }
-  return "just now";
+  return "just now"
 }
 
 /** An unparseable timestamp says so rather than rendering as 1970 or NaN. */
 function stamp(at: number | null, now: number): string {
-  return at === null ? "unknown" : relative(at, now);
+  return at === null ? "unknown" : relative(at, now)
 }
 
 function absolute(at: number | null): string | undefined {
-  return at === null ? undefined : new Date(at).toLocaleString();
+  return at === null ? undefined : new Date(at).toLocaleString()
 }
 
 /* ------------------------------------------------------------------ errors */
@@ -778,19 +778,19 @@ function absolute(at: number | null): string | undefined {
  */
 async function failure(res: Response): Promise<string> {
   try {
-    const body = (await res.json()) as { error?: unknown };
+    const body = (await res.json()) as { error?: unknown }
     if (typeof body.error === "string" && body.error) {
-      return `The server refused the request: ${body.error} (HTTP ${res.status}).`;
+      return `The server refused the request: ${body.error} (HTTP ${res.status}).`
     }
   } catch {
     // No JSON body — a proxy error page or an empty response. Fall through.
   }
-  return `The server returned ${res.status}.`;
+  return `The server returned ${res.status}.`
 }
 
 function message(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) {
-    return String((e as { message?: unknown }).message ?? "Unknown error");
+    return String((e as { message?: unknown }).message ?? "Unknown error")
   }
-  return String(e ?? "Unknown error");
+  return String(e ?? "Unknown error")
 }

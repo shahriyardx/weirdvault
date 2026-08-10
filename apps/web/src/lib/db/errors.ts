@@ -24,20 +24,20 @@
  * pulling a connection pool behind it.
  */
 export function dbErrorSummary(e: unknown): string {
-  if (!(e instanceof Error)) return "unknown error";
-  const code = errorCode(e);
-  return code ? `${e.name} (${code})` : e.name;
+  if (!(e instanceof Error)) return "unknown error"
+  const code = errorCode(e)
+  return code ? `${e.name} (${code})` : e.name
 }
 
 /** The driver's error code, if it put one on the error or on its cause. */
 function errorCode(e: Error): string | null {
-  const direct = (e as { code?: unknown }).code;
-  if (typeof direct === "string" && direct !== "") return direct;
+  const direct = (e as { code?: unknown }).code
+  if (typeof direct === "string" && direct !== "") return direct
 
-  const cause = (e as { cause?: unknown }).cause;
+  const cause = (e as { cause?: unknown }).cause
   if (typeof cause === "object" && cause !== null) {
-    const nested = (cause as { code?: unknown }).code;
-    if (typeof nested === "string" && nested !== "") return nested;
+    const nested = (cause as { code?: unknown }).code
+    if (typeof nested === "string" && nested !== "") return nested
   }
-  return null;
+  return null
 }

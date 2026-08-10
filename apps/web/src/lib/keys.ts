@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * SSH key custody.
@@ -17,36 +17,36 @@
  * injected script, and a browser extension are all equally unable to read it.
  */
 
-import { idbDelete, idbGet, idbGetAll, idbPut } from "./idb";
-import { importKey as wasmImportKey } from "./ssh/wasm";
-import type { ImportedKey, SshKeyType } from "./ssh/types";
-import { recordDeletion } from "./vault/tombstones";
+import { idbDelete, idbGet, idbGetAll, idbPut } from "./idb"
+import { importKey as wasmImportKey } from "./ssh/wasm"
+import type { ImportedKey, SshKeyType } from "./ssh/types"
+import { recordDeletion } from "./vault/tombstones"
 
-export type KeyMode = "portable" | "device-bound";
+export type KeyMode = "portable" | "device-bound"
 
 export interface StoredKey {
-  id: string;
-  label: string;
-  mode: KeyMode;
+  id: string
+  label: string
+  mode: KeyMode
   /** Raw 32-byte Ed25519 public key. */
-  publicKeyRaw: ArrayBuffer;
+  publicKeyRaw: ArrayBuffer
   /** Present only for portable keys: PKCS#8 encrypted with the vault key. */
-  wrapped?: { iv: ArrayBuffer; ciphertext: ArrayBuffer };
+  wrapped?: { iv: ArrayBuffer; ciphertext: ArrayBuffer }
   /** Present only for device-bound keys: the CryptoKey handle itself. */
-  privateKey?: CryptoKey;
-  createdAt: number;
+  privateKey?: CryptoKey
+  createdAt: number
 }
 
 export interface SshKey {
-  id: string;
-  label: string;
-  mode: KeyMode;
-  publicKeyRaw: Uint8Array;
-  privateKey: CryptoKey;
-  createdAt: number;
+  id: string
+  label: string
+  mode: KeyMode
+  publicKeyRaw: Uint8Array
+  privateKey: CryptoKey
+  createdAt: number
 }
 
-const STORE = "keys";
+const STORE = "keys"
 
 /* ------------------------------------------------------------- pkcs8 --- */
 
@@ -60,20 +60,20 @@ const STORE = "keys";
  * to check when the question is "can anything read this key afterwards".
  */
 async function importPrivate(pkcs8: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey("pkcs8", pkcs8 as BufferSource, "Ed25519", false, ["sign"]);
+  return crypto.subtle.importKey("pkcs8", pkcs8 as BufferSource, "Ed25519", false, ["sign"])
 }
 
 async function wrapWithVault(
   pkcs8: Uint8Array,
   vaultKey: CryptoKey,
 ): Promise<{ iv: ArrayBuffer; ciphertext: ArrayBuffer }> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iv = crypto.getRandomValues(new Uint8Array(12))
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     vaultKey,
     pkcs8 as BufferSource,
-  );
-  return { iv: iv.buffer as ArrayBuffer, ciphertext };
+  )
+  return { iv: iv.buffer as ArrayBuffer, ciphertext }
 }
 
 /* ------------------------------------------------------------ generation */
@@ -87,17 +87,17 @@ export async function generateKey(
     throw new Error(
       "A portable key needs the vault unlocked so it can be wrapped. " +
         "Sign in first, or create a device-bound key.",
-    );
+    )
   }
 
   // Portable keys must be exportable for the instant it takes to wrap them.
-  const extractable = mode === "portable";
+  const extractable = mode === "portable"
   const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, extractable, [
     "sign",
     "verify",
-  ])) as CryptoKeyPair;
+  ])) as CryptoKeyPair
 
-  const publicKeyRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
+  const publicKeyRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey))
 
   const record: StoredKey = {
     id: crypto.randomUUID(),
@@ -105,24 +105,24 @@ export async function generateKey(
     mode,
     publicKeyRaw: publicKeyRaw.buffer as ArrayBuffer,
     createdAt: Date.now(),
-  };
+  }
 
-  let privateKey = pair.privateKey;
+  let privateKey = pair.privateKey
 
   if (mode === "portable") {
-    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
-    record.wrapped = await wrapWithVault(pkcs8, vaultKey!);
+    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey))
+    record.wrapped = await wrapWithVault(pkcs8, vaultKey!)
 
     // Re-import non-extractable and drop the exportable handle, so from here on
     // this key behaves exactly like a device-bound one.
-    privateKey = await importPrivate(pkcs8);
-    pkcs8.fill(0);
+    privateKey = await importPrivate(pkcs8)
+    pkcs8.fill(0)
   } else {
-    record.privateKey = pair.privateKey;
+    record.privateKey = pair.privateKey
   }
 
-  await idbPut(STORE, record.id, record);
-  return { ...record, publicKeyRaw, privateKey } as SshKey;
+  await idbPut(STORE, record.id, record)
+  return { ...record, publicKeyRaw, privateKey } as SshKey
 }
 
 /* ------------------------------------------------------------------ import */
@@ -165,7 +165,7 @@ export async function generateKey(
  * SyncedKey, an algorithm-aware makeSigner and authorizedKeysLine, and
  * connect.ts passing the key's real type.
  */
-export const CONNECTABLE_KEY_TYPES: readonly SshKeyType[] = ["ed25519"];
+export const CONNECTABLE_KEY_TYPES: readonly SshKeyType[] = ["ed25519"]
 
 /** Thrown when the key is encrypted, so the UI can ask for the passphrase. */
 export class KeyPassphraseError extends Error {
@@ -174,26 +174,26 @@ export class KeyPassphraseError extends Error {
       reason === "missing"
         ? "This key is encrypted. Enter its passphrase to continue."
         : "That passphrase does not open this key.",
-    );
-    this.name = "KeyPassphraseError";
+    )
+    this.name = "KeyPassphraseError"
   }
 }
 
 /** Everything else, carrying a message meant to be shown as-is. */
 export class KeyImportError extends Error {
   constructor(message: string) {
-    super(message);
-    this.name = "KeyImportError";
+    super(message)
+    this.name = "KeyImportError"
   }
 }
 
 /** What the review step shows before anything is stored. */
 export interface KeyPreview {
-  keyType: SshKeyType;
-  bits: number;
-  fingerprint: string;
+  keyType: SshKeyType
+  bits: number
+  fingerprint: string
   /** The key's own comment, when the core reports one. Usually it does not. */
-  comment?: string;
+  comment?: string
 }
 
 /**
@@ -204,25 +204,25 @@ export interface KeyPreview {
  */
 function precheck(text: string): void {
   if (!text) {
-    throw new KeyImportError("Nothing to import — paste a private key or choose a file.");
+    throw new KeyImportError("Nothing to import — paste a private key or choose a file.")
   }
   if (/^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-|sk-)\S*\s+AAAA/.test(text)) {
     throw new KeyImportError(
       "That is a public key — the one ending in .pub. Import the private half instead, " +
         "the file with the same name and no extension.",
-    );
+    )
   }
   if (text.startsWith("PuTTY-User-Key-File")) {
     throw new KeyImportError(
       "PuTTY .ppk files are not PEM. In PuTTYgen, load the key and use " +
         "Conversions → Export OpenSSH key, then import that file.",
-    );
+    )
   }
   if (!text.includes("-----BEGIN")) {
     throw new KeyImportError(
       "This does not look like a private key. An OpenSSH key file starts with " +
         "-----BEGIN OPENSSH PRIVATE KEY-----.",
-    );
+    )
   }
 }
 
@@ -235,14 +235,14 @@ function precheck(text: string): void {
  * failure.
  */
 function translate(error: unknown): Error {
-  const message = String((error as Error)?.message ?? error);
+  const message = String((error as Error)?.message ?? error)
 
-  if (/passphrase is required/i.test(message)) return new KeyPassphraseError("missing");
+  if (/passphrase is required/i.test(message)) return new KeyPassphraseError("missing")
   if (/wrong passphrase|password incorrect/i.test(message)) {
-    return new KeyPassphraseError("wrong");
+    return new KeyPassphraseError("wrong")
   }
   if (/not an encrypted key/i.test(message)) {
-    return new KeyImportError("This key is not encrypted — leave the passphrase blank.");
+    return new KeyImportError("This key is not encrypted — leave the passphrase blank.")
   }
   // The word boundary is doing real work: "*ecdsa.PrivateKey" contains
   // "dsa.PrivateKey" as a substring, and answering an ECDSA key with advice
@@ -250,21 +250,21 @@ function translate(error: unknown): Error {
   if (/\bdsa\.PrivateKey/.test(message)) {
     return new KeyImportError(
       "OpenSSH DSA keys cannot be used from a browser; generate an Ed25519 key instead.",
-    );
+    )
   }
   if (/unhandled key type/i.test(message)) {
     return new KeyImportError(
       "The SSH core does not handle this key type. Security-key backed keys " +
         "(sk-ssh-ed25519, sk-ecdsa-sha2-nistp256) sign on the hardware token itself, " +
         "which a web page cannot drive over the relay.",
-    );
+    )
   }
-  return new KeyImportError(message);
+  return new KeyImportError(message)
 }
 
 /** Why this parsed key still cannot be used here, or null if it can. */
 function rejectionFor(keyType: SshKeyType): string | null {
-  if (CONNECTABLE_KEY_TYPES.includes(keyType)) return null;
+  if (CONNECTABLE_KEY_TYPES.includes(keyType)) return null
 
   switch (keyType) {
     case "ecdsa-p256":
@@ -272,16 +272,16 @@ function rejectionFor(keyType: SshKeyType): string | null {
         "This is an ECDSA P-256 key. The SSH core can sign with one, but this build " +
         "presents every key to the handshake as Ed25519, so importing it would give " +
         "you a key that fails at authentication. Import or generate an Ed25519 key."
-      );
+      )
     case "rsa":
       return (
         "This is an RSA key. This build presents every key to the handshake as Ed25519, " +
         "and WebCrypto binds an RSA key to one hash at import time, so it could not " +
         "answer a server that asks for rsa-sha2-512 rather than rsa-sha2-256. Import " +
         "or generate an Ed25519 key."
-      );
+      )
     default:
-      return `This build cannot connect with a ${String(keyType)} key.`;
+      return `This build cannot connect with a ${String(keyType)} key.`
   }
 }
 
@@ -294,24 +294,24 @@ async function withParsedKey<T>(
   passphrase: string,
   consume: (key: ImportedKey) => Promise<T>,
 ): Promise<T> {
-  const text = pem.trim();
-  precheck(text);
+  const text = pem.trim()
+  precheck(text)
 
-  let parsed: ImportedKey;
+  let parsed: ImportedKey
   try {
     // OpenSSH keys must end in a newline; a paste out of a terminal often does
     // not. Adding one costs nothing and removes a baffling parse error.
-    parsed = await wasmImportKey(`${text}\n`, passphrase || undefined);
+    parsed = await wasmImportKey(`${text}\n`, passphrase || undefined)
   } catch (error) {
-    throw translate(error);
+    throw translate(error)
   }
 
   try {
-    const rejection = rejectionFor(parsed.keyType);
-    if (rejection) throw new KeyImportError(rejection);
-    return await consume(parsed);
+    const rejection = rejectionFor(parsed.keyType)
+    if (rejection) throw new KeyImportError(rejection)
+    return await consume(parsed)
   } finally {
-    parsed.pkcs8.fill(0);
+    parsed.pkcs8.fill(0)
   }
 }
 
@@ -331,7 +331,7 @@ export async function inspectImportedKey(pem: string, passphrase = ""): Promise<
     bits: parsed.bits,
     fingerprint: parsed.fingerprint,
     comment: commentFrom(parsed.authorizedKey),
-  }));
+  }))
 }
 
 /**
@@ -342,9 +342,9 @@ export async function inspectImportedKey(pem: string, passphrase = ""): Promise<
  * used the day the core starts emitting it, rather than being quietly dropped.
  */
 function commentFrom(authorizedKey: string): string | undefined {
-  const [, , ...rest] = authorizedKey.trim().split(/\s+/);
-  const comment = rest.join(" ").trim();
-  return comment || undefined;
+  const [, , ...rest] = authorizedKey.trim().split(/\s+/)
+  const comment = rest.join(" ").trim()
+  return comment || undefined
 }
 
 /**
@@ -357,23 +357,23 @@ function commentFrom(authorizedKey: string): string | undefined {
 export async function importKey(
   pem: string,
   opts: {
-    label?: string;
-    mode?: KeyMode;
-    passphrase?: string;
-    vaultKey?: CryptoKey;
+    label?: string
+    mode?: KeyMode
+    passphrase?: string
+    vaultKey?: CryptoKey
   } = {},
 ): Promise<SshKey> {
-  const { label = "imported", mode = "portable", passphrase = "", vaultKey } = opts;
+  const { label = "imported", mode = "portable", passphrase = "", vaultKey } = opts
 
   if (mode === "portable" && !vaultKey) {
     throw new KeyImportError(
       "A portable key needs the vault unlocked so it can be wrapped. " +
         "Sign in first, or import it as a device-bound key.",
-    );
+    )
   }
 
   return withParsedKey(pem, passphrase, async (parsed) => {
-    const publicKeyRaw = Uint8Array.from(parsed.publicKeyRaw);
+    const publicKeyRaw = Uint8Array.from(parsed.publicKeyRaw)
 
     const record: StoredKey = {
       id: crypto.randomUUID(),
@@ -381,19 +381,19 @@ export async function importKey(
       mode,
       publicKeyRaw: publicKeyRaw.buffer as ArrayBuffer,
       createdAt: Date.now(),
-    };
+    }
 
     if (mode === "portable") {
-      record.wrapped = await wrapWithVault(parsed.pkcs8, vaultKey!);
+      record.wrapped = await wrapWithVault(parsed.pkcs8, vaultKey!)
     }
     // Non-extractable in both modes and from the first moment we hold it: the
     // handle below is the only copy of this key that outlives the function.
-    const privateKey = await importPrivate(parsed.pkcs8);
-    if (mode === "device-bound") record.privateKey = privateKey;
+    const privateKey = await importPrivate(parsed.pkcs8)
+    if (mode === "device-bound") record.privateKey = privateKey
 
-    await idbPut(STORE, record.id, record);
-    return { ...record, publicKeyRaw, privateKey } as SshKey;
-  });
+    await idbPut(STORE, record.id, record)
+    return { ...record, publicKeyRaw, privateKey } as SshKey
+  })
 }
 
 /* --------------------------------------------------------------- loading */
@@ -404,11 +404,11 @@ export async function importKey(
  * to show rather than pretending they're missing.
  */
 export async function listKeys(vaultKey?: CryptoKey): Promise<SshKey[]> {
-  const stored = await idbGetAll<StoredKey>(STORE);
-  const out: SshKey[] = [];
+  const stored = await idbGetAll<StoredKey>(STORE)
+  const out: SshKey[] = []
 
   for (const rec of stored.sort((a, b) => a.createdAt - b.createdAt)) {
-    const privateKey = await hydrate(rec, vaultKey);
+    const privateKey = await hydrate(rec, vaultKey)
     if (privateKey) {
       out.push({
         id: rec.id,
@@ -417,15 +417,15 @@ export async function listKeys(vaultKey?: CryptoKey): Promise<SshKey[]> {
         publicKeyRaw: new Uint8Array(rec.publicKeyRaw),
         privateKey,
         createdAt: rec.createdAt,
-      });
+      })
     }
   }
-  return out;
+  return out
 }
 
 async function hydrate(rec: StoredKey, vaultKey?: CryptoKey): Promise<CryptoKey | null> {
-  if (rec.mode === "device-bound") return rec.privateKey ?? null;
-  if (!rec.wrapped || !vaultKey) return null;
+  if (rec.mode === "device-bound") return rec.privateKey ?? null
+  if (!rec.wrapped || !vaultKey) return null
 
   try {
     const pkcs8 = new Uint8Array(
@@ -434,20 +434,20 @@ async function hydrate(rec: StoredKey, vaultKey?: CryptoKey): Promise<CryptoKey 
         vaultKey,
         rec.wrapped.ciphertext,
       ),
-    );
-    const key = await importPrivate(pkcs8);
-    pkcs8.fill(0);
-    return key;
+    )
+    const key = await importPrivate(pkcs8)
+    pkcs8.fill(0)
+    return key
   } catch {
     // Wrong vault key, or tampered ciphertext. Either way it is not usable.
-    return null;
+    return null
   }
 }
 
 /** Stored keys including ones that couldn't be unwrapped, for UI listing. */
 export async function listStoredKeys(): Promise<StoredKey[]> {
-  const all = await idbGetAll<StoredKey>(STORE);
-  return all.sort((a, b) => a.createdAt - b.createdAt);
+  const all = await idbGetAll<StoredKey>(STORE)
+  return all.sort((a, b) => a.createdAt - b.createdAt)
 }
 
 /**
@@ -466,26 +466,26 @@ export async function listStoredKeys(): Promise<StoredKey[]> {
  * a key (SyncResult.keysWithheld) precisely so this stays a one-device problem.
  */
 export async function listUnwrappableKeyIds(vaultKey: CryptoKey): Promise<Set<string>> {
-  const out = new Set<string>();
+  const out = new Set<string>()
   for (const rec of await idbGetAll<StoredKey>(STORE)) {
-    if (rec.mode !== "portable" || !rec.wrapped) continue;
-    if (!(await hydrate(rec, vaultKey))) out.add(rec.id);
+    if (rec.mode !== "portable" || !rec.wrapped) continue
+    if (!(await hydrate(rec, vaultKey))) out.add(rec.id)
   }
-  return out;
+  return out
 }
 
 export async function deleteKey(id: string): Promise<void> {
-  await idbDelete(STORE, id);
-  await recordDeletion(id);
+  await idbDelete(STORE, id)
+  await recordDeletion(id)
 }
 
 /** Used by vault sync to land a portable key pulled from another device. */
 export async function putStoredKey(rec: StoredKey): Promise<void> {
-  await idbPut(STORE, rec.id, rec);
+  await idbPut(STORE, rec.id, rec)
 }
 
 export async function getStoredKey(id: string): Promise<StoredKey | undefined> {
-  return idbGet<StoredKey>(STORE, id);
+  return idbGet<StoredKey>(STORE, id)
 }
 
 /* ---------------------------------------------------------------- format */
@@ -495,46 +495,46 @@ export async function getStoredKey(id: string): Promise<StoredKey | undefined> {
  * string "ssh-ed25519" ‖ string <32-byte key>.
  */
 export function authorizedKeysLine(key: { publicKeyRaw: Uint8Array; label: string }): string {
-  const type = new TextEncoder().encode("ssh-ed25519");
-  const raw = key.publicKeyRaw;
+  const type = new TextEncoder().encode("ssh-ed25519")
+  const raw = key.publicKeyRaw
 
-  const blob = new Uint8Array(4 + type.length + 4 + raw.length);
-  const view = new DataView(blob.buffer);
-  let off = 0;
-  view.setUint32(off, type.length);
-  off += 4;
-  blob.set(type, off);
-  off += type.length;
-  view.setUint32(off, raw.length);
-  off += 4;
-  blob.set(raw, off);
+  const blob = new Uint8Array(4 + type.length + 4 + raw.length)
+  const view = new DataView(blob.buffer)
+  let off = 0
+  view.setUint32(off, type.length)
+  off += 4
+  blob.set(type, off)
+  off += type.length
+  view.setUint32(off, raw.length)
+  off += 4
+  blob.set(raw, off)
 
-  let s = "";
-  for (const b of blob) s += String.fromCharCode(b);
+  let s = ""
+  for (const b of blob) s += String.fromCharCode(b)
   // Comments are interpolated into a remote shell command by installKey, and
   // the Go side rejects anything outside [A-Za-z0-9@._-].
-  const comment = key.label.replace(/[^A-Za-z0-9@._-]/g, "-") || "webxterm";
-  return `ssh-ed25519 ${btoa(s)} ${comment}`;
+  const comment = key.label.replace(/[^A-Za-z0-9@._-]/g, "-") || "webxterm"
+  return `ssh-ed25519 ${btoa(s)} ${comment}`
 }
 
 /** The signing callback handed to WASM: challenge in, signature out. */
 export function makeSigner(key: SshKey) {
   return async (data: Uint8Array): Promise<Uint8Array> =>
-    new Uint8Array(await crypto.subtle.sign("Ed25519", key.privateKey, data as BufferSource));
+    new Uint8Array(await crypto.subtle.sign("Ed25519", key.privateKey, data as BufferSource))
 }
 
 /** Verifies the security claim rather than asserting it. */
 export async function proveNonExtractable(key: SshKey): Promise<{ ok: boolean; detail: string }> {
   if (key.privateKey.extractable) {
-    return { ok: false, detail: "privateKey.extractable is true" };
+    return { ok: false, detail: "privateKey.extractable is true" }
   }
   for (const fmt of ["pkcs8", "jwk"] as const) {
     try {
-      await crypto.subtle.exportKey(fmt, key.privateKey);
-      return { ok: false, detail: `exportKey("${fmt}") unexpectedly succeeded` };
+      await crypto.subtle.exportKey(fmt, key.privateKey)
+      return { ok: false, detail: `exportKey("${fmt}") unexpectedly succeeded` }
     } catch {
       /* expected */
     }
   }
-  return { ok: true, detail: "pkcs8/jwk export refused" };
+  return { ok: true, detail: "pkcs8/jwk export refused" }
 }

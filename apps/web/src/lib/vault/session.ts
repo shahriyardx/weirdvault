@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react"
 
-import type { DerivedSecrets } from "./kdf";
+import type { DerivedSecrets } from "./kdf"
 
 /**
  * In-memory custody of the derived key material.
@@ -20,12 +20,12 @@ import type { DerivedSecrets } from "./kdf";
  */
 
 interface VaultSession {
-  vaultKey: CryptoKey;
-  auditKey: CryptoKey | null;
+  vaultKey: CryptoKey
+  auditKey: CryptoKey | null
 }
 
-let current: VaultSession | null = null;
-const listeners = new Set<() => void>();
+let current: VaultSession | null = null
+const listeners = new Set<() => void>()
 
 /**
  * Whether the unlock prompt is showing.
@@ -34,34 +34,34 @@ const listeners = new Set<() => void>();
  * can ask for it rather than failing with "no usable key", which tells the user
  * nothing about what to do next.
  */
-let unlockOpen = false;
+let unlockOpen = false
 
 function emit() {
-  for (const fn of listeners) fn();
+  for (const fn of listeners) fn()
 }
 
 export function setVaultKey(vaultKey: CryptoKey, auditKey: CryptoKey | null = null) {
-  current = { vaultKey, auditKey };
-  unlockOpen = false;
-  emit();
+  current = { vaultKey, auditKey }
+  unlockOpen = false
+  emit()
 }
 
 export function getVaultKey(): CryptoKey | null {
-  return current?.vaultKey ?? null;
+  return current?.vaultKey ?? null
 }
 
 export function getAuditKey(): CryptoKey | null {
-  return current?.auditKey ?? null;
+  return current?.auditKey ?? null
 }
 
 export function isUnlocked(): boolean {
-  return current !== null;
+  return current !== null
 }
 
 export function lock() {
-  current = null;
-  recovered = null;
-  emit();
+  current = null
+  recovered = null
+  emit()
 }
 
 /* --------------------------------------------------- recovered credentials */
@@ -89,21 +89,21 @@ export function lock() {
  * loses it, and the settings page then says the re-key cannot be done from this
  * tab rather than offering a form that would fail.
  */
-let recovered: DerivedSecrets | null = null;
+let recovered: DerivedSecrets | null = null
 
 export function setRecoveredSecrets(secrets: DerivedSecrets) {
-  recovered = secrets;
-  emit();
+  recovered = secrets
+  emit()
 }
 
 export function getRecoveredSecrets(): DerivedSecrets | null {
-  return recovered;
+  return recovered
 }
 
 export function clearRecoveredSecrets() {
-  if (!recovered) return;
-  recovered = null;
-  emit();
+  if (!recovered) return
+  recovered = null
+  emit()
 }
 
 /** Reactive: can this tab still re-key without the old password? */
@@ -112,25 +112,25 @@ export function useRecoveredSecrets(): boolean {
     subscribe,
     () => recovered !== null,
     () => false,
-  );
+  )
 }
 
 export function requestUnlock() {
-  if (current) return; // already unlocked; nothing to ask for
-  unlockOpen = true;
-  emit();
+  if (current) return // already unlocked; nothing to ask for
+  unlockOpen = true
+  emit()
 }
 
 export function dismissUnlock() {
-  unlockOpen = false;
-  emit();
+  unlockOpen = false
+  emit()
 }
 
 function subscribe(fn: () => void) {
-  listeners.add(fn);
+  listeners.add(fn)
   return () => {
-    listeners.delete(fn);
-  };
+    listeners.delete(fn)
+  }
 }
 
 /**
@@ -143,7 +143,7 @@ export function useVaultUnlocked(): boolean {
     () => current !== null,
     // Server render: always locked, since the key only exists in the browser.
     () => false,
-  );
+  )
 }
 
 /** Reactive: is the unlock prompt currently requested? */
@@ -152,5 +152,5 @@ export function useUnlockRequested(): boolean {
     subscribe,
     () => unlockOpen,
     () => false,
-  );
+  )
 }

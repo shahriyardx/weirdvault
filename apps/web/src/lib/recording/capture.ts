@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Capturing a session.
@@ -75,16 +75,16 @@
  * is a guard on programmatic callers rather than the path a person takes.
  */
 
-import { useSyncExternalStore } from "react";
-import { toast } from "sonner";
+import { useSyncExternalStore } from "react"
+import { toast } from "sonner"
 
-import { canRecordNow } from "@/lib/billing/client";
-import type { SessionTapEvent } from "@/lib/ssh/session-provider";
-import { formatBytes } from "@/lib/usage";
-import { getVaultKey } from "@/lib/vault/session";
-import type { Cast, CastEvent } from "./format";
-import { MAX_CAPTURE_BYTES } from "./limits";
-import { RecordingRequestError, saveRecording, type RecordingSummary } from "./store";
+import { canRecordNow } from "@/lib/billing/client"
+import type { SessionTapEvent } from "@/lib/ssh/session-provider"
+import { formatBytes } from "@/lib/usage"
+import { getVaultKey } from "@/lib/vault/session"
+import type { Cast, CastEvent } from "./format"
+import { MAX_CAPTURE_BYTES } from "./limits"
+import { RecordingRequestError, saveRecording, type RecordingSummary } from "./store"
 
 /* -------------------------------------------------------------- the buffer */
 
@@ -94,39 +94,39 @@ import { RecordingRequestError, saveRecording, type RecordingSummary } from "./s
  */
 export class CastBuffer {
   /** Milliseconds since the epoch, for "when was this recorded". */
-  readonly startedAt: number;
+  readonly startedAt: number
 
   /** The geometry the recording began at. The header carries exactly this. */
-  private readonly initialCols: number;
-  private readonly initialRows: number;
+  private readonly initialCols: number
+  private readonly initialRows: number
 
-  private readonly events: CastEvent[] = [];
-  private cols: number;
-  private rows: number;
-  private captured = 0;
-  private full = false;
-  private lastAt = 0;
+  private readonly events: CastEvent[] = []
+  private cols: number
+  private rows: number
+  private captured = 0
+  private full = false
+  private lastAt = 0
 
   constructor(cols: number, rows: number, startedAt: number = Date.now()) {
-    this.initialCols = cols;
-    this.initialRows = rows;
-    this.cols = cols;
-    this.rows = rows;
-    this.startedAt = startedAt;
+    this.initialCols = cols
+    this.initialRows = rows
+    this.cols = cols
+    this.rows = rows
+    this.startedAt = startedAt
   }
 
   /** Raw output bytes kept so far. Not the stored size, which is larger. */
   get bytes(): number {
-    return this.captured;
+    return this.captured
   }
 
   get eventCount(): number {
-    return this.events.length;
+    return this.events.length
   }
 
   /** True once the cap refused a chunk. Nothing is recorded after that. */
   get isFull(): boolean {
-    return this.full;
+    return this.full
   }
 
   /**
@@ -139,14 +139,14 @@ export class CastBuffer {
    * Losing a few hundred bytes at the very end is the cheaper failure.
    */
   output(at: number, bytes: Uint8Array): boolean {
-    if (this.full || bytes.length === 0) return false;
+    if (this.full || bytes.length === 0) return false
     if (this.captured + bytes.length > MAX_CAPTURE_BYTES) {
-      this.full = true;
-      return false;
+      this.full = true
+      return false
     }
-    this.captured += bytes.length;
-    this.events.push({ at: this.stamp(at), kind: "output", bytes });
-    return true;
+    this.captured += bytes.length
+    this.events.push({ at: this.stamp(at), kind: "output", bytes })
+    return true
   }
 
   /**
@@ -154,11 +154,11 @@ export class CastBuffer {
    * resize per frame and the geometry only matters when it changes.
    */
   resize(at: number, cols: number, rows: number): void {
-    if (this.full) return;
-    if (cols === this.cols && rows === this.rows) return;
-    this.cols = cols;
-    this.rows = rows;
-    this.events.push({ at: this.stamp(at), kind: "resize", cols, rows });
+    if (this.full) return
+    if (cols === this.cols && rows === this.rows) return
+    this.cols = cols
+    this.rows = rows
+    this.events.push({ at: this.stamp(at), kind: "resize", cols, rows })
   }
 
   /**
@@ -168,9 +168,9 @@ export class CastBuffer {
    * passes its own clock, and clamping is the quiet correct answer.
    */
   private stamp(at: number): number {
-    const stamped = Math.max(0, Math.round(at), this.lastAt);
-    this.lastAt = stamped;
-    return stamped;
+    const stamped = Math.max(0, Math.round(at), this.lastAt)
+    this.lastAt = stamped
+    return stamped
   }
 
   toCast(meta: { durationMs: number; label?: string; host?: string }): Cast {
@@ -187,31 +187,31 @@ export class CastBuffer {
         ...(meta.host ? { host: meta.host } : {}),
       },
       events: [...this.events],
-    };
+    }
   }
 }
 
 /* ------------------------------------------------------------- the registry */
 
 /** Why capture stopped. Every one of these is shown to the user verbatim. */
-export type EndReason = "user" | "cap" | "session-closed";
+export type EndReason = "user" | "cap" | "session-closed"
 
 export interface RecorderState {
-  sessionId: string;
+  sessionId: string
   /** The session's label at the moment recording started. */
-  label: string;
+  label: string
   /** Milliseconds since the epoch. */
-  startedAt: number;
+  startedAt: number
   /** Raw output bytes captured. Compare against MAX_CAPTURE_BYTES. */
-  bytes: number;
+  bytes: number
   /** False the moment bytes stop being kept, for any reason. */
-  capturing: boolean;
+  capturing: boolean
   /** Null while capturing. */
-  ended: EndReason | null;
+  ended: EndReason | null
   /** An encrypt-and-upload is in flight. */
-  saving: boolean;
+  saving: boolean
   /** Why the last save attempt failed. The recording is still in memory. */
-  error: string | null;
+  error: string | null
   /**
    * Whether trying the save again could plausibly work.
    *
@@ -221,40 +221,40 @@ export interface RecorderState {
    * there would be a control that cannot succeed, and the honest alternative is
    * to say so and offer the download instead.
    */
-  retryable: boolean;
+  retryable: boolean
 }
 
 interface ActiveRecorder {
-  sessionId: string;
-  label: string;
-  host: string;
-  targetRef: string | null;
-  deviceId: string | null;
-  buffer: CastBuffer;
+  sessionId: string
+  label: string
+  host: string
+  targetRef: string | null
+  deviceId: string | null
+  buffer: CastBuffer
   /** performance.now() when recording began; event timestamps are offsets. */
-  clockBase: number;
+  clockBase: number
   /**
    * performance.now() when capture ended. Held rather than recomputed at save
    * time: a save that fails and is retried ten minutes later must not report a
    * recording ten minutes longer than the one it is storing.
    */
-  endedAt: number | null;
-  untap: () => void;
-  ended: EndReason | null;
-  saving: boolean;
-  error: string | null;
-  retryable: boolean;
+  endedAt: number | null
+  untap: () => void
+  ended: EndReason | null
+  saving: boolean
+  error: string | null
+  retryable: boolean
 }
 
-const recorders = new Map<string, ActiveRecorder>();
-const stateListeners = new Set<() => void>();
-const savedListeners = new Set<(summary: RecordingSummary) => void>();
+const recorders = new Map<string, ActiveRecorder>()
+const stateListeners = new Set<() => void>()
+const savedListeners = new Set<(summary: RecordingSummary) => void>()
 
 /**
  * useSyncExternalStore compares snapshots by identity, so the array is rebuilt
  * only when something actually changed and handed out unchanged otherwise.
  */
-let snapshot: RecorderState[] = [];
+let snapshot: RecorderState[] = []
 
 function rebuild() {
   snapshot = [...recorders.values()].map((r) => ({
@@ -267,8 +267,8 @@ function rebuild() {
     saving: r.saving,
     error: r.error,
     retryable: r.retryable,
-  }));
-  for (const fn of stateListeners) fn();
+  }))
+  for (const fn of stateListeners) fn()
 }
 
 /**
@@ -277,21 +277,21 @@ function rebuild() {
  * worth making. State transitions publish immediately; a growing byte count
  * publishes at most a few times a second.
  */
-const PROGRESS_PUBLISH_MS = 400;
-let lastProgressPublish = 0;
+const PROGRESS_PUBLISH_MS = 400
+let lastProgressPublish = 0
 
 function publishProgress() {
-  const now = Date.now();
-  if (now - lastProgressPublish < PROGRESS_PUBLISH_MS) return;
-  lastProgressPublish = now;
-  rebuild();
+  const now = Date.now()
+  if (now - lastProgressPublish < PROGRESS_PUBLISH_MS) return
+  lastProgressPublish = now
+  rebuild()
 }
 
 function subscribeState(fn: () => void) {
-  stateListeners.add(fn);
+  stateListeners.add(fn)
   return () => {
-    stateListeners.delete(fn);
-  };
+    stateListeners.delete(fn)
+  }
 }
 
 /** Live recorder state, for anything that shows a recording indicator. */
@@ -301,10 +301,10 @@ export function useRecorders(): RecorderState[] {
     () => snapshot,
     // Server render: recording happens in a tab, so there is never one here.
     () => EMPTY,
-  );
+  )
 }
 
-const EMPTY: RecorderState[] = [];
+const EMPTY: RecorderState[] = []
 
 /**
  * Fires when a recording has been stored. The recordings page uses it to add the
@@ -313,31 +313,31 @@ const EMPTY: RecorderState[] = [];
  * was on another route is still reported.
  */
 export function subscribeSaved(fn: (summary: RecordingSummary) => void): () => void {
-  savedListeners.add(fn);
+  savedListeners.add(fn)
   return () => {
-    savedListeners.delete(fn);
-  };
+    savedListeners.delete(fn)
+  }
 }
 
 export function isRecording(sessionId: string): boolean {
-  const r = recorders.get(sessionId);
-  return r !== undefined && r.ended === null;
+  const r = recorders.get(sessionId)
+  return r !== undefined && r.ended === null
 }
 
 export interface StartRecordingRequest {
-  sessionId: string;
+  sessionId: string
   /** Shown in the UI and written into the header, inside the ciphertext. */
-  label: string;
+  label: string
   /** "user@host:port". Also inside the ciphertext, never in a column. */
-  host: string;
+  host: string
   /** HMAC(auditKey, host|port), or null when this tab has no audit key. */
-  targetRef: string | null;
-  deviceId: string | null;
+  targetRef: string | null
+  deviceId: string | null
   /** The session's current geometry, from the provider's last resize. */
-  cols: number;
-  rows: number;
+  cols: number
+  rows: number
   /** The provider's tapSession, already bound to this session id. */
-  tap: (fn: (e: SessionTapEvent) => void) => () => void;
+  tap: (fn: (e: SessionTapEvent) => void) => () => void
 }
 
 /**
@@ -347,13 +347,13 @@ export interface StartRecordingRequest {
  */
 export function startRecording(req: StartRecordingRequest): void {
   if (recorders.has(req.sessionId)) {
-    throw new Error("That session is already being recorded.");
+    throw new Error("That session is already being recorded.")
   }
   if (!getVaultKey()) {
     // Checked here as well as in the UI: a recording that cannot be encrypted
     // has nowhere to go, and finding that out at the end would mean discovering
     // it after capturing an hour of someone's work.
-    throw new Error("The vault is locked, so a recording could not be encrypted.");
+    throw new Error("The vault is locked, so a recording could not be encrypted.")
   }
   if (!canRecordNow()) {
     // The same argument one step further along: the server would refuse the save
@@ -362,10 +362,10 @@ export function startRecording(req: StartRecordingRequest): void {
     throw new Error(
       "Saving a session recording is a Pro feature, and this account is on Free. Recordings " +
         "already saved can still be played and downloaded.",
-    );
+    )
   }
 
-  const buffer = new CastBuffer(req.cols, req.rows);
+  const buffer = new CastBuffer(req.cols, req.rows)
   const recorder: ActiveRecorder = {
     sessionId: req.sessionId,
     label: req.label,
@@ -382,47 +382,47 @@ export function startRecording(req: StartRecordingRequest): void {
     saving: false,
     error: null,
     retryable: true,
-  };
+  }
 
   recorder.untap = req.tap((event) => {
-    if (recorder.ended !== null) return;
-    const at = performance.now() - recorder.clockBase;
+    if (recorder.ended !== null) return
+    const at = performance.now() - recorder.clockBase
 
     if (event.kind === "output") {
-      const kept = recorder.buffer.output(at, event.bytes);
+      const kept = recorder.buffer.output(at, event.bytes)
       if (!kept && recorder.buffer.isFull) {
-        end(recorder, "cap");
-        return;
+        end(recorder, "cap")
+        return
       }
-      publishProgress();
-      return;
+      publishProgress()
+      return
     }
 
     if (event.kind === "resize") {
-      recorder.buffer.resize(at, event.cols, event.rows);
-      return;
+      recorder.buffer.resize(at, event.cols, event.rows)
+      return
     }
 
-    end(recorder, "session-closed");
-  });
+    end(recorder, "session-closed")
+  })
 
-  recorders.set(req.sessionId, recorder);
-  rebuild();
+  recorders.set(req.sessionId, recorder)
+  rebuild()
 }
 
 /** Stops capture and stores what was captured. */
 export async function stopRecording(sessionId: string): Promise<void> {
-  const recorder = recorders.get(sessionId);
-  if (!recorder) return;
-  if (recorder.ended === null) end(recorder, "user");
-  await persist(recorder);
+  const recorder = recorders.get(sessionId)
+  if (!recorder) return
+  if (recorder.ended === null) end(recorder, "user")
+  await persist(recorder)
 }
 
 /** Retries a save that failed — a vault that locked, a network that dropped. */
 export async function retrySave(sessionId: string): Promise<void> {
-  const recorder = recorders.get(sessionId);
-  if (!recorder || recorder.ended === null || recorder.saving) return;
-  await persist(recorder);
+  const recorder = recorders.get(sessionId)
+  if (!recorder || recorder.ended === null || recorder.saving) return
+  await persist(recorder)
 }
 
 /**
@@ -445,22 +445,22 @@ export async function retrySave(sessionId: string): Promise<void> {
  * session that is still going would be wrong about the one thing it asserts.
  */
 export function castFor(sessionId: string): Cast | null {
-  const recorder = recorders.get(sessionId);
-  if (!recorder || recorder.ended === null || recorder.endedAt === null) return null;
+  const recorder = recorders.get(sessionId)
+  if (!recorder || recorder.ended === null || recorder.endedAt === null) return null
   return recorder.buffer.toCast({
     durationMs: recorder.endedAt - recorder.clockBase,
     label: recorder.label,
     host: recorder.host,
-  });
+  })
 }
 
 /** Throws away an unsaved recording. Nothing was on the server to remove. */
 export function discardRecording(sessionId: string): void {
-  const recorder = recorders.get(sessionId);
-  if (!recorder) return;
-  recorder.untap();
-  recorders.delete(sessionId);
-  rebuild();
+  const recorder = recorders.get(sessionId)
+  if (!recorder) return
+  recorder.untap()
+  recorders.delete(sessionId)
+  rebuild()
 }
 
 /**
@@ -472,12 +472,12 @@ export function discardRecording(sessionId: string): void {
  * lost to the next reload.
  */
 function end(recorder: ActiveRecorder, reason: EndReason) {
-  if (recorder.ended !== null) return;
-  recorder.ended = reason;
-  recorder.endedAt = performance.now();
-  recorder.untap();
-  rebuild();
-  if (reason !== "user") void persist(recorder);
+  if (recorder.ended !== null) return
+  recorder.ended = reason
+  recorder.endedAt = performance.now()
+  recorder.untap()
+  rebuild()
+  if (reason !== "user") void persist(recorder)
 }
 
 /**
@@ -502,53 +502,53 @@ function announceFailure(recorder: ActiveRecorder) {
           "Retrying will not help until the plan changes. Open Recordings to download it as a " +
           "file or discard it — do not reload this tab first, or it is gone."),
     duration: 15000,
-  });
+  })
 }
 
 async function persist(recorder: ActiveRecorder) {
-  if (recorder.saving) return;
+  if (recorder.saving) return
 
-  const vaultKey = getVaultKey();
+  const vaultKey = getVaultKey()
   if (!vaultKey) {
     recorder.error =
-      "The vault locked before this recording could be encrypted. It is still here, in this tab only — unlock and save it, or a reload will lose it.";
-    recorder.retryable = true;
-    rebuild();
-    announceFailure(recorder);
-    return;
+      "The vault locked before this recording could be encrypted. It is still here, in this tab only — unlock and save it, or a reload will lose it."
+    recorder.retryable = true
+    rebuild()
+    announceFailure(recorder)
+    return
   }
 
-  recorder.saving = true;
-  recorder.error = null;
-  recorder.retryable = true;
-  rebuild();
+  recorder.saving = true
+  recorder.error = null
+  recorder.retryable = true
+  rebuild()
 
   const cast = recorder.buffer.toCast({
     durationMs: (recorder.endedAt ?? performance.now()) - recorder.clockBase,
     label: recorder.label,
     host: recorder.host,
-  });
+  })
 
   try {
     const summary = await saveRecording(vaultKey, {
       cast,
       targetRef: recorder.targetRef,
       deviceId: recorder.deviceId,
-    });
-    recorders.delete(recorder.sessionId);
-    rebuild();
-    for (const fn of savedListeners) fn(summary);
+    })
+    recorders.delete(recorder.sessionId)
+    rebuild()
+    for (const fn of savedListeners) fn(summary)
     toast.success(`Recording of ${recorder.label} saved`, {
       description: `${formatBytes(summary.sizeBytes)} of ciphertext stored. It is on the Recordings page.`,
-    });
+    })
   } catch (error) {
-    recorder.saving = false;
-    recorder.error = error instanceof Error ? error.message : String(error);
+    recorder.saving = false
+    recorder.error = error instanceof Error ? error.message : String(error)
     // A plan refusal is the one failure a retry cannot get past. Everything else
     // — a locked vault, a dropped connection, a full account — is a state that
     // can change while the transcript sits here.
-    recorder.retryable = !(error instanceof RecordingRequestError && error.kind === "plan");
-    rebuild();
-    announceFailure(recorder);
+    recorder.retryable = !(error instanceof RecordingRequestError && error.kind === "plan")
+    rebuild()
+    announceFailure(recorder)
   }
 }

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Watching a recording somebody shared.
@@ -33,9 +33,9 @@
  *    used to find out which tokens are real.
  */
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import {
   ArrowRightIcon,
   EyeIcon,
@@ -43,32 +43,32 @@ import {
   LinkBreakIcon,
   ShieldWarningIcon,
   WarningOctagonIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { RecordingPlayer } from "@/components/recording-player";
-import { PageHeader, PageShell } from "@/components/shell/page-shell";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RecordingPlayer } from "@/components/recording-player"
+import { PageHeader, PageShell } from "@/components/shell/page-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   ShareError,
   fetchShared,
   parseShareFragment,
   type ShareFailure,
   type SharedRecording,
-} from "@/lib/recording/share";
+} from "@/lib/recording/share"
 
 type View =
   | { phase: "loading" }
   | { phase: "ready"; shared: SharedRecording }
-  | { phase: "failed"; kind: ShareFailure; detail: string };
+  | { phase: "failed"; kind: ShareFailure; detail: string }
 
 export default function SharedRecordingPage() {
-  const params = useParams<{ token: string }>();
-  const token = typeof params.token === "string" ? params.token : "";
+  const params = useParams<{ token: string }>()
+  const token = typeof params.token === "string" ? params.token : ""
 
-  const [view, setView] = useState<View>({ phase: "loading" });
+  const [view, setView] = useState<View>({ phase: "loading" })
 
   /**
    * Which link has already been fetched.
@@ -78,39 +78,39 @@ export default function SharedRecordingPage() {
    * effect spends a view. On a link the owner limited to one, a second fetch is
    * the difference between the recipient seeing the recording and seeing a 404.
    */
-  const fetched = useRef<string | null>(null);
+  const fetched = useRef<string | null>(null)
 
   useEffect(() => {
-    if (token === "" || fetched.current === token) return;
-    fetched.current = token;
+    if (token === "" || fetched.current === token) return
+    fetched.current = token
 
-    let cancelled = false;
+    let cancelled = false
     void (async () => {
       // Read once, here. The fragment is not put in state, not in a dependency
       // array, and not in anything that could end up serialised.
-      const material = parseShareFragment(window.location.hash);
+      const material = parseShareFragment(window.location.hash)
       if (material === null) {
         // Deliberately no fetch. The recording could not be opened even if it
         // arrived, and asking would burn a view off somebody else's limit.
-        if (!cancelled) setView({ phase: "failed", kind: "missing-key", detail: "" });
-        return;
+        if (!cancelled) setView({ phase: "failed", kind: "missing-key", detail: "" })
+        return
       }
 
       try {
-        const shared = await fetchShared(token, material);
-        if (!cancelled) setView({ phase: "ready", shared });
+        const shared = await fetchShared(token, material)
+        if (!cancelled) setView({ phase: "ready", shared })
       } catch (error) {
-        if (cancelled) return;
-        const kind = error instanceof ShareError ? error.kind : "server";
-        const detail = error instanceof Error ? error.message : String(error);
-        setView({ phase: "failed", kind, detail });
+        if (cancelled) return
+        const kind = error instanceof ShareError ? error.kind : "server"
+        const detail = error instanceof Error ? error.message : String(error)
+        setView({ phase: "failed", kind, detail })
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [token]);
+      cancelled = true
+    }
+  }, [token])
 
   return (
     <PageShell>
@@ -157,13 +157,13 @@ export default function SharedRecordingPage() {
         </CardContent>
       </Card>
     </PageShell>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ ready */
 
 function ReadyState({ shared }: { shared: SharedRecording }) {
-  const remaining = shared.maxViews === null ? null : Math.max(0, shared.maxViews - shared.views);
+  const remaining = shared.maxViews === null ? null : Math.max(0, shared.maxViews - shared.views)
 
   return (
     <div className="mt-6 flex flex-col gap-4">
@@ -215,7 +215,7 @@ function ReadyState({ shared }: { shared: SharedRecording }) {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
 
 function LoadingState() {
@@ -227,7 +227,7 @@ function LoadingState() {
         <Skeleton className="h-3 w-40" />
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* --------------------------------------------------------------- failures */
@@ -351,11 +351,11 @@ const FAILURES: Record<ShareFailure, { title: string; body: React.ReactNode }> =
       </p>
     ),
   },
-};
+}
 
 function FailureState({ kind, detail }: { kind: ShareFailure; detail: string }) {
-  const copy = FAILURES[kind];
-  const keyProblem = kind === "missing-key" || kind === "unreadable-key" || kind === "wrong-key";
+  const copy = FAILURES[kind]
+  const keyProblem = kind === "missing-key" || kind === "unreadable-key" || kind === "wrong-key"
 
   return (
     <>
@@ -397,5 +397,5 @@ function FailureState({ kind, detail }: { kind: ShareFailure; detail: string }) 
         </CardContent>
       </Card>
     </>
-  );
+  )
 }

@@ -1,4 +1,4 @@
-import Stripe from "stripe";
+import Stripe from "stripe"
 
 /**
  * The configured Stripe client, and the three environment variables it needs.
@@ -28,9 +28,9 @@ import Stripe from "stripe";
  */
 
 /** Named so the error messages, the UI copy and the README cannot drift. */
-export const STRIPE_SECRET_ENV = "STRIPE_SECRET_KEY";
-export const STRIPE_PRICE_ENV = "STRIPE_PRICE_PRO";
-export const STRIPE_WEBHOOK_ENV = "STRIPE_WEBHOOK_SECRET";
+export const STRIPE_SECRET_ENV = "STRIPE_SECRET_KEY"
+export const STRIPE_PRICE_ENV = "STRIPE_PRICE_PRO"
+export const STRIPE_WEBHOOK_ENV = "STRIPE_WEBHOOK_SECRET"
 
 /**
  * Thrown when a route needs something the deployment has not been given.
@@ -42,22 +42,22 @@ export const STRIPE_WEBHOOK_ENV = "STRIPE_WEBHOOK_SECRET";
  */
 export class BillingNotConfiguredError extends Error {
   /** The environment variable that is unset. Safe to show an operator. */
-  readonly missing: string;
+  readonly missing: string
 
   constructor(missing: string) {
     super(
       `Billing is not configured on this deployment: ${missing} is not set. ` +
         "Nothing was charged and nothing was changed.",
-    );
-    this.name = "BillingNotConfiguredError";
-    this.missing = missing;
+    )
+    this.name = "BillingNotConfiguredError"
+    this.missing = missing
   }
 }
 
 function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new BillingNotConfiguredError(name);
-  return value;
+  const value = process.env[name]
+  if (!value) throw new BillingNotConfiguredError(name)
+  return value
 }
 
 /**
@@ -74,10 +74,10 @@ function required(name: string): string {
  * an object this code destructures. It also means upgrading is a deliberate act:
  * bump the SDK, bump this, read the changelog for the fields that moved.
  */
-const globalForStripe = globalThis as unknown as { stripe?: Stripe };
+const globalForStripe = globalThis as unknown as { stripe?: Stripe }
 
 export function stripeClient(): Stripe {
-  const key = required(STRIPE_SECRET_ENV);
+  const key = required(STRIPE_SECRET_ENV)
   globalForStripe.stripe ??= new Stripe(key, {
     apiVersion: "2026-07-29.dahlia",
     typescript: true,
@@ -85,8 +85,8 @@ export function stripeClient(): Stripe {
     // key to the retry, so a create that actually landed is not repeated.
     maxNetworkRetries: 1,
     appInfo: { name: "webxterm" },
-  });
-  return globalForStripe.stripe;
+  })
+  return globalForStripe.stripe
 }
 
 /**
@@ -103,12 +103,12 @@ export function stripeClient(): Stripe {
  * direction than refusing to charge at all.
  */
 export function proPriceId(): string {
-  return required(STRIPE_PRICE_ENV);
+  return required(STRIPE_PRICE_ENV)
 }
 
 /** The webhook signing secret. Its value never leaves this module. */
 export function webhookSecret(): string {
-  return required(STRIPE_WEBHOOK_ENV);
+  return required(STRIPE_WEBHOOK_ENV)
 }
 
 /**
@@ -124,7 +124,7 @@ export function webhookSecret(): string {
  * that has to produce a page either way.
  */
 export function billingConfigured(): boolean {
-  return Boolean(process.env[STRIPE_SECRET_ENV] && process.env[STRIPE_PRICE_ENV]);
+  return Boolean(process.env[STRIPE_SECRET_ENV] && process.env[STRIPE_PRICE_ENV])
 }
 
 /**
@@ -141,7 +141,7 @@ export function billingConfigured(): boolean {
  * and this fallback exists only so local development works without ceremony.
  */
 export function appOrigin(request: Request): string {
-  const configured = process.env.BETTER_AUTH_URL;
-  if (configured) return configured.replace(/\/$/, "");
-  return new URL(request.url).origin;
+  const configured = process.env.BETTER_AUTH_URL
+  if (configured) return configured.replace(/\/$/, "")
+  return new URL(request.url).origin
 }

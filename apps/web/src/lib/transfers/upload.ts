@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Streaming uploads, including whole directories.
@@ -14,35 +14,33 @@
  * Files are read via File.stream(), so nothing is ever fully in memory.
  */
 
-import type { SftpHandle, SshSession, TransferResult } from "@/lib/ssh/types";
-import { buildTar } from "./tar";
+import type { SftpHandle, SshSession, TransferResult } from "@/lib/ssh/types"
+import { buildTar } from "./tar"
 
 /** Above this many files, or below this mean size, tar wins decisively. */
-const TAR_FILE_COUNT_THRESHOLD = 24;
-const TAR_MEAN_SIZE_THRESHOLD = 512 * 1024;
+const TAR_FILE_COUNT_THRESHOLD = 24
+const TAR_MEAN_SIZE_THRESHOLD = 512 * 1024
 
 export interface UploadItem {
   /** Path relative to the upload root, e.g. "src/index.ts". */
-  path: string;
-  file: File;
+  path: string
+  file: File
 }
 
 export interface UploadOptions {
-  onProgress?: (done: number, total: number, current?: string) => void;
-  signal?: AbortSignal;
+  onProgress?: (done: number, total: number, current?: string) => void
+  signal?: AbortSignal
   /** Force a strategy instead of choosing by shape. */
-  strategy?: "sftp" | "tar";
+  strategy?: "sftp" | "tar"
 }
 
-export type UploadStrategy = "sftp" | "tar";
+export type UploadStrategy = "sftp" | "tar"
 
 export function chooseStrategy(items: UploadItem[]): UploadStrategy {
-  if (items.length <= 1) return "sftp";
-  const total = items.reduce((n, i) => n + i.file.size, 0);
-  const mean = total / items.length;
-  return items.length >= TAR_FILE_COUNT_THRESHOLD || mean < TAR_MEAN_SIZE_THRESHOLD
-    ? "tar"
-    : "sftp";
+  if (items.length <= 1) return "sftp"
+  const total = items.reduce((n, i) => n + i.file.size, 0)
+  const mean = total / items.length
+  return items.length >= TAR_FILE_COUNT_THRESHOLD || mean < TAR_MEAN_SIZE_THRESHOLD ? "tar" : "sftp"
 }
 
 export async function upload(
@@ -52,10 +50,10 @@ export async function upload(
   items: UploadItem[],
   opts: UploadOptions = {},
 ): Promise<{ result: TransferResult; strategy: UploadStrategy }> {
-  const strategy = opts.strategy ?? chooseStrategy(items);
+  const strategy = opts.strategy ?? chooseStrategy(items)
   return strategy === "tar"
     ? { strategy, result: await uploadViaTar(session, remoteDir, items, opts) }
-    : { strategy, result: await uploadViaSftp(sftp, remoteDir, items, opts) };
+    : { strategy, result: await uploadViaSftp(sftp, remoteDir, items, opts) }
 }
 
 async function uploadViaSftp(
@@ -64,37 +62,37 @@ async function uploadViaSftp(
   items: UploadItem[],
   opts: UploadOptions,
 ): Promise<TransferResult> {
-  const total = items.reduce((n, i) => n + i.file.size, 0);
-  const start = performance.now();
-  let done = 0;
+  const total = items.reduce((n, i) => n + i.file.size, 0)
+  const start = performance.now()
+  let done = 0
 
   // Create directories first so per-file writes never fail on a missing parent.
-  const dirs = new Set<string>();
+  const dirs = new Set<string>()
   for (const item of items) {
     const dir = item.path.includes("/")
       ? `${remoteDir}/${item.path.slice(0, item.path.lastIndexOf("/"))}`
-      : remoteDir;
-    dirs.add(dir);
+      : remoteDir
+    dirs.add(dir)
   }
-  for (const dir of [...dirs].sort()) await sftp.mkdir(dir);
+  for (const dir of [...dirs].sort()) await sftp.mkdir(dir)
 
   for (const item of items) {
-    if (opts.signal?.aborted) throw new Error("cancelled");
-    opts.onProgress?.(done, total, item.path);
+    if (opts.signal?.aborted) throw new Error("cancelled")
+    opts.onProgress?.(done, total, item.path)
 
-    const reader = item.file.stream().getReader();
+    const reader = item.file.stream().getReader()
     await sftp.upload(`${remoteDir}/${item.path}`, async () => {
-      if (opts.signal?.aborted) throw new Error("cancelled");
-      const { value, done: finished } = await reader.read();
-      if (finished) return null;
-      done += value.length;
-      opts.onProgress?.(done, total, item.path);
-      return value;
-    });
+      if (opts.signal?.aborted) throw new Error("cancelled")
+      const { value, done: finished } = await reader.read()
+      if (finished) return null
+      done += value.length
+      opts.onProgress?.(done, total, item.path)
+      return value
+    })
   }
 
-  const ms = performance.now() - start;
-  return { bytes: total, ms, mbPerSec: total / 1048576 / (ms / 1000) };
+  const ms = performance.now() - start
+  return { bytes: total, ms, mbPerSec: total / 1048576 / (ms / 1000) }
 }
 
 async function uploadViaTar(
@@ -103,19 +101,19 @@ async function uploadViaTar(
   items: UploadItem[],
   opts: UploadOptions,
 ): Promise<TransferResult> {
-  const total = items.reduce((n, i) => n + i.file.size, 0);
-  let done = 0;
+  const total = items.reduce((n, i) => n + i.file.size, 0)
+  let done = 0
 
   const next = buildTar(items, {
     onFile: (path) => opts.onProgress?.(done, total, path),
     onBytes: (n) => {
-      done += n;
-      opts.onProgress?.(done, total);
+      done += n
+      opts.onProgress?.(done, total)
     },
     signal: opts.signal,
-  });
+  })
 
-  return session.uploadTar(remoteDir, next);
+  return session.uploadTar(remoteDir, next)
 }
 
 /* --------------------------------------------------------- drag & drop --- */
@@ -128,42 +126,42 @@ async function uploadViaTar(
  * entry instead. Non-standard, but supported everywhere that matters.
  */
 export async function itemsFromDataTransfer(dt: DataTransfer): Promise<UploadItem[]> {
-  const entries: FileSystemEntry[] = [];
+  const entries: FileSystemEntry[] = []
   for (const item of Array.from(dt.items)) {
-    if (item.kind !== "file") continue;
-    const entry = item.webkitGetAsEntry?.();
-    if (entry) entries.push(entry);
+    if (item.kind !== "file") continue
+    const entry = item.webkitGetAsEntry?.()
+    if (entry) entries.push(entry)
   }
 
   if (entries.length === 0) {
-    return Array.from(dt.files).map((file) => ({ path: file.name, file }));
+    return Array.from(dt.files).map((file) => ({ path: file.name, file }))
   }
 
-  const out: UploadItem[] = [];
-  await Promise.all(entries.map((e) => walkEntry(e, "", out)));
-  return out;
+  const out: UploadItem[] = []
+  await Promise.all(entries.map((e) => walkEntry(e, "", out)))
+  return out
 }
 
 async function walkEntry(entry: FileSystemEntry, prefix: string, out: UploadItem[]): Promise<void> {
-  const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+  const path = prefix ? `${prefix}/${entry.name}` : entry.name
 
   if (entry.isFile) {
     const file = await new Promise<File>((resolve, reject) =>
       (entry as FileSystemFileEntry).file(resolve, reject),
-    );
-    out.push({ path, file });
-    return;
+    )
+    out.push({ path, file })
+    return
   }
 
-  const reader = (entry as FileSystemDirectoryEntry).createReader();
+  const reader = (entry as FileSystemDirectoryEntry).createReader()
   // readEntries returns at most ~100 at a time and signals completion with an
   // empty batch, so it has to be drained in a loop.
   for (;;) {
     const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
       reader.readEntries(resolve, reject),
-    );
-    if (batch.length === 0) break;
-    await Promise.all(batch.map((child) => walkEntry(child, path, out)));
+    )
+    if (batch.length === 0) break
+    await Promise.all(batch.map((child) => walkEntry(child, path, out)))
   }
 }
 
@@ -172,5 +170,5 @@ export function itemsFromInput(files: FileList): UploadItem[] {
   return Array.from(files).map((file) => ({
     path: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
     file,
-  }));
+  }))
 }

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Reading the audit log.
@@ -23,46 +23,46 @@
  * parseable timestamp, which cannot be keyed or ordered at all.
  */
 
-import { buildRefIndex } from "./blind";
-import { AUDIT_EVENTS, type AuditEventType } from "./events";
-import { AUDIT_RETENTION_DAYS, type AuditRetentionWindow } from "./retention";
-import { listHosts } from "@/lib/hosts";
+import { buildRefIndex } from "./blind"
+import { AUDIT_EVENTS, type AuditEventType } from "./events"
+import { AUDIT_RETENTION_DAYS, type AuditRetentionWindow } from "./retention"
+import { listHosts } from "@/lib/hosts"
 
 /* ------------------------------------------------------------------- model */
 
 /** One row as the API returns it, with the timestamp parsed for sorting. */
 export interface AuditRow {
-  id: string;
+  id: string
   /**
    * The stored event type. Usually a key of AUDIT_EVENTS — the API rejects
    * anything else on write — but kept as a plain string so a row written by a
    * newer build than this one still renders instead of vanishing.
    */
-  eventType: string;
+  eventType: string
   /**
    * The source column as stored, not one re-derived from the event type. The
    * two agree today because the server sets `source` from the catalogue, but
    * the stored value is the record of what actually wrote the row and that is
    * what the page must show.
    */
-  source: string;
+  source: string
   /** HMAC(auditKey, host|port). Null on account-level events, which have no host. */
-  targetRef: string | null;
+  targetRef: string | null
   /** Truncated network, or null when the address could not be read on write. */
-  ipPrefix: string | null;
+  ipPrefix: string | null
   /** Allowlisted metadata; validated server-side, never free text. */
-  metadata: Record<string, unknown>;
-  deviceId: string | null;
+  metadata: Record<string, unknown>
+  deviceId: string | null
   /** Milliseconds since the epoch, for filtering and display. */
-  at: number;
+  at: number
   /** The ISO string as received. Also what the cursor is expressed in. */
-  createdAt: string;
+  createdAt: string
 }
 
 export interface AuditPage {
-  rows: AuditRow[];
+  rows: AuditRow[]
   /** Pass back as `before` to fetch the next page. Null when the server had no more. */
-  nextCursor: string | null;
+  nextCursor: string | null
   /**
    * The retention window the server applied to this response, and the only way
    * this browser can know it.
@@ -74,14 +74,14 @@ export interface AuditPage {
    * one — an older server, or a shape that failed validation — in which case the
    * page says nothing about retention rather than assuming a window.
    */
-  retention: AuditRetentionWindow | null;
+  retention: AuditRetentionWindow | null
 }
 
 export interface DeviceSummary {
-  id: string;
-  label: string;
+  id: string
+  label: string
   /** Set once the device has been revoked; the record is kept so ids still resolve. */
-  revokedAt: string | null;
+  revokedAt: string | null
 }
 
 /**
@@ -89,15 +89,15 @@ export interface DeviceSummary {
  * sign-in link, a dead network wants a retry; a toast saying "something went
  * wrong" serves neither.
  */
-export type AuditFailureKind = "unauthorized" | "network" | "server";
+export type AuditFailureKind = "unauthorized" | "network" | "server"
 
 export class AuditFetchError extends Error {
-  readonly kind: AuditFailureKind;
+  readonly kind: AuditFailureKind
 
   constructor(kind: AuditFailureKind, message: string) {
-    super(message);
-    this.name = "AuditFetchError";
-    this.kind = kind;
+    super(message)
+    this.name = "AuditFetchError"
+    this.kind = kind
   }
 }
 
@@ -106,32 +106,32 @@ export class AuditFetchError extends Error {
  * quick while still covering a normal month of activity in one page, and
  * anything older is an explicit "Load older" away.
  */
-export const AUDIT_PAGE_SIZE = 100;
+export const AUDIT_PAGE_SIZE = 100
 
 /* ------------------------------------------------------------------ fetches */
 
 export async function fetchAuditPage(
   opts: { before?: string | null; limit?: number } = {},
 ): Promise<AuditPage> {
-  const params = new URLSearchParams({ limit: String(opts.limit ?? AUDIT_PAGE_SIZE) });
-  if (opts.before) params.set("before", opts.before);
+  const params = new URLSearchParams({ limit: String(opts.limit ?? AUDIT_PAGE_SIZE) })
+  if (opts.before) params.set("before", opts.before)
 
-  const res = await request(`/api/audit?${params.toString()}`);
+  const res = await request(`/api/audit?${params.toString()}`)
   const body = (await res.json()) as {
-    events?: unknown;
-    nextCursor?: unknown;
-    retention?: unknown;
-  };
+    events?: unknown
+    nextCursor?: unknown
+    retention?: unknown
+  }
 
   const rows = Array.isArray(body.events)
     ? body.events.map(toRow).filter((row): row is AuditRow => row !== null)
-    : [];
+    : []
 
   return {
     rows,
     nextCursor: typeof body.nextCursor === "string" ? body.nextCursor : null,
     retention: toRetention(body.retention),
-  };
+  }
 }
 
 /**
@@ -144,16 +144,16 @@ export async function fetchAuditPage(
  * than used to index an object and produce `undefined` on screen.
  */
 function toRetention(raw: unknown): AuditRetentionWindow | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  if (typeof r.tier !== "string" || !(r.tier in AUDIT_RETENTION_DAYS)) return null;
-  if (typeof r.days !== "number" || !Number.isFinite(r.days) || r.days <= 0) return null;
-  if (typeof r.since !== "string" || Number.isNaN(Date.parse(r.since))) return null;
+  if (!raw || typeof raw !== "object") return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.tier !== "string" || !(r.tier in AUDIT_RETENTION_DAYS)) return null
+  if (typeof r.days !== "number" || !Number.isFinite(r.days) || r.days <= 0) return null
+  if (typeof r.since !== "string" || Number.isNaN(Date.parse(r.since))) return null
   return {
     tier: r.tier as AuditRetentionWindow["tier"],
     days: r.days,
     since: r.since,
-  };
+  }
 }
 
 /**
@@ -161,50 +161,50 @@ function toRetention(raw: unknown): AuditRetentionWindow | null {
  * listed here: their rows are the ones you most want to be able to read.
  */
 export async function fetchDevices(): Promise<DeviceSummary[]> {
-  const res = await request("/api/devices");
-  const body = (await res.json()) as { devices?: unknown };
-  if (!Array.isArray(body.devices)) return [];
+  const res = await request("/api/devices")
+  const body = (await res.json()) as { devices?: unknown }
+  if (!Array.isArray(body.devices)) return []
 
   return body.devices.flatMap((raw) => {
-    if (!raw || typeof raw !== "object") return [];
-    const d = raw as Record<string, unknown>;
-    if (typeof d.id !== "string") return [];
+    if (!raw || typeof raw !== "object") return []
+    const d = raw as Record<string, unknown>
+    if (typeof d.id !== "string") return []
     return [
       {
         id: d.id,
         label: typeof d.label === "string" && d.label !== "" ? d.label : "Unnamed device",
         revokedAt: typeof d.revokedAt === "string" ? d.revokedAt : null,
       },
-    ];
-  });
+    ]
+  })
 }
 
 async function request(url: string): Promise<Response> {
-  let res: Response;
+  let res: Response
   try {
-    res = await fetch(url, { cache: "no-store" });
+    res = await fetch(url, { cache: "no-store" })
   } catch {
     throw new AuditFetchError(
       "network",
       "The request never reached the server. You may be offline.",
-    );
+    )
   }
   if (res.status === 401) {
-    throw new AuditFetchError("unauthorized", "This browser is no longer signed in.");
+    throw new AuditFetchError("unauthorized", "This browser is no longer signed in.")
   }
   if (!res.ok) {
-    throw new AuditFetchError("server", `The server returned ${res.status}.`);
+    throw new AuditFetchError("server", `The server returned ${res.status}.`)
   }
-  return res;
+  return res
 }
 
 function toRow(raw: unknown): AuditRow | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
+  if (!raw || typeof raw !== "object") return null
+  const r = raw as Record<string, unknown>
 
-  const createdAt = typeof r.createdAt === "string" ? r.createdAt : null;
-  const at = createdAt ? Date.parse(createdAt) : Number.NaN;
-  if (typeof r.id !== "string" || !createdAt || Number.isNaN(at)) return null;
+  const createdAt = typeof r.createdAt === "string" ? r.createdAt : null
+  const at = createdAt ? Date.parse(createdAt) : Number.NaN
+  if (typeof r.id !== "string" || !createdAt || Number.isNaN(at)) return null
 
   return {
     id: r.id,
@@ -219,7 +219,7 @@ function toRow(raw: unknown): AuditRow | null {
     deviceId: typeof r.deviceId === "string" ? r.deviceId : null,
     at,
     createdAt,
-  };
+  }
 }
 
 /**
@@ -234,9 +234,9 @@ function toRow(raw: unknown): AuditRow | null {
  * doubling the table.
  */
 export function mergePages(existing: AuditRow[], incoming: AuditRow[]): AuditRow[] {
-  const byId = new Map(existing.map((row) => [row.id, row]));
-  for (const row of incoming) byId.set(row.id, row);
-  return [...byId.values()].sort((a, b) => b.at - a.at);
+  const byId = new Map(existing.map((row) => [row.id, row]))
+  for (const row of incoming) byId.set(row.id, row)
+  return [...byId.values()].sort((a, b) => b.at - a.at)
 }
 
 /* ------------------------------------------------------------- resolution */
@@ -248,22 +248,22 @@ export function mergePages(existing: AuditRow[], incoming: AuditRow[]): AuditRow
  * reference, here and on the server, which is the whole point of blinding it.
  */
 export async function buildHostLabels(auditKey: CryptoKey): Promise<Map<string, string>> {
-  return buildRefIndex(auditKey, await listHosts());
+  return buildRefIndex(auditKey, await listHosts())
 }
 
 /** The reference, shortened for display. Never expands to anything readable. */
 export function shortRef(ref: string): string {
-  return `h/${ref.slice(0, 10)}…`;
+  return `h/${ref.slice(0, 10)}…`
 }
 
 /** A device id, shortened. Shown only when there is no label to show instead. */
 export function shortId(id: string): string {
-  return `d/${id.slice(0, 8)}…`;
+  return `d/${id.slice(0, 8)}…`
 }
 
 /** True when this build has a label and an icon for the type. */
 export function isKnownEvent(type: string): type is AuditEventType {
-  return type in AUDIT_EVENTS;
+  return type in AUDIT_EVENTS
 }
 
 /* -------------------------------------------------------------- metadata */
@@ -283,131 +283,131 @@ export function describeEvent(
   row: AuditRow,
   deviceLabel: (id: string) => string | null,
 ): string | null {
-  const m = row.metadata;
-  const parts: string[] = [];
+  const m = row.metadata
+  const parts: string[] = []
 
   switch (row.eventType) {
     case "auth.signin": {
-      const method = str(m.method);
-      if (method) parts.push(METHOD_LABELS[method] ?? method);
-      break;
+      const method = str(m.method)
+      if (method) parts.push(METHOD_LABELS[method] ?? method)
+      break
     }
     case "auth.signout": {
-      const scope = str(m.scope);
-      if (scope) parts.push(scope === "all" ? "all sessions" : "this device only");
-      break;
+      const scope = str(m.scope)
+      if (scope) parts.push(scope === "all" ? "all sessions" : "this device only")
+      break
     }
     case "device.registered": {
-      const platform = str(m.platform);
-      if (platform) parts.push(PLATFORM_LABELS[platform] ?? platform);
-      break;
+      const platform = str(m.platform)
+      if (platform) parts.push(PLATFORM_LABELS[platform] ?? platform)
+      break
     }
     case "device.revoked": {
-      const id = str(m.revokedDeviceId);
-      if (id) parts.push(deviceLabel(id) ?? `device ${shortId(id)}`);
-      break;
+      const id = str(m.revokedDeviceId)
+      if (id) parts.push(deviceLabel(id) ?? `device ${shortId(id)}`)
+      break
     }
     case "vault.synced": {
-      const version = num(m.version);
-      const records = num(m.records);
-      if (version !== null) parts.push(`version ${version}`);
-      if (records !== null) parts.push(`${records} ${records === 1 ? "record" : "records"}`);
-      break;
+      const version = num(m.version)
+      const records = num(m.records)
+      if (version !== null) parts.push(`version ${version}`)
+      if (records !== null) parts.push(`${records} ${records === 1 ? "record" : "records"}`)
+      break
     }
     case "recovery.enrolled": {
-      const codes = num(m.codes);
-      if (codes !== null) parts.push(`${codes} ${codes === 1 ? "code" : "codes"}`);
-      break;
+      const codes = num(m.codes)
+      if (codes !== null) parts.push(`${codes} ${codes === 1 ? "code" : "codes"}`)
+      break
     }
     case "recovery.redeemed": {
-      const remaining = num(m.remaining);
-      if (remaining !== null) parts.push(`${remaining} left`);
-      break;
+      const remaining = num(m.remaining)
+      if (remaining !== null) parts.push(`${remaining} left`)
+      break
     }
     case "recovery.disabled":
-      break;
+      break
     case "totp.enrolled":
-      break;
+      break
     case "totp.codes-reissued": {
-      const codes = num(m.backupCodes);
-      if (codes !== null) parts.push(`${codes} new ${codes === 1 ? "code" : "codes"}`);
-      break;
+      const codes = num(m.backupCodes)
+      if (codes !== null) parts.push(`${codes} new ${codes === 1 ? "code" : "codes"}`)
+      break
     }
     case "totp.verified": {
-      const factor = str(m.factor);
+      const factor = str(m.factor)
       // Spelled out rather than shown as the stored slug: "backup-code" on this
       // row means somebody could not use their authenticator, which is the one
       // thing on the timeline most worth noticing.
-      if (factor) parts.push(factor === "backup-code" ? "backup code" : "authenticator code");
-      break;
+      if (factor) parts.push(factor === "backup-code" ? "backup code" : "authenticator code")
+      break
     }
     case "totp.disabled":
-      break;
+      break
     case "passkey.registered": {
-      const deviceType = str(m.deviceType);
-      const backedUp = m.backedUp;
-      if (deviceType === "multiDevice" || backedUp === true) parts.push("synced");
-      else if (deviceType === "singleDevice" || backedUp === false) parts.push("this device only");
-      break;
+      const deviceType = str(m.deviceType)
+      const backedUp = m.backedUp
+      if (deviceType === "multiDevice" || backedUp === true) parts.push("synced")
+      else if (deviceType === "singleDevice" || backedUp === false) parts.push("this device only")
+      break
     }
     case "passkey.removed":
     case "passkey.used":
-      break;
+      break
     case "connection.opened": {
-      const port = num(m.port);
-      if (port !== null) parts.push(`port ${port}`);
-      break;
+      const port = num(m.port)
+      if (port !== null) parts.push(`port ${port}`)
+      break
     }
     case "connection.closed": {
-      const ms = num(m.durationMs);
-      const up = num(m.bytesUp);
-      const down = num(m.bytesDown);
-      if (ms !== null) parts.push(duration(ms));
-      if (up !== null) parts.push(`${bytes(up)} up`);
-      if (down !== null) parts.push(`${bytes(down)} down`);
-      break;
+      const ms = num(m.durationMs)
+      const up = num(m.bytesUp)
+      const down = num(m.bytesDown)
+      if (ms !== null) parts.push(duration(ms))
+      if (up !== null) parts.push(`${bytes(up)} up`)
+      if (down !== null) parts.push(`${bytes(down)} down`)
+      break
     }
     case "key.installed": {
-      const result = str(m.result);
-      const fingerprint = str(m.fingerprint);
-      if (result) parts.push(result === "already-present" ? "already present" : "installed");
-      if (fingerprint) parts.push(shortFingerprint(fingerprint));
-      break;
+      const result = str(m.result)
+      const fingerprint = str(m.fingerprint)
+      if (result) parts.push(result === "already-present" ? "already present" : "installed")
+      if (fingerprint) parts.push(shortFingerprint(fingerprint))
+      break
     }
     case "hostkey.pinned": {
-      const keyType = str(m.keyType);
-      const fingerprint = str(m.fingerprint);
-      if (keyType) parts.push(keyType);
-      if (fingerprint) parts.push(shortFingerprint(fingerprint));
-      break;
+      const keyType = str(m.keyType)
+      const fingerprint = str(m.fingerprint)
+      if (keyType) parts.push(keyType)
+      if (fingerprint) parts.push(shortFingerprint(fingerprint))
+      break
     }
     case "hostkey.mismatch": {
-      const expected = str(m.expected);
-      const presented = str(m.presented);
-      if (expected) parts.push(`expected ${shortFingerprint(expected)}`);
-      if (presented) parts.push(`presented ${shortFingerprint(presented)}`);
-      break;
+      const expected = str(m.expected)
+      const presented = str(m.presented)
+      if (expected) parts.push(`expected ${shortFingerprint(expected)}`)
+      if (presented) parts.push(`presented ${shortFingerprint(presented)}`)
+      break
     }
     case "hostkey.cleared": {
-      const fingerprint = str(m.fingerprint);
-      if (fingerprint) parts.push(shortFingerprint(fingerprint));
-      break;
+      const fingerprint = str(m.fingerprint)
+      if (fingerprint) parts.push(shortFingerprint(fingerprint))
+      break
     }
     default:
       // An event type this build does not know. Its metadata was still
       // allowlisted by whatever wrote it, but this build has no formatter for
       // it and guessing at one would be inventing a reading.
-      return null;
+      return null
   }
 
-  return parts.length > 0 ? parts.join(" · ") : null;
+  return parts.length > 0 ? parts.join(" · ") : null
 }
 
 const METHOD_LABELS: Record<string, string> = {
   password: "password",
   passkey: "passkey",
   sso: "single sign-on",
-};
+}
 
 const PLATFORM_LABELS: Record<string, string> = {
   macos: "macOS",
@@ -416,39 +416,39 @@ const PLATFORM_LABELS: Record<string, string> = {
   ios: "iOS",
   android: "Android",
   other: "unknown platform",
-};
+}
 
 function str(v: unknown): string | null {
-  return typeof v === "string" && v !== "" ? v : null;
+  return typeof v === "string" && v !== "" ? v : null
 }
 
 function num(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
+  return typeof v === "number" && Number.isFinite(v) ? v : null
 }
 
 /** Enough of the fingerprint to recognise, not enough to mistake for the whole. */
 function shortFingerprint(fingerprint: string): string {
-  return fingerprint.length > 13 ? `${fingerprint.slice(0, 13)}…` : fingerprint;
+  return fingerprint.length > 13 ? `${fingerprint.slice(0, 13)}…` : fingerprint
 }
 
 function duration(ms: number): string {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${seconds} s`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours} h ${minutes % 60} min`;
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds} s`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  return `${hours} h ${minutes % 60} min`
 }
 
 /** Decimal units, because that is what transfer counters elsewhere report. */
 function bytes(n: number): string {
-  const units = ["B", "kB", "MB", "GB", "TB"];
-  let value = n;
-  let unit = 0;
+  const units = ["B", "kB", "MB", "GB", "TB"]
+  let value = n
+  let unit = 0
   while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
+    value /= 1000
+    unit += 1
   }
-  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Number(value.toFixed(1));
-  return `${rounded} ${units[unit]}`;
+  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Number(value.toFixed(1))
+  return `${rounded} ${units[unit]}`
 }

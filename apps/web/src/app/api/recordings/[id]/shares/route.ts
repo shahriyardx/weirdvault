@@ -1,10 +1,10 @@
-import { and, desc, eq, sql, sum } from "drizzle-orm";
-import { headers } from "next/headers";
+import { and, desc, eq, sql, sum } from "drizzle-orm"
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { tierFor } from "@/lib/billing/subscription";
-import { canRecordOnTier } from "@/lib/billing/tiers";
-import { db, schema } from "@/lib/db";
+import { auth } from "@/lib/auth"
+import { tierFor } from "@/lib/billing/subscription"
+import { canRecordOnTier } from "@/lib/billing/tiers"
+import { db, schema } from "@/lib/db"
 import {
   BodyError,
   destroyBody,
@@ -12,15 +12,15 @@ import {
   statusForBodyError,
   writeBody,
   type StoredBody,
-} from "@/lib/recording/blobs";
+} from "@/lib/recording/blobs"
 import {
   MAX_ACCOUNT_RECORDING_BYTES,
   MAX_BLOB_BYTES,
   RECORDING_REQUIRES_PRO,
-} from "@/lib/recording/limits";
-import { MAX_SHARE_TTL_MS, MAX_SHARE_VIEWS, newShareToken } from "@/lib/recording/share";
-import { enforce } from "@/lib/rate-limit";
-import { shareKey } from "@/lib/storage/objects";
+} from "@/lib/recording/limits"
+import { MAX_SHARE_TTL_MS, MAX_SHARE_VIEWS, newShareToken } from "@/lib/recording/share"
+import { enforce } from "@/lib/rate-limit"
+import { shareKey } from "@/lib/storage/objects"
 
 /**
  * The owner's side of sharing: make a link, list the links, cut one off.
@@ -84,7 +84,7 @@ import { shareKey } from "@/lib/storage/objects";
  * `expiresAt` and the server that checks it. A browser five minutes fast should
  * not have its 30-day link refused for being 30 days and thirty seconds.
  */
-const CLOCK_SKEW_MS = 5 * 60 * 1000;
+const CLOCK_SKEW_MS = 5 * 60 * 1000
 
 /** The columns a listing may return. Never `ciphertext`, and never `token`. */
 const SUMMARY = {
@@ -95,12 +95,12 @@ const SUMMARY = {
   views: schema.recordingShare.views,
   revokedAt: schema.recordingShare.revokedAt,
   createdAt: schema.recordingShare.createdAt,
-};
+}
 
 async function requireUser() {
   // Next.js 16: headers() is async-only.
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user ?? null;
+  const session = await auth.api.getSession({ headers: await headers() })
+  return session?.user ?? null
 }
 
 /** Whether this recording is this user's. Owner in the WHERE clause, as ever. */
@@ -109,8 +109,8 @@ async function ownsRecording(userId: string, recordingId: string): Promise<boole
     .select({ id: schema.recording.id })
     .from(schema.recording)
     .where(and(eq(schema.recording.id, recordingId), eq(schema.recording.userId, userId)))
-    .limit(1);
-  return row !== undefined;
+    .limit(1)
+  return row !== undefined
 }
 
 /**
@@ -124,26 +124,26 @@ async function storedBytesFor(userId: string): Promise<number> {
   const [recordings] = await db
     .select({ bytes: sum(schema.recording.sizeBytes) })
     .from(schema.recording)
-    .where(eq(schema.recording.userId, userId));
+    .where(eq(schema.recording.userId, userId))
   const [shares] = await db
     .select({ bytes: sum(schema.recordingShare.sizeBytes) })
     .from(schema.recordingShare)
-    .where(eq(schema.recordingShare.userId, userId));
-  return Number(recordings?.bytes ?? 0) + Number(shares?.bytes ?? 0);
+    .where(eq(schema.recordingShare.userId, userId))
+  return Number(recordings?.bytes ?? 0) + Number(shares?.bytes ?? 0)
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   // Next.js 16: route params are async.
-  const { id } = await params;
+  const { id } = await params
 
   // The recording is checked first so that a recording belonging to somebody
   // else answers 404 rather than an empty list, which would be a quiet way of
   // saying "that id exists and has no shares".
   if (!(await ownsRecording(user.id, id))) {
-    return Response.json({ error: "not found" }, { status: 404 });
+    return Response.json({ error: "not found" }, { status: 404 })
   }
 
   const rows = await db
@@ -152,14 +152,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .where(
       and(eq(schema.recordingShare.recordingId, id), eq(schema.recordingShare.userId, user.id)),
     )
-    .orderBy(desc(schema.recordingShare.createdAt));
+    .orderBy(desc(schema.recordingShare.createdAt))
 
   // The token is not in SUMMARY and its absence is the point. Returning it
   // would let this page render most of a link, and most of a link is a thing
   // somebody would try to send — while the half that matters, the key, was
   // dropped the moment the dialog that created it closed. A share is listed so
   // it can be counted and revoked, not so it can be handed out again.
-  return Response.json({ shares: rows });
+  return Response.json({ shares: rows })
 }
 
 /**
@@ -168,19 +168,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
  * ceiling. GET and DELETE are not limited here: listing a link and cutting one
  * off must keep working when somebody is trying to stop a link they regret.
  */
-const SHARE_LIMIT = { max: 20, windowSeconds: 3600 };
+const SHARE_LIMIT = { max: 20, windowSeconds: 3600 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   const limited = await enforce("share-create", request, SHARE_LIMIT, {
     userId: user.id,
     message:
       "That is more share links than this account can create in an hour. No link was made and " +
       "the recording is untouched.",
-  });
-  if (limited) return limited;
+  })
+  if (limited) return limited
 
   // Before the body, so a refusal does not require a re-encrypted copy of the
   // whole transcript to be uploaded first. `tierFor` fails toward access.
@@ -195,43 +195,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         code: RECORDING_REQUIRES_PRO,
       },
       { status: 402 },
-    );
+    )
   }
 
-  const { id } = await params;
+  const { id } = await params
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown>
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { blob, expiresAt, maxViews } = body;
+  const { blob, expiresAt, maxViews } = body
 
   if (typeof blob !== "string" || blob === "") {
-    return Response.json({ error: "blob (string) required" }, { status: 400 });
+    return Response.json({ error: "blob (string) required" }, { status: 400 })
   }
-  const sizeBytes = Buffer.byteLength(blob, "utf8");
+  const sizeBytes = Buffer.byteLength(blob, "utf8")
   if (sizeBytes > MAX_BLOB_BYTES) {
     return Response.json(
       {
         error: `That share is ${Math.round(sizeBytes / 1024 / 1024)} MB encrypted, and the limit is ${MAX_BLOB_BYTES / 1024 / 1024} MB.`,
       },
       { status: 413 },
-    );
+    )
   }
 
-  const expires = typeof expiresAt === "string" ? new Date(expiresAt) : null;
+  const expires = typeof expiresAt === "string" ? new Date(expiresAt) : null
   if (!expires || Number.isNaN(expires.valueOf())) {
-    return Response.json({ error: "expiresAt must be an ISO timestamp" }, { status: 400 });
+    return Response.json({ error: "expiresAt must be an ISO timestamp" }, { status: 400 })
   }
-  const ttl = expires.valueOf() - Date.now();
+  const ttl = expires.valueOf() - Date.now()
   if (ttl <= 0) {
     return Response.json(
       { error: "A link that has already expired is not worth creating." },
       { status: 400 },
-    );
+    )
   }
   if (ttl > MAX_SHARE_TTL_MS + CLOCK_SKEW_MS) {
     return Response.json(
@@ -242,13 +242,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           "forwarded somewhere you cannot see.",
       },
       { status: 400 },
-    );
+    )
   }
 
   // Null means unlimited, which is a real answer and not a missing one. Anything
   // that is neither null nor a usable count is a bug in the caller rather than a
   // preference to interpret.
-  let views: number | null = null;
+  let views: number | null = null
   if (maxViews !== undefined && maxViews !== null) {
     if (
       typeof maxViews !== "number" ||
@@ -259,16 +259,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return Response.json(
         { error: `maxViews must be a whole number between 1 and ${MAX_SHARE_VIEWS}, or null` },
         { status: 400 },
-      );
+      )
     }
-    views = maxViews;
+    views = maxViews
   }
 
   if (!(await ownsRecording(user.id, id))) {
-    return Response.json({ error: "not found" }, { status: 404 });
+    return Response.json({ error: "not found" }, { status: 404 })
   }
 
-  const storedBytes = await storedBytesFor(user.id);
+  const storedBytes = await storedBytesFor(user.id)
   if (storedBytes + sizeBytes > MAX_ACCOUNT_RECORDING_BYTES) {
     return Response.json(
       {
@@ -280,20 +280,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           "recording, and try again.",
       },
       { status: 413 },
-    );
+    )
   }
 
-  const token = newShareToken();
+  const token = newShareToken()
   // Minted here rather than by the insert, because the object key is built from
   // it and the object is written first. Same ordering as POST /api/recordings,
   // for the reasons in lib/recording/blobs.ts.
-  const shareId = crypto.randomUUID();
+  const shareId = crypto.randomUUID()
 
-  let stored: StoredBody;
+  let stored: StoredBody
   try {
-    stored = await writeBody(shareKey(user.id, shareId), Buffer.from(blob, "utf8"));
+    stored = await writeBody(shareKey(user.id, shareId), Buffer.from(blob, "utf8"))
   } catch (e) {
-    if (!(e instanceof BodyError)) throw e;
+    if (!(e instanceof BodyError)) throw e
     return Response.json(
       {
         error:
@@ -302,12 +302,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           " The recording itself is untouched.",
       },
       { status: statusForBodyError(e) },
-    );
+    )
   }
 
-  let row;
   try {
-    [row] = await db
+    const [row] = await db
       .insert(schema.recordingShare)
       .values({
         id: shareId,
@@ -319,16 +318,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         expiresAt: expires,
         maxViews: views,
       })
-      .returning(SUMMARY);
-  } catch (e) {
-    await discardBody(stored);
-    throw e;
-  }
+      .returning(SUMMARY)
 
-  // The token travels back exactly once, because it is one half of a link the
-  // caller is about to build and then cannot rebuild: the other half is a key
-  // that only ever existed in that tab. The listing above never returns it.
-  return Response.json({ share: row, token }, { status: 201 });
+    // The token travels back exactly once, because it is one half of a link the
+    // caller is about to build and then cannot rebuild: the other half is a key
+    // that only ever existed in that tab. The listing above never returns it.
+    return Response.json({ share: row, token }, { status: 201 })
+  } catch (e) {
+    await discardBody(stored)
+    throw e
+  }
 }
 
 /**
@@ -373,13 +372,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
  * preference — see lib/storage/objects.ts.
  */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const { id } = await params;
-  const shareId = new URL(request.url).searchParams.get("share");
+  const { id } = await params
+  const shareId = new URL(request.url).searchParams.get("share")
   if (!shareId) {
-    return Response.json({ error: "share (query parameter) required" }, { status: 400 });
+    return Response.json({ error: "share (query parameter) required" }, { status: 400 })
   }
 
   // Scoped by share, recording and owner — the same three the UPDATE below
@@ -397,14 +396,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         eq(schema.recordingShare.userId, user.id),
       ),
     )
-    .limit(1);
+    .limit(1)
 
-  if (!existing) return Response.json({ error: "not found" }, { status: 404 });
+  if (!existing) return Response.json({ error: "not found" }, { status: 404 })
 
   try {
-    await destroyBody(existing);
+    await destroyBody(existing)
   } catch (e) {
-    if (!(e instanceof BodyError)) throw e;
+    if (!(e instanceof BodyError)) throw e
     return Response.json(
       {
         error:
@@ -414,7 +413,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
           "still fetchable would be worse than this refusal.",
       },
       { status: statusForBodyError(e) },
-    );
+    )
   }
 
   // Idempotent: revoking an already-revoked share keeps the original timestamp
@@ -439,12 +438,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         eq(schema.recordingShare.userId, user.id),
       ),
     )
-    .returning(SUMMARY);
+    .returning(SUMMARY)
 
   // `returning` is what tells "revoked" apart from "there was nothing of yours
   // by that id". Reporting success for an update that matched nothing is the
   // wrong answer to give somebody who has just asked for a link to stop working.
-  if (revoked.length === 0) return Response.json({ error: "not found" }, { status: 404 });
+  if (revoked.length === 0) return Response.json({ error: "not found" }, { status: 404 })
 
-  return Response.json({ share: revoked[0] });
+  return Response.json({ share: revoked[0] })
 }

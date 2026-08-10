@@ -34,7 +34,7 @@
  * answers when the monthly transfer allowance is used up, and a browser holding
  * an unsaved transcript needs to tell those two apart to say anything useful.
  */
-export const RECORDING_REQUIRES_PRO = "recording_requires_pro";
+export const RECORDING_REQUIRES_PRO = "recording_requires_pro"
 
 /**
  * Where capture stops. Four mebibytes of raw output is a long working session —
@@ -46,10 +46,10 @@ export const RECORDING_REQUIRES_PRO = "recording_requires_pro";
  * recording is finalised with everything up to that point, and the reason is on
  * screen. It is stated on /pricing for that reason.
  */
-export const MAX_CAPTURE_BYTES = 4 * 1024 * 1024;
+export const MAX_CAPTURE_BYTES = 4 * 1024 * 1024
 
 /** Where the UI starts warning. Three quarters leaves time to wrap up. */
-export const WARN_CAPTURE_BYTES = Math.floor(MAX_CAPTURE_BYTES * 0.75);
+export const WARN_CAPTURE_BYTES = Math.floor(MAX_CAPTURE_BYTES * 0.75)
 
 /**
  * The largest blob POST /api/recordings will accept, measured server-side.
@@ -60,7 +60,7 @@ export const WARN_CAPTURE_BYTES = Math.floor(MAX_CAPTURE_BYTES * 0.75);
  * rejected at the end of a long session is an hour of someone's work thrown away
  * by a number they never saw.
  */
-export const MAX_BLOB_BYTES = 12 * 1024 * 1024;
+export const MAX_BLOB_BYTES = 12 * 1024 * 1024
 
 /**
  * The most stored ciphertext one account may hold, across all its recordings.
@@ -82,4 +82,4 @@ export const MAX_BLOB_BYTES = 12 * 1024 * 1024;
  * route itself — see docs/THREAT-MODEL.md, which lists bandwidth and IP-level
  * limits as still to add.
  */
-export const MAX_ACCOUNT_RECORDING_BYTES = 1_000_000_000;
+export const MAX_ACCOUNT_RECORDING_BYTES = 1_000_000_000

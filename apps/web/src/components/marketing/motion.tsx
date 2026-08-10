@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Scroll motion for the marketing pages, built on browser primitives.
@@ -20,13 +20,13 @@
  *    than the flash it costs.
  */
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
 function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (typeof window === "undefined") return false
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
 /**
@@ -40,36 +40,36 @@ export function Reveal({
   delay = 0,
   className,
 }: {
-  children: ReactNode;
-  delay?: number;
-  className?: string;
+  children: ReactNode
+  delay?: number
+  className?: string
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(true);
+  const ref = useRef<HTMLDivElement>(null)
+  const [shown, setShown] = useState(true)
 
   useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const el = ref.current;
-    if (!el) return;
+    if (prefersReducedMotion()) return
+    const el = ref.current
+    if (!el) return
 
     // Hide only now that an observer is definitely coming to un-hide it.
-    setShown(false);
+    setShown(false)
 
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          setShown(true);
-          io.disconnect(); // one-way: re-hiding on scroll-up is nauseating
+          if (!entry.isIntersecting) continue
+          setShown(true)
+          io.disconnect() // one-way: re-hiding on scroll-up is nauseating
         }
       },
       // Fire slightly before the element is fully on screen, so the motion has
       // finished by the time it is centred and being read.
       { rootMargin: "0px 0px -12% 0px", threshold: 0.05 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   return (
     <div
@@ -79,7 +79,7 @@ export function Reveal({
     >
       {children}
     </div>
-  );
+  )
 }
 
 /**
@@ -96,48 +96,48 @@ export function ScrollScene({
   style,
   decorative = false,
 }: {
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
+  children: ReactNode
+  className?: string
+  style?: CSSProperties
   /**
    * Named rather than spread from `...rest`, so that passing `aria-hidden`
    * cannot silently do nothing. It did exactly that for a while: the prop was
    * accepted at the call site, dropped here, and the hero backdrop was in the
    * accessibility tree the whole time.
    */
-  decorative?: boolean;
+  decorative?: boolean
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const el = ref.current;
-    if (!el) return;
+    if (prefersReducedMotion()) return
+    const el = ref.current
+    if (!el) return
 
-    let frame = 0;
+    let frame = 0
     const update = () => {
-      frame = 0;
-      const rect = el.getBoundingClientRect();
-      const vh = window.innerHeight || 1;
+      frame = 0
+      const rect = el.getBoundingClientRect()
+      const vh = window.innerHeight || 1
       // 0 when the top edge is at the bottom of the viewport, 1 once the
       // element's bottom edge has passed the top.
-      const raw = (vh - rect.top) / (vh + rect.height);
-      el.style.setProperty("--p", String(Math.min(1, Math.max(0, raw))));
-    };
+      const raw = (vh - rect.top) / (vh + rect.height)
+      el.style.setProperty("--p", String(Math.min(1, Math.max(0, raw))))
+    }
     const onScroll = () => {
       // Coalesce to one write per frame; scroll fires far more often than that.
-      if (!frame) frame = requestAnimationFrame(update);
-    };
+      if (!frame) frame = requestAnimationFrame(update)
+    }
 
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll, { passive: true });
+    update()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", onScroll, { passive: true })
     return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, []);
+      if (frame) cancelAnimationFrame(frame)
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", onScroll)
+    }
+  }, [])
 
   return (
     <div
@@ -148,7 +148,7 @@ export function ScrollScene({
     >
       {children}
     </div>
-  );
+  )
 }
 
 /**
@@ -160,28 +160,28 @@ export function ScrollScene({
  * to speak of and a tilt would just fight the scroll.
  */
 export function TiltCard({ children, className }: { children: ReactNode; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null)
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (e.pointerType !== "mouse" || prefersReducedMotion()) return;
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - 0.5;
-    const y = (e.clientY - r.top) / r.height - 0.5;
-    el.style.setProperty("--tilt-x", `${(-y * 6).toFixed(2)}deg`);
-    el.style.setProperty("--tilt-y", `${(x * 6).toFixed(2)}deg`);
+    if (e.pointerType !== "mouse" || prefersReducedMotion()) return
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width - 0.5
+    const y = (e.clientY - r.top) / r.height - 0.5
+    el.style.setProperty("--tilt-x", `${(-y * 6).toFixed(2)}deg`)
+    el.style.setProperty("--tilt-y", `${(x * 6).toFixed(2)}deg`)
     // Where the sheen sits, so the highlight tracks the pointer rather than
     // sitting in a fixed corner while the card moves under it.
-    el.style.setProperty("--mx", `${((x + 0.5) * 100).toFixed(1)}%`);
-    el.style.setProperty("--my", `${((y + 0.5) * 100).toFixed(1)}%`);
+    el.style.setProperty("--mx", `${((x + 0.5) * 100).toFixed(1)}%`)
+    el.style.setProperty("--my", `${((y + 0.5) * 100).toFixed(1)}%`)
   }
 
   function reset() {
-    const el = ref.current;
-    if (!el) return;
-    el.style.setProperty("--tilt-x", "0deg");
-    el.style.setProperty("--tilt-y", "0deg");
+    const el = ref.current
+    if (!el) return
+    el.style.setProperty("--tilt-x", "0deg")
+    el.style.setProperty("--tilt-y", "0deg")
   }
 
   return (
@@ -197,5 +197,5 @@ export function TiltCard({ children, className }: { children: ReactNode; classNa
     >
       {children}
     </div>
-  );
+  )
 }

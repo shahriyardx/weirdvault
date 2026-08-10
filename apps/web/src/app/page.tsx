@@ -1,25 +1,25 @@
-import Link from "next/link";
-import { ArrowRightIcon, BroadcastIcon, ShieldCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link"
+import { ArrowRightIcon, BroadcastIcon, ShieldCheckIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { ArchitectureDiagram } from "@/components/diagrams/architecture";
-import { FeatureBento } from "@/components/marketing/bento";
-import { HeroTerminal } from "@/components/marketing/hero-terminal";
-import { Reveal, ScrollScene, TiltCard } from "@/components/marketing/motion";
-import { PageShell } from "@/components/shell/page-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { AUDIT_RETENTION_LABEL } from "@/lib/audit/retention";
-import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers";
-import { formatBytes } from "@/lib/usage";
+import { ArchitectureDiagram } from "@/components/diagrams/architecture"
+import { FeatureBento } from "@/components/marketing/bento"
+import { HeroTerminal } from "@/components/marketing/hero-terminal"
+import { Reveal, ScrollScene, TiltCard } from "@/components/marketing/motion"
+import { PageShell } from "@/components/shell/page-shell"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { AUDIT_RETENTION_LABEL } from "@/lib/audit/retention"
+import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers"
+import { formatBytes } from "@/lib/usage"
 
 /**
  * Imported rather than written out, for the same reason the pricing page does
  * it: a landing page that names a different cap from the one /api/relay-token
  * refuses at is a landing page that lies the first time either changes.
  */
-const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free);
-const FREE_HISTORY = AUDIT_RETENTION_LABEL.free;
+const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free)
+const FREE_HISTORY = AUDIT_RETENTION_LABEL.free
 
 /**
  * The landing page.
@@ -207,7 +207,7 @@ export default function Home() {
         </Reveal>
       </section>
     </PageShell>
-  );
+  )
 }
 
 /* --------------------------------------------------------------- pieces */
@@ -222,7 +222,7 @@ function HeroBackdrop() {
       <div className="absolute inset-0 [background-image:linear-gradient(to_right,color-mix(in_oklch,var(--border)_45%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklch,var(--border)_45%,transparent)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(ellipse_75%_60%_at_50%_0%,#000_45%,transparent_100%)] [transform:translate3d(0,calc(var(--p)*-3rem),0)] will-change-transform" />
       <div className="absolute -top-24 left-1/2 size-[38rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,color-mix(in_oklch,var(--primary)_11%,transparent),transparent_65%)] blur-3xl" />
     </ScrollScene>
-  );
+  )
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
@@ -235,7 +235,7 @@ function Stat({ value, label }: { value: string; label: string }) {
       </p>
       <p className="mt-2 text-xs leading-relaxed text-pretty text-muted-foreground">{label}</p>
     </div>
-  );
+  )
 }
 
 /** The whole server-side setup, shown rather than described. */
@@ -257,5 +257,5 @@ function CommandPreview() {
         <span className="text-foreground"> &gt;&gt; ~/.ssh/authorized_keys</span>
       </pre>
     </div>
-  );
+  )
 }

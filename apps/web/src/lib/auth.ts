@@ -1,18 +1,18 @@
-import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { twoFactor } from "better-auth/plugins/two-factor";
-import { passkey } from "@better-auth/passkey";
-import { getTableColumns } from "drizzle-orm";
+import { betterAuth } from "better-auth"
+import { APIError, createAuthMiddleware } from "better-auth/api"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { twoFactor } from "better-auth/plugins/two-factor"
+import { passkey } from "@better-auth/passkey"
+import { getTableColumns } from "drizzle-orm"
 
-import { db, schema } from "@/lib/db";
-import { dbErrorSummary } from "@/lib/db/errors";
-import { ipPrefix, type AuditEventType } from "@/lib/audit/events";
-import { clientAddress } from "@/lib/audit/address";
-import { BillingNotConfiguredError } from "@/lib/billing/stripe";
-import { cancelSubscriptionForDeletion } from "@/lib/billing/subscription";
-import { authRateLimitStorage } from "@/lib/rate-limit";
-import { purgeAccountObjects } from "@/lib/storage/purge";
+import { db, schema } from "@/lib/db"
+import { dbErrorSummary } from "@/lib/db/errors"
+import { ipPrefix, type AuditEventType } from "@/lib/audit/events"
+import { clientAddress } from "@/lib/audit/address"
+import { BillingNotConfiguredError } from "@/lib/billing/stripe"
+import { cancelSubscriptionForDeletion } from "@/lib/billing/subscription"
+import { authRateLimitStorage } from "@/lib/rate-limit"
+import { purgeAccountObjects } from "@/lib/storage/purge"
 
 /**
  * Better Auth owns accounts and sessions. That is the whole list.
@@ -48,8 +48,8 @@ import { purgeAccountObjects } from "@/lib/storage/purge";
  * page that follows it.
  */
 /** Named so the error messages, the UI copy and the README cannot drift. */
-export const GITHUB_ID_ENV = "GITHUB_CLIENT_ID";
-export const GITHUB_SECRET_ENV = "GITHUB_CLIENT_SECRET";
+export const GITHUB_ID_ENV = "GITHUB_CLIENT_ID"
+export const GITHUB_SECRET_ENV = "GITHUB_CLIENT_SECRET"
 
 /**
  * The GitHub OAuth app's credentials, or null if this deployment has none.
@@ -71,11 +71,11 @@ export const GITHUB_SECRET_ENV = "GITHUB_CLIENT_SECRET";
  * the least debuggable place for it to go wrong.
  */
 const githubCredentials = (() => {
-  const clientId = process.env[GITHUB_ID_ENV];
-  const clientSecret = process.env[GITHUB_SECRET_ENV];
-  if (!clientId || !clientSecret) return null;
-  return { clientId, clientSecret };
-})();
+  const clientId = process.env[GITHUB_ID_ENV]
+  const clientSecret = process.env[GITHUB_SECRET_ENV]
+  if (!clientId || !clientSecret) return null
+  return { clientId, clientSecret }
+})()
 
 /**
  * Whether "Continue with GitHub" exists on this deployment.
@@ -86,7 +86,7 @@ const githubCredentials = (() => {
  * button is not rendered at all, rather than rendered and failing when pressed.
  */
 export function githubConfigured(): boolean {
-  return githubCredentials !== null;
+  return githubCredentials !== null
 }
 
 /* ------------------------------------------------------------ second factors */
@@ -127,18 +127,18 @@ export function githubConfigured(): boolean {
  * attacker controls.
  */
 const relyingParty = (() => {
-  const raw = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+  const raw = process.env.BETTER_AUTH_URL ?? "http://localhost:3000"
   try {
-    const url = new URL(raw);
-    return { rpID: url.hostname, origin: url.origin };
+    const url = new URL(raw)
+    return { rpID: url.hostname, origin: url.origin }
   } catch {
     // A malformed BETTER_AUTH_URL is a configuration error, not something to
     // paper over with a guess: an RP ID invented here would mint credentials
     // that never work again. localhost is the only defensible fallback because
     // it is also the only value that is right by accident.
-    return { rpID: "localhost", origin: "http://localhost:3000" };
+    return { rpID: "localhost", origin: "http://localhost:3000" }
   }
-})();
+})()
 
 /**
  * That better-auth's two-factor plugin can actually store an enrolment here.
@@ -167,16 +167,16 @@ const relyingParty = (() => {
  * fail at the insert. `bun run db:migrate` is the answer, and the container
  * runs it at start.
  */
-const TWO_FACTOR_PLUGIN_COLUMNS = ["verified", "failedVerificationCount", "lockedUntil"] as const;
+const TWO_FACTOR_PLUGIN_COLUMNS = ["verified", "failedVerificationCount", "lockedUntil"] as const
 
 const missingTwoFactorColumns: readonly string[] = (() => {
-  const present = new Set(Object.keys(getTableColumns(schema.twoFactor)));
-  return TWO_FACTOR_PLUGIN_COLUMNS.filter((column) => !present.has(column));
-})();
+  const present = new Set(Object.keys(getTableColumns(schema.twoFactor)))
+  return TWO_FACTOR_PLUGIN_COLUMNS.filter((column) => !present.has(column))
+})()
 
 /** Whether this deployment can actually store a TOTP enrolment. */
 export function totpStorageReady(): boolean {
-  return missingTwoFactorColumns.length === 0;
+  return missingTwoFactorColumns.length === 0
 }
 
 /**
@@ -184,22 +184,22 @@ export function totpStorageReady(): boolean {
  * sentence, because the person who can act on this is reading a migration.
  */
 export function missingTwoFactorStorage(): readonly string[] {
-  return missingTwoFactorColumns;
+  return missingTwoFactorColumns
 }
 
 if (missingTwoFactorColumns.length > 0) {
   console.warn(
     "two-factor (TOTP) is disabled in the UI: the two_factor table is missing " +
       `${missingTwoFactorColumns.join(", ")}, which better-auth writes. Passkeys are unaffected.`,
-  );
+  )
 }
 
 /* ------------------------------------------------------- second-factor audit */
 
 /** One catalogued event and the metadata the allowlist permits for it. */
 interface FactorEvent {
-  type: AuditEventType;
-  metadata: Record<string, unknown>;
+  type: AuditEventType
+  metadata: Record<string, unknown>
 }
 
 /**
@@ -237,70 +237,70 @@ const WATCHED_PATHS = new Set([
   "/two-factor/verify-backup-code",
   "/two-factor/disable",
   "/two-factor/generate-backup-codes",
-]);
+])
 
 const secondFactorAudit = createAuthMiddleware(async (ctx) => {
   // This runs on every Better Auth request, /get-session included, so the first
   // thing it does is decide it has nothing to do.
-  if (!WATCHED_PATHS.has(ctx.path)) return;
+  if (!WATCHED_PATHS.has(ctx.path)) return
 
   // After-hooks run on failure too, with the error in `returned`. A row written
   // here would say a factor changed when the request was refused.
-  const returned: unknown = ctx.context.returned;
-  if (returned instanceof APIError) return;
+  const returned: unknown = ctx.context.returned
+  if (returned instanceof APIError) return
 
   // The endpoint either had a session (an authenticated change) or has just
   // created one (a sign-in). Both are on the context by the time this runs.
-  const priorSession = ctx.context.session ?? null;
-  const userId = priorSession?.user?.id ?? ctx.context.newSession?.user?.id ?? null;
-  if (!userId) return;
+  const priorSession = ctx.context.session ?? null
+  const userId = priorSession?.user?.id ?? ctx.context.newSession?.user?.id ?? null
+  if (!userId) return
 
-  let event: FactorEvent | null = null;
+  let event: FactorEvent | null = null
 
   switch (ctx.path) {
     case "/passkey/verify-registration": {
       // Read off the row the plugin just created rather than off the request,
       // so what is logged is what was stored. Absent keys are omitted rather
       // than defaulted: "not recorded" and "not backed up" are different facts.
-      const row = returned as { backedUp?: unknown; deviceType?: unknown } | null;
-      const metadata: Record<string, unknown> = {};
-      if (typeof row?.backedUp === "boolean") metadata.backedUp = row.backedUp;
+      const row = returned as { backedUp?: unknown; deviceType?: unknown } | null
+      const metadata: Record<string, unknown> = {}
+      if (typeof row?.backedUp === "boolean") metadata.backedUp = row.backedUp
       if (row?.deviceType === "singleDevice" || row?.deviceType === "multiDevice") {
-        metadata.deviceType = row.deviceType;
+        metadata.deviceType = row.deviceType
       }
-      event = { type: "passkey.registered", metadata };
-      break;
+      event = { type: "passkey.registered", metadata }
+      break
     }
     case "/passkey/delete-passkey":
       // No credential id in the metadata. It is the server's handle on a
       // credential, it is meaningless once the row is gone, and a timeline is
       // not where it belongs.
-      event = { type: "passkey.removed", metadata: {} };
-      break;
+      event = { type: "passkey.removed", metadata: {} }
+      break
     case "/passkey/verify-authentication":
-      event = { type: "passkey.used", metadata: {} };
-      break;
+      event = { type: "passkey.used", metadata: {} }
+      break
     case "/two-factor/verify-totp":
       event = priorSession
         ? { type: "totp.enrolled", metadata: {} }
-        : { type: "totp.verified", metadata: { factor: "totp" } };
-      break;
+        : { type: "totp.verified", metadata: { factor: "totp" } }
+      break
     case "/two-factor/verify-backup-code":
-      event = { type: "totp.verified", metadata: { factor: "backup-code" } };
-      break;
+      event = { type: "totp.verified", metadata: { factor: "backup-code" } }
+      break
     case "/two-factor/disable":
-      event = { type: "totp.disabled", metadata: {} };
-      break;
+      event = { type: "totp.disabled", metadata: {} }
+      break
     case "/two-factor/generate-backup-codes": {
-      const codes = (returned as { backupCodes?: unknown } | null)?.backupCodes;
+      const codes = (returned as { backupCodes?: unknown } | null)?.backupCodes
       event = {
         type: "totp.codes-reissued",
         metadata: Array.isArray(codes) ? { backupCodes: codes.length } : {},
-      };
-      break;
+      }
+      break
     }
     default:
-      return;
+      return
   }
 
   try {
@@ -318,13 +318,13 @@ const secondFactorAudit = createAuthMiddleware(async (ctx) => {
       // A client-chosen prefix would be a fabricated record.
       ipPrefix: ipPrefix(ctx.headers ? clientAddress(ctx.headers) : null),
       metadata: event.metadata,
-    });
+    })
   } catch (e) {
     // Summarised, never logged whole: a drizzle failure's message is the SQL and
     // the values bound to it, and one of those is a user id.
-    console.error(`audit row for ${event.type} was not written`, dbErrorSummary(e));
+    console.error(`audit row for ${event.type} was not written`, dbErrorSummary(e))
   }
-});
+})
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -533,9 +533,8 @@ export const auth = betterAuth({
        */
       beforeDelete: async (user) => {
         try {
-          const cancelled = await cancelSubscriptionForDeletion(user.id);
-          if (cancelled)
-            console.info(`subscription ${cancelled} cancelled before account deletion`);
+          const cancelled = await cancelSubscriptionForDeletion(user.id)
+          if (cancelled) console.info(`subscription ${cancelled} cancelled before account deletion`)
         } catch (e) {
           // Summarised rather than logged whole: this path reads the database
           // before it calls Stripe, and a drizzle failure's message is the SQL
@@ -543,7 +542,7 @@ export const auth = betterAuth({
           console.error(
             "account deletion refused: the subscription could not be cancelled",
             dbErrorSummary(e),
-          );
+          )
           throw new APIError("SERVICE_UNAVAILABLE", {
             message:
               e instanceof BillingNotConfiguredError
@@ -555,7 +554,7 @@ export const auth = betterAuth({
                   "deleted — deleting it now would leave the subscription charging with no way " +
                   "to reach it. Nothing was changed. Try again, or cancel in the billing portal " +
                   "first.",
-          });
+          })
         }
       },
 
@@ -583,14 +582,14 @@ export const auth = betterAuth({
        * and went with it.
        */
       afterDelete: async (user) => {
-        const purged = await purgeAccountObjects(user.id);
-        if (!purged.attempted) return;
+        const purged = await purgeAccountObjects(user.id)
+        if (!purged.attempted) return
         console.info(
           `account deletion: purged ${purged.deleted} stored recording object(s)` +
             (purged.failed > 0
               ? `, ${purged.failed} could not be removed and are now orphaned`
               : ""),
-        );
+        )
       },
     },
   },
@@ -695,19 +694,19 @@ export const auth = betterAuth({
 
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-});
+})
 
-export type Session = typeof auth.$Infer.Session;
+export type Session = typeof auth.$Infer.Session
 
 /**
  * Better Auth's provider id for a password account. It is what `setPassword`
  * writes and what `signIn.email` reads, so it is also — in this app — the name
  * of the row that says "this account has a vault key behind it".
  */
-const CREDENTIAL_PROVIDER = "credential";
+const CREDENTIAL_PROVIDER = "credential"
 
 /** What the dashboard layout needs to know before it renders anything. */
-export type AccountGate = "signed-out" | "no-vault-password" | "ready";
+export type AccountGate = "signed-out" | "no-vault-password" | "ready"
 
 /**
  * Whether this request may enter the dashboard, and if not, why not.
@@ -732,11 +731,11 @@ export type AccountGate = "signed-out" | "no-vault-password" | "ready";
  * that would refuse to set a second one.
  */
 export async function accountGate(requestHeaders: Headers): Promise<AccountGate> {
-  const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session) return "signed-out";
+  const session = await auth.api.getSession({ headers: requestHeaders })
+  if (!session) return "signed-out"
 
-  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
-  return accounts.some((a) => a.providerId === CREDENTIAL_PROVIDER) ? "ready" : "no-vault-password";
+  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders })
+  return accounts.some((a) => a.providerId === CREDENTIAL_PROVIDER) ? "ready" : "no-vault-password"
 }
 
 /**
@@ -746,6 +745,6 @@ export async function accountGate(requestHeaders: Headers): Promise<AccountGate>
  * narrower question and answers it after the session is known to exist.
  */
 export async function hasVaultCredential(requestHeaders: Headers): Promise<boolean> {
-  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
-  return accounts.some((a) => a.providerId === CREDENTIAL_PROVIDER);
+  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders })
+  return accounts.some((a) => a.providerId === CREDENTIAL_PROVIDER)
 }

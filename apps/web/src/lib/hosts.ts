@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Host records.
@@ -9,8 +9,8 @@
  * search happens here, after decryption.
  */
 
-import { idbDelete, idbGetAll, idbPut } from "./idb";
-import { recordDeletion } from "./vault/tombstones";
+import { idbDelete, idbGetAll, idbPut } from "./idb"
+import { recordDeletion } from "./vault/tombstones"
 
 /**
  * How a host authenticates.
@@ -20,17 +20,17 @@ import { recordDeletion } from "./vault/tombstones";
  * credential for skipping one dialog, and the first thing webxterm does with a
  * password is install a key so it is not needed again.
  */
-export type HostAuth = "key" | "password";
+export type HostAuth = "key" | "password"
 
 export interface Host {
-  id: string;
-  label: string;
-  hostname: string;
-  port: number;
-  username: string;
+  id: string
+  label: string
+  hostname: string
+  port: number
+  username: string
   /** Defaults to "key" — records written before this field existed are key hosts. */
-  auth?: HostAuth;
-  keyId?: string;
+  auth?: HostAuth
+  keyId?: string
   /**
    * Reached through an agent rather than by dialling `hostname`.
    *
@@ -48,11 +48,11 @@ export interface Host {
    * vault, like everything else about a host. The server knows the agent exists;
    * it does not know which of the user's hosts points at it.
    */
-  agentId?: string;
-  folder?: string;
-  tags?: string[];
-  createdAt: number;
-  lastUsedAt?: number;
+  agentId?: string
+  folder?: string
+  tags?: string[]
+  createdAt: number
+  lastUsedAt?: number
   /**
    * Bumped by every write that goes through saveHost. This is the stamp the
    * vault merge resolves on, and it exists because nothing else here moves when
@@ -71,14 +71,14 @@ export interface Host {
    * it. The merge falls back through lastUsedAt to createdAt for those, which is
    * the old behaviour, and the first edit gives the record a real stamp.
    */
-  updatedAt?: number;
+  updatedAt?: number
 }
 
-const STORE = "hosts";
+const STORE = "hosts"
 
 export async function listHosts(): Promise<Host[]> {
-  const all = await idbGetAll<Host>(STORE);
-  return all.sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt));
+  const all = await idbGetAll<Host>(STORE)
+  return all.sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt))
 }
 
 /**
@@ -97,14 +97,14 @@ export async function saveHost(
     id: host.id ?? crypto.randomUUID(),
     createdAt: host.createdAt ?? Date.now(),
     updatedAt: Date.now(),
-  };
-  await idbPut(STORE, record.id, record);
-  return record;
+  }
+  await idbPut(STORE, record.id, record)
+  return record
 }
 
 /** Lands a host from the vault exactly as it arrived, stamp included. */
 export async function putHost(host: Host): Promise<void> {
-  await idbPut(STORE, host.id, host);
+  await idbPut(STORE, host.id, host)
 }
 
 /**
@@ -121,18 +121,18 @@ export async function rememberHost(
   const existing = (await listHosts()).find(
     (h) =>
       h.hostname === fields.hostname && h.port === fields.port && h.username === fields.username,
-  );
-  if (!existing && !opts.create) return null;
+  )
+  if (!existing && !opts.create) return null
 
   return saveHost({
     ...(existing ?? {}),
     ...fields,
     label: existing?.label ?? `${fields.username}@${fields.hostname}`,
     lastUsedAt: Date.now(),
-  });
+  })
 }
 
 export async function deleteHost(id: string): Promise<void> {
-  await idbDelete(STORE, id);
-  await recordDeletion(id);
+  await idbDelete(STORE, id)
+  await recordDeletion(id)
 }

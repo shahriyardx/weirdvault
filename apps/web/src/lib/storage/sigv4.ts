@@ -1,4 +1,4 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto"
 
 /**
  * AWS Signature Version 4, for the five S3 calls this app makes.
@@ -27,26 +27,26 @@ import { createHash, createHmac } from "node:crypto";
  */
 
 /** The scope suffix, fixed by the algorithm. */
-const TERMINATOR = "aws4_request";
-const ALGORITHM = "AWS4-HMAC-SHA256";
+const TERMINATOR = "aws4_request"
+const ALGORITHM = "AWS4-HMAC-SHA256"
 
 export interface SigningCredentials {
-  accessKeyId: string;
-  secretAccessKey: string;
-  region: string;
-  service: string;
+  accessKeyId: string
+  secretAccessKey: string
+  region: string
+  service: string
 }
 
 export interface SignableRequest {
-  method: string;
+  method: string
   /** Already-encoded path, beginning with `/`. See `encodePath`. */
-  path: string;
+  path: string
   /** Query parameters, unencoded. Encoded and sorted here. */
-  query?: Record<string, string>;
+  query?: Record<string, string>
   /** Header values by lowercase name. `host` is required; the rest are added. */
-  headers: Record<string, string>;
+  headers: Record<string, string>
   /** The exact bytes of the body. Empty for GET and DELETE. */
-  body: Buffer;
+  body: Buffer
 }
 
 /* ------------------------------------------------------------------ encoding */
@@ -65,9 +65,9 @@ export interface SignableRequest {
  * from user input is not the day to discover the encoder was approximate.
  */
 export function encodeRfc3986(value: string): string {
-  let out = "";
+  let out = ""
   for (const byte of Buffer.from(value, "utf8")) {
-    const c = String.fromCharCode(byte);
+    const c = String.fromCharCode(byte)
     if (
       (byte >= 0x41 && byte <= 0x5a) ||
       (byte >= 0x61 && byte <= 0x7a) ||
@@ -77,12 +77,12 @@ export function encodeRfc3986(value: string): string {
       c === "." ||
       c === "~"
     ) {
-      out += c;
+      out += c
     } else {
-      out += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+      out += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`
     }
   }
-  return out;
+  return out
 }
 
 /**
@@ -95,11 +95,11 @@ export function encodeRfc3986(value: string): string {
  * so what is signed is what is sent, verbatim.
  */
 export function encodePath(key: string): string {
-  return `/${key.split("/").map(encodeRfc3986).join("/")}`;
+  return `/${key.split("/").map(encodeRfc3986).join("/")}`
 }
 
 function canonicalQuery(query: Record<string, string> | undefined): string {
-  if (!query) return "";
+  if (!query) return ""
   return (
     Object.entries(query)
       .map(([k, v]) => [encodeRfc3986(k), encodeRfc3986(v)] as const)
@@ -109,17 +109,17 @@ function canonicalQuery(query: Record<string, string> | undefined): string {
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       .map(([k, v]) => `${k}=${v}`)
       .join("&")
-  );
+  )
 }
 
 /* ------------------------------------------------------------------- hashing */
 
 export function sha256Hex(data: Buffer | string): string {
-  return createHash("sha256").update(data).digest("hex");
+  return createHash("sha256").update(data).digest("hex")
 }
 
 function hmac(key: Buffer | string, data: string): Buffer {
-  return createHmac("sha256", key).update(data, "utf8").digest();
+  return createHmac("sha256", key).update(data, "utf8").digest()
 }
 
 /**
@@ -133,17 +133,17 @@ export function signingKey(
   region: string,
   service: string,
 ): Buffer {
-  const kDate = hmac(`AWS4${secretAccessKey}`, dateStamp);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, service);
-  return hmac(kService, TERMINATOR);
+  const kDate = hmac(`AWS4${secretAccessKey}`, dateStamp)
+  const kRegion = hmac(kDate, region)
+  const kService = hmac(kRegion, service)
+  return hmac(kService, TERMINATOR)
 }
 
 /* ----------------------------------------------------------------- canonical */
 
 export interface Canonical {
-  request: string;
-  signedHeaders: string;
+  request: string
+  signedHeaders: string
 }
 
 /**
@@ -158,13 +158,13 @@ export interface Canonical {
 export function canonicalRequest(req: SignableRequest, payloadHash: string): Canonical {
   const names = Object.keys(req.headers)
     .map((n) => n.toLowerCase())
-    .sort();
+    .sort()
 
-  const lower: Record<string, string> = {};
-  for (const [k, v] of Object.entries(req.headers)) lower[k.toLowerCase()] = v.trim();
+  const lower: Record<string, string> = {}
+  for (const [k, v] of Object.entries(req.headers)) lower[k.toLowerCase()] = v.trim()
 
-  const canonicalHeaders = names.map((n) => `${n}:${lower[n]}\n`).join("");
-  const signedHeaders = names.join(";");
+  const canonicalHeaders = names.map((n) => `${n}:${lower[n]}\n`).join("")
+  const signedHeaders = names.join(";")
 
   return {
     request: [
@@ -176,7 +176,7 @@ export function canonicalRequest(req: SignableRequest, payloadHash: string): Can
       payloadHash,
     ].join("\n"),
     signedHeaders,
-  };
+  }
 }
 
 /* -------------------------------------------------------------------- signing */
@@ -186,8 +186,8 @@ export function timestamps(now: Date): { amzDate: string; dateStamp: string } {
   const amzDate = now
     .toISOString()
     .replace(/[-:]/g, "")
-    .replace(/\.\d{3}/, "");
-  return { amzDate, dateStamp: amzDate.slice(0, 8) };
+    .replace(/\.\d{3}/, "")
+  return { amzDate, dateStamp: amzDate.slice(0, 8) }
 }
 
 /**
@@ -206,28 +206,28 @@ export function signRequest(
   creds: SigningCredentials,
   now: Date,
 ): Record<string, string> {
-  const { amzDate, dateStamp } = timestamps(now);
-  const payloadHash = sha256Hex(req.body);
+  const { amzDate, dateStamp } = timestamps(now)
+  const payloadHash = sha256Hex(req.body)
 
   const headers: Record<string, string> = {
     ...req.headers,
     "x-amz-date": amzDate,
     "x-amz-content-sha256": payloadHash,
-  };
+  }
 
-  const { request, signedHeaders } = canonicalRequest({ ...req, headers }, payloadHash);
+  const { request, signedHeaders } = canonicalRequest({ ...req, headers }, payloadHash)
 
-  const scope = `${dateStamp}/${creds.region}/${creds.service}/${TERMINATOR}`;
-  const stringToSign = [ALGORITHM, amzDate, scope, sha256Hex(request)].join("\n");
+  const scope = `${dateStamp}/${creds.region}/${creds.service}/${TERMINATOR}`
+  const stringToSign = [ALGORITHM, amzDate, scope, sha256Hex(request)].join("\n")
   const signature = hmac(
     signingKey(creds.secretAccessKey, dateStamp, creds.region, creds.service),
     stringToSign,
-  ).toString("hex");
+  ).toString("hex")
 
   return {
     ...headers,
     authorization:
       `${ALGORITHM} Credential=${creds.accessKeyId}/${scope}, ` +
       `SignedHeaders=${signedHeaders}, Signature=${signature}`,
-  };
+  }
 }

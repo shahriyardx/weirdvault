@@ -211,6 +211,9 @@
   property the reveal component stops updating under reduced motion, so pinning
   the animations here closes the same door twice.
 */
+/* biome-ignore-start lint/complexity/noImportantStyles: overriding every animation
+   on the page is exactly what this block is for, and it has to win against
+   whatever declared them. This is the canonical reduced-motion reset. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -221,3 +224,4 @@
     scroll-behavior: auto !important;
   }
 }
+/* biome-ignore-end lint/complexity/noImportantStyles: end of the reduced-motion reset */

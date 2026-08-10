@@ -1,13 +1,13 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { useState } from "react"
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { unpin } from "@/lib/hostkeys";
-import { useSshSession } from "@/lib/ssh/session-provider";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { unpin } from "@/lib/hostkeys"
+import { useSshSession } from "@/lib/ssh/session-provider"
 
 /**
  * A host key mismatch is either a rebuilt server or an active interception, and
@@ -15,10 +15,10 @@ import { useSshSession } from "@/lib/ssh/session-provider";
  * a deliberate act — never a "trust anyway" button sitting beside the warning.
  */
 export function HostKeyMismatchWarning() {
-  const { mismatch, dismissMismatch } = useSshSession();
-  const [confirmText, setConfirmText] = useState("");
+  const { mismatch, dismissMismatch } = useSshSession()
+  const [confirmText, setConfirmText] = useState("")
 
-  if (!mismatch) return null;
+  if (!mismatch) return null
 
   return (
     <Alert variant="destructive" className="mb-6">
@@ -67,8 +67,8 @@ export function HostKeyMismatchWarning() {
             variant="destructive"
             disabled={confirmText !== "clear pin"}
             onClick={async () => {
-              await unpin(mismatch.host, mismatch.port);
-              dismissMismatch();
+              await unpin(mismatch.host, mismatch.port)
+              dismissMismatch()
             }}
           >
             Clear pin
@@ -79,5 +79,5 @@ export function HostKeyMismatchWarning() {
         </div>
       </AlertDescription>
     </Alert>
-  );
+  )
 }

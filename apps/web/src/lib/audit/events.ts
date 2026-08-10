@@ -10,8 +10,8 @@
  * Shared by client and server, so it must stay dependency-free.
  */
 
-export const AUDIT_SOURCES = ["server", "relay", "client"] as const;
-export type AuditSource = (typeof AUDIT_SOURCES)[number];
+export const AUDIT_SOURCES = ["server", "relay", "client"] as const
+export type AuditSource = (typeof AUDIT_SOURCES)[number]
 
 export const AUDIT_EVENTS = {
   "auth.signin": { source: "server", ip: "full" },
@@ -63,12 +63,12 @@ export const AUDIT_EVENTS = {
   "hostkey.pinned": { source: "client", ip: "prefix" },
   "hostkey.mismatch": { source: "client", ip: "prefix" },
   "hostkey.cleared": { source: "client", ip: "prefix" },
-} as const;
+} as const
 
-export type AuditEventType = keyof typeof AUDIT_EVENTS;
+export type AuditEventType = keyof typeof AUDIT_EVENTS
 
 export const isAuditEventType = (v: unknown): v is AuditEventType =>
-  typeof v === "string" && v in AUDIT_EVENTS;
+  typeof v === "string" && v in AUDIT_EVENTS
 
 /**
  * Allowed metadata keys per event, with a validator each.
@@ -78,18 +78,18 @@ export const isAuditEventType = (v: unknown): v is AuditEventType =>
  * transfer contents, the authorized_keys comment (user-chosen free text — the
  * key fingerprint carries the same audit value and no free text), passwords.
  */
-type Validator = (v: unknown) => boolean;
+type Validator = (v: unknown) => boolean
 
 const isFingerprint: Validator = (v) =>
-  typeof v === "string" && /^SHA256:[A-Za-z0-9+/]{43}$/.test(v);
-const isUuid: Validator = (v) => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);
+  typeof v === "string" && /^SHA256:[A-Za-z0-9+/]{43}$/.test(v)
+const isUuid: Validator = (v) => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)
 const isSmallInt: Validator = (v) =>
-  typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1e12;
-const isBoolean: Validator = (v) => typeof v === "boolean";
+  typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1e12
+const isBoolean: Validator = (v) => typeof v === "boolean"
 const isEnum =
   (...allowed: string[]): Validator =>
   (v) =>
-    typeof v === "string" && allowed.includes(v);
+    typeof v === "string" && allowed.includes(v)
 
 export const AUDIT_METADATA: Record<AuditEventType, Record<string, Validator>> = {
   "auth.signin": { method: isEnum("password", "passkey", "sso") },
@@ -139,14 +139,14 @@ export const AUDIT_METADATA: Record<AuditEventType, Record<string, Validator>> =
   },
   "hostkey.mismatch": { expected: isFingerprint, presented: isFingerprint },
   "hostkey.cleared": { fingerprint: isFingerprint },
-};
+}
 
-const MAX_METADATA_BYTES = 512;
+const MAX_METADATA_BYTES = 512
 
 export interface MetadataResult {
-  ok: boolean;
-  error?: string;
-  value?: Record<string, unknown>;
+  ok: boolean
+  error?: string
+  value?: Record<string, unknown>
 }
 
 /**
@@ -154,29 +154,29 @@ export interface MetadataResult {
  * silent drop — a caller sending something unexpected should find out.
  */
 export function validateMetadata(type: AuditEventType, meta: unknown): MetadataResult {
-  if (meta === undefined || meta === null) return { ok: true, value: {} };
+  if (meta === undefined || meta === null) return { ok: true, value: {} }
   if (typeof meta !== "object" || Array.isArray(meta)) {
-    return { ok: false, error: "metadata must be an object" };
+    return { ok: false, error: "metadata must be an object" }
   }
 
-  const allowed = AUDIT_METADATA[type];
-  const out: Record<string, unknown> = {};
+  const allowed = AUDIT_METADATA[type]
+  const out: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
-    const validator = allowed[key];
+    const validator = allowed[key]
     if (!validator) {
-      return { ok: false, error: `metadata key "${key}" is not allowed for ${type}` };
+      return { ok: false, error: `metadata key "${key}" is not allowed for ${type}` }
     }
     if (!validator(value)) {
-      return { ok: false, error: `metadata value for "${key}" failed validation` };
+      return { ok: false, error: `metadata value for "${key}" failed validation` }
     }
-    out[key] = value;
+    out[key] = value
   }
 
   if (JSON.stringify(out).length > MAX_METADATA_BYTES) {
-    return { ok: false, error: "metadata too large" };
+    return { ok: false, error: "metadata too large" }
   }
-  return { ok: true, value: out };
+  return { ok: true, value: out }
 }
 
 /**
@@ -192,24 +192,24 @@ export function validateMetadata(type: AuditEventType, meta: unknown): MetadataR
  * and answering null is better than answering with the attacker's choice.
  */
 export function ipPrefix(ip: string | null | undefined): string | null {
-  if (!ip) return null;
-  const addr = ip.trim();
-  if (addr.includes(",")) return null;
+  if (!ip) return null
+  const addr = ip.trim()
+  if (addr.includes(",")) return null
 
   if (addr.includes(":")) {
     // IPv6 -> /48
-    const groups = addr.split(":").filter(Boolean);
-    return groups.length >= 3 ? `${groups.slice(0, 3).join(":")}::/48` : null;
+    const groups = addr.split(":").filter(Boolean)
+    return groups.length >= 3 ? `${groups.slice(0, 3).join(":")}::/48` : null
   }
-  const octets = addr.split(".");
-  if (octets.length !== 4 || octets.some((o) => !/^\d{1,3}$/.test(o))) return null;
-  return `${octets.slice(0, 3).join(".")}.0/24`;
+  const octets = addr.split(".")
+  if (octets.length !== 4 || octets.some((o) => !/^\d{1,3}$/.test(o))) return null
+  return `${octets.slice(0, 3).join(".")}.0/24`
 }
 
 /** Events a browser is allowed to self-report. Everything else is server-only. */
 export const CLIENT_REPORTABLE: readonly AuditEventType[] = Object.entries(AUDIT_EVENTS)
   .filter(([, def]) => def.source === "client")
-  .map(([type]) => type as AuditEventType);
+  .map(([type]) => type as AuditEventType)
 
 /**
  * The event types something in this build actually writes.
@@ -270,12 +270,12 @@ export const EMITTED_EVENTS: readonly AuditEventType[] = [
   "hostkey.pinned",
   "hostkey.mismatch",
   "hostkey.cleared",
-];
+]
 
 /** Catalogued but written by nothing. Named in the UI rather than offered as a filter. */
 export const UNEMITTED_EVENTS: readonly AuditEventType[] = (
   Object.keys(AUDIT_EVENTS) as AuditEventType[]
-).filter((type) => !EMITTED_EVENTS.includes(type));
+).filter((type) => !EMITTED_EVENTS.includes(type))
 
 /** Sources that appear on at least one row today. The relay writes nothing. */
-export const EMITTED_SOURCES: readonly AuditSource[] = ["server", "client"];
+export const EMITTED_SOURCES: readonly AuditSource[] = ["server", "client"]

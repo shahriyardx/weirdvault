@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Asking for whatever the host did not already specify.
@@ -12,9 +12,9 @@
  * handshake failure from the server instead of a question from us.
  */
 
-import * as React from "react";
+import * as React from "react"
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -22,36 +22,36 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import type { SshKey } from "@/lib/keys";
+} from "@/components/ui/select"
+import type { SshKey } from "@/lib/keys"
 
-export type Need = "key" | "password";
+export type Need = "key" | "password"
 
 /** What the prompt hands back: a chosen key id, or a password. */
-export type Credential = { keyId: string } | { password: string };
+export type Credential = { keyId: string } | { password: string }
 
 interface Pending {
   /**
    * Identifies this one ask. It exists so the form below can be remounted per
    * prompt rather than reset by an effect — see the note on `PromptForm`.
    */
-  id: string;
-  host: { label: string; username: string; hostname: string; port: number };
-  need: Need;
-  resolve: (credential: Credential | null) => void;
+  id: string
+  host: { label: string; username: string; hostname: string; port: number }
+  need: Need
+  resolve: (credential: Credential | null) => void
 }
 
 export function useCredentialPrompt() {
-  const [pending, setPending] = React.useState<Pending | null>(null);
+  const [pending, setPending] = React.useState<Pending | null>(null)
 
   const askFor = React.useCallback(
     (host: Pending["host"], need: Need) =>
@@ -59,16 +59,16 @@ export function useCredentialPrompt() {
         setPending({ id: crypto.randomUUID(), host, need, resolve }),
       ),
     [],
-  );
+  )
 
   const settle = React.useCallback((credential: Credential | null) => {
     setPending((p) => {
-      p?.resolve(credential);
-      return null;
-    });
-  }, []);
+      p?.resolve(credential)
+      return null
+    })
+  }, [])
 
-  return { pending, askFor, settle };
+  return { pending, askFor, settle }
 }
 
 export function CredentialPrompt({
@@ -76,9 +76,9 @@ export function CredentialPrompt({
   keys,
   onSettle,
 }: {
-  pending: Pick<Pending, "id" | "host" | "need"> | null;
-  keys: SshKey[];
-  onSettle: (credential: Credential | null) => void;
+  pending: Pick<Pending, "id" | "host" | "need"> | null
+  keys: SshKey[]
+  onSettle: (credential: Credential | null) => void
 }) {
   return (
     <Dialog open={pending !== null} onOpenChange={(open) => !open && onSettle(null)}>
@@ -94,7 +94,7 @@ export function CredentialPrompt({
         )}
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 /**
@@ -116,25 +116,25 @@ function PromptForm({
   keys,
   onSettle,
 }: {
-  host: Pending["host"];
-  need: Need;
-  keys: SshKey[];
-  onSettle: (credential: Credential | null) => void;
+  host: Pending["host"]
+  need: Need
+  keys: SshKey[]
+  onSettle: (credential: Credential | null) => void
 }) {
-  const [password, setPassword] = React.useState("");
-  const [chosenKeyId, setChosenKeyId] = React.useState<string | null>(null);
+  const [password, setPassword] = React.useState("")
+  const [chosenKeyId, setChosenKeyId] = React.useState<string | null>(null)
   /**
    * What is being entered right now, which starts at what the host asked for
    * but is not fixed to it — a key host might be reachable with a password
    * today, and a password host might be the one you have a key for.
    */
-  const [chosenMode, setChosenMode] = React.useState<Need | null>(null);
+  const [chosenMode, setChosenMode] = React.useState<Need | null>(null)
 
-  const keyId = chosenKeyId ?? keys[0]?.id ?? "";
-  const mode = chosenMode ?? need;
-  const target = `${host.username}@${host.hostname}:${host.port}`;
-  const ready = mode === "password" ? password.length > 0 : keyId.length > 0;
-  const canUseKey = keys.length > 0;
+  const keyId = chosenKeyId ?? keys[0]?.id ?? ""
+  const mode = chosenMode ?? need
+  const target = `${host.username}@${host.hostname}:${host.port}`
+  const ready = mode === "password" ? password.length > 0 : keyId.length > 0
+  const canUseKey = keys.length > 0
 
   return (
     <>
@@ -151,9 +151,9 @@ function PromptForm({
       <form
         className="grid gap-3"
         onSubmit={(e) => {
-          e.preventDefault();
-          if (!ready) return;
-          onSettle(mode === "password" ? { password } : { keyId });
+          e.preventDefault()
+          if (!ready) return
+          onSettle(mode === "password" ? { password } : { keyId })
         }}
       >
         {mode === "password" ? (
@@ -222,5 +222,5 @@ function PromptForm({
         </DialogFooter>
       </form>
     </>
-  );
+  )
 }

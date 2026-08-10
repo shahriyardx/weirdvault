@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Device identity.
@@ -37,28 +37,28 @@
  * stale handles are non-extractable keys nothing can address.
  */
 
-import { idbGet, idbPut } from "./idb";
+import { idbGet, idbPut } from "./idb"
 
-const STORE = "vault";
-const KEY = "device-identity";
+const STORE = "vault"
+const KEY = "device-identity"
 
 interface DeviceIdentity {
-  id: string;
-  label: string;
-  platform: string;
-  keyPair: CryptoKeyPair;
-  publicKeyRaw: ArrayBuffer;
+  id: string
+  label: string
+  platform: string
+  keyPair: CryptoKeyPair
+  publicKeyRaw: ArrayBuffer
 }
 
 function detectPlatform(): string {
-  if (typeof navigator === "undefined") return "other";
-  const ua = navigator.userAgent;
-  if (/iPhone|iPad|iPod/.test(ua)) return "ios";
-  if (/Android/.test(ua)) return "android";
-  if (/Mac OS X/.test(ua)) return "macos";
-  if (/Windows/.test(ua)) return "windows";
-  if (/Linux/.test(ua)) return "linux";
-  return "other";
+  if (typeof navigator === "undefined") return "other"
+  const ua = navigator.userAgent
+  if (/iPhone|iPad|iPod/.test(ua)) return "ios"
+  if (/Android/.test(ua)) return "android"
+  if (/Mac OS X/.test(ua)) return "macos"
+  if (/Windows/.test(ua)) return "windows"
+  if (/Linux/.test(ua)) return "linux"
+  return "other"
 }
 
 function defaultLabel(platform: string): string {
@@ -70,12 +70,12 @@ function defaultLabel(platform: string): string {
         ? "Chrome"
         : /Safari/.test(navigator.userAgent)
           ? "Safari"
-          : "Browser";
+          : "Browser"
   const os =
     { macos: "Mac", windows: "Windows", linux: "Linux", ios: "iPhone", android: "Android" }[
       platform
-    ] ?? "Device";
-  return `${browser} on ${os}`;
+    ] ?? "Device"
+  return `${browser} on ${os}`
 }
 
 /**
@@ -88,37 +88,37 @@ function defaultLabel(platform: string): string {
  * stranger in the device list.
  */
 export async function ensureDeviceIdentity(): Promise<DeviceIdentity> {
-  const existing = await idbGet<DeviceIdentity>(STORE, KEY);
-  if (existing) return existing;
+  const existing = await idbGet<DeviceIdentity>(STORE, KEY)
+  if (existing) return existing
 
   const keyPair = (await crypto.subtle.generateKey({ name: "Ed25519" }, false, [
     "sign",
     "verify",
-  ])) as CryptoKeyPair;
+  ])) as CryptoKeyPair
 
-  const platform = detectPlatform();
+  const platform = detectPlatform()
   const identity: DeviceIdentity = {
     id: crypto.randomUUID(),
     label: defaultLabel(platform),
     platform,
     keyPair,
     publicKeyRaw: await crypto.subtle.exportKey("raw", keyPair.publicKey),
-  };
+  }
 
-  await idbPut(STORE, KEY, identity);
-  return identity;
+  await idbPut(STORE, KEY, identity)
+  return identity
 }
 
 export async function getCurrentDeviceId(): Promise<string | undefined> {
-  const identity = await idbGet<DeviceIdentity>(STORE, KEY);
-  return identity?.id;
+  const identity = await idbGet<DeviceIdentity>(STORE, KEY)
+  return identity?.id
 }
 
 function b64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
+  const bytes = new Uint8Array(buf)
+  let s = ""
+  for (const b of bytes) s += String.fromCharCode(b)
+  return btoa(s)
 }
 
 /**
@@ -128,7 +128,7 @@ function b64(buf: ArrayBuffer): string {
  */
 export async function registerDevice(): Promise<{ id: string } | null> {
   try {
-    const identity = await ensureDeviceIdentity();
+    const identity = await ensureDeviceIdentity()
     const res = await fetch("/api/devices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -138,10 +138,10 @@ export async function registerDevice(): Promise<{ id: string } | null> {
         platform: identity.platform,
         signingKey: b64(identity.publicKeyRaw),
       }),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as { id: string };
+    })
+    if (!res.ok) return null
+    return (await res.json()) as { id: string }
   } catch {
-    return null;
+    return null
   }
 }

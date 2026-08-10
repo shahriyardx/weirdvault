@@ -1,32 +1,32 @@
-"use client";
+"use client"
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
 import {
   FloppyDiskIcon,
   PlugsConnectedIcon,
   ShieldCheckIcon,
   WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { HostKeyMismatchWarning } from "@/components/host-key-mismatch";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { HostKeyMismatchWarning } from "@/components/host-key-mismatch"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
-import { noAutofillSecret, noAutofillText } from "@/lib/no-autofill";
+} from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { useSshSession } from "@/lib/ssh/session-provider"
+import { requestUnlock, useVaultUnlocked } from "@/lib/vault/session"
+import { noAutofillSecret, noAutofillText } from "@/lib/no-autofill"
 
 export default function ConnectPage() {
   // useSearchParams needs a boundary above it, and the fallback is the form
@@ -36,29 +36,29 @@ export default function ConnectPage() {
     <Suspense fallback={null}>
       <ConnectForm />
     </Suspense>
-  );
+  )
 }
 
 function ConnectForm() {
-  const router = useRouter();
-  const params = useSearchParams();
+  const router = useRouter()
+  const params = useSearchParams()
   const { keys, activeKey, setActiveKey, connect, phase, error, pinned, mismatch, refreshKeys } =
-    useSshSession();
-  const vaultUnlocked = useVaultUnlocked();
+    useSshSession()
+  const vaultUnlocked = useVaultUnlocked()
 
   // Keys may have been created on another page since the provider loaded, and
   // arriving here to find "no usable keys" would be wrong.
   useEffect(() => {
-    void refreshKeys();
-  }, [refreshKeys]);
+    void refreshKeys()
+  }, [refreshKeys])
 
   const [form, setForm] = useState({
     hostname: "",
     port: "",
     username: "",
     password: "",
-  });
-  const [usePassword, setUsePassword] = useState(false);
+  })
+  const [usePassword, setUsePassword] = useState(false)
 
   /**
    * Enrolled machines, if any.
@@ -69,44 +69,44 @@ function ConnectForm() {
    * choice about a feature the user has not set up, offered at the moment they
    * are trying to do something else.
    */
-  const [machines, setMachines] = useState<{ id: string; label: string }[]>([]);
+  const [machines, setMachines] = useState<{ id: string; label: string }[]>([])
   // "direct" rather than "" as the no-agent value: Radix treats an empty string
   // as "nothing selected" and throws if an item claims it, so the sentinel has to
   // be a real value that means the absence of one.
-  const DIRECT = "direct";
+  const DIRECT = "direct"
   // Preselected from ?agent= when you arrive from the Machines page, so
   // "Connect" there lands on a form that already knows what you clicked.
-  const [reach, setReach] = useState<string>(params.get("agent") || DIRECT);
-  const agentId = reach === DIRECT ? "" : reach;
-  const machine = machines.find((m) => m.id === agentId) ?? null;
+  const [reach, setReach] = useState<string>(params.get("agent") || DIRECT)
+  const agentId = reach === DIRECT ? "" : reach
+  const machine = machines.find((m) => m.id === agentId) ?? null
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch("/api/agents");
-      if (!res.ok) return;
+      const res = await fetch("/api/agents")
+      if (!res.ok) return
       const body = (await res.json()) as {
-        agents: { id: string; label: string; revokedAt: string | null }[];
-      };
-      const live = body.agents.filter((a) => !a.revokedAt).map(({ id, label }) => ({ id, label }));
-      setMachines(live);
+        agents: { id: string; label: string; revokedAt: string | null }[]
+      }
+      const live = body.agents.filter((a) => !a.revokedAt).map(({ id, label }) => ({ id, label }))
+      setMachines(live)
 
       // The name is only ever a label for an agent host, so there is nothing
       // for the user to invent: default it to what they called the machine.
       // Only when the field is untouched — retyping over someone's edit
       // because a fetch landed late is worse than not filling it at all.
-      const preselected = live.find((m) => m.id === params.get("agent"));
+      const preselected = live.find((m) => m.id === params.get("agent"))
       if (preselected) {
-        setForm((f) => (f.hostname === "" ? { ...f, hostname: preselected.label } : f));
+        setForm((f) => (f.hostname === "" ? { ...f, hostname: preselected.label } : f))
       }
-    })();
-  }, [params]);
+    })()
+  }, [params])
 
   async function submit(e: React.FormEvent, opts: { save?: boolean } = {}) {
-    e.preventDefault();
+    e.preventDefault()
     if (!activeKey) {
       // Almost always a locked vault hiding the portable keys.
-      if (!vaultUnlocked) requestUnlock();
-      return;
+      if (!vaultUnlocked) requestUnlock()
+      return
     }
     try {
       await connect({
@@ -120,10 +120,10 @@ function ConnectForm() {
         key: activeKey,
         password: usePassword ? form.password : undefined,
         save: opts.save,
-      });
-      setForm((f) => ({ ...f, password: "" }));
-      setUsePassword(false);
-      router.push("/dashboard/terminal");
+      })
+      setForm((f) => ({ ...f, password: "" }))
+      setUsePassword(false)
+      router.push("/dashboard/terminal")
     } catch {
       // Surfaced through context state; nothing to add here.
     }
@@ -242,8 +242,8 @@ function ConnectForm() {
                 <Select
                   value={activeKey?.id ?? ""}
                   onValueChange={(id) => {
-                    const k = keys.find((x) => x.id === id);
-                    if (k) setActiveKey(k);
+                    const k = keys.find((x) => x.id === id)
+                    if (k) setActiveKey(k)
                   }}
                 >
                   <SelectTrigger className="w-full">
@@ -338,5 +338,5 @@ function ConnectForm() {
         </div>
       </form>
     </div>
-  );
+  )
 }

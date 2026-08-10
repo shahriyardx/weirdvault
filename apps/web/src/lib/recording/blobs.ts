@@ -4,7 +4,7 @@ import {
   objectStore,
   putObject,
   ObjectStoreError,
-} from "@/lib/storage/objects";
+} from "@/lib/storage/objects"
 
 /**
  * The one place that knows a recording's bytes can be in two places.
@@ -50,8 +50,8 @@ import {
 
 /** The two columns, on either table. */
 export interface StoredBody {
-  ciphertext: Buffer | null;
-  storageKey: string | null;
+  ciphertext: Buffer | null
+  storageKey: string | null
 }
 
 /**
@@ -59,15 +59,15 @@ export interface StoredBody {
  * because a bucket that is down and an object that is gone want different
  * words and — more to the point — different advice about retrying.
  */
-export type BodyFailure = "missing" | "unreachable" | "unconfigured";
+export type BodyFailure = "missing" | "unreachable" | "unconfigured"
 
 export class BodyError extends Error {
-  readonly kind: BodyFailure;
+  readonly kind: BodyFailure
 
   constructor(kind: BodyFailure, message: string) {
-    super(message);
-    this.name = "BodyError";
-    this.kind = kind;
+    super(message)
+    this.name = "BodyError"
+    this.kind = kind
   }
 }
 
@@ -76,7 +76,7 @@ export class BodyError extends Error {
  * and the tests; every reader handles either.
  */
 export function storingInBucket(): boolean {
-  return objectStore() !== null;
+  return objectStore() !== null
 }
 
 /* --------------------------------------------------------------------- read */
@@ -91,25 +91,25 @@ export function storingInBucket(): boolean {
  * have drifted and answering "no bytes" would file that under normal.
  */
 export async function readBody(row: StoredBody): Promise<Buffer | null> {
-  if (row.storageKey === null) return row.ciphertext;
+  if (row.storageKey === null) return row.ciphertext
 
-  const store = objectStore();
+  const store = objectStore()
   if (!store) {
     throw new BodyError(
       "unconfigured",
       "This recording is stored in a bucket and this server has no bucket configured. " +
         "The R2_* variables were set when it was saved and are not set now.",
-    );
+    )
   }
 
-  let object: Buffer | null;
+  let object: Buffer | null
   try {
-    object = await getObject(store, row.storageKey);
+    object = await getObject(store, row.storageKey)
   } catch (e) {
     throw new BodyError(
       "unreachable",
       e instanceof ObjectStoreError ? e.message : "the storage bucket could not be reached",
-    );
+    )
   }
 
   if (!object) {
@@ -117,9 +117,9 @@ export async function readBody(row: StoredBody): Promise<Buffer | null> {
       "missing",
       "The stored recording is no longer in the bucket, so there is nothing left to play. " +
         "The row survives; the bytes do not.",
-    );
+    )
   }
-  return object;
+  return object
 }
 
 /* -------------------------------------------------------------------- write */
@@ -133,18 +133,18 @@ export async function readBody(row: StoredBody): Promise<Buffer | null> {
  * that this function has no opinion about which table it is serving.
  */
 export async function writeBody(key: string, blob: Buffer): Promise<StoredBody> {
-  const store = objectStore();
-  if (!store) return { ciphertext: blob, storageKey: null };
+  const store = objectStore()
+  if (!store) return { ciphertext: blob, storageKey: null }
 
   try {
-    await putObject(store, key, blob);
+    await putObject(store, key, blob)
   } catch (e) {
     throw new BodyError(
       "unreachable",
       e instanceof ObjectStoreError ? e.message : "the storage bucket could not be reached",
-    );
+    )
   }
-  return { ciphertext: null, storageKey: key };
+  return { ciphertext: null, storageKey: key }
 }
 
 /**
@@ -156,15 +156,15 @@ export async function writeBody(key: string, blob: Buffer): Promise<StoredBody> 
  * would replace a useful error with a less useful one.
  */
 export async function discardBody(body: StoredBody): Promise<void> {
-  const store = objectStore();
-  if (!body.storageKey || !store) return;
+  const store = objectStore()
+  if (!body.storageKey || !store) return
   try {
-    await deleteObject(store, body.storageKey);
+    await deleteObject(store, body.storageKey)
   } catch (e) {
     console.warn(
       `orphaned object ${body.storageKey}: the row was not written and neither was the cleanup`,
       e instanceof Error ? e.message : "unknown error",
-    );
+    )
   }
 }
 
@@ -178,25 +178,25 @@ export async function discardBody(body: StoredBody): Promise<void> {
  * that knows the object was ever anybody's.
  */
 export async function destroyBody(row: StoredBody): Promise<void> {
-  if (!row.storageKey) return;
+  if (!row.storageKey) return
 
-  const store = objectStore();
+  const store = objectStore()
   if (!store) {
     throw new BodyError(
       "unconfigured",
       "This recording's bytes are in a bucket and this server has no bucket configured, so " +
         "they cannot be destroyed. Deleting the row would leave them there with nothing left " +
         "that knows whose they were.",
-    );
+    )
   }
 
   try {
-    await deleteObject(store, row.storageKey);
+    await deleteObject(store, row.storageKey)
   } catch (e) {
     throw new BodyError(
       "unreachable",
       e instanceof ObjectStoreError ? e.message : "the storage bucket could not be reached",
-    );
+    )
   }
 }
 
@@ -211,10 +211,10 @@ export async function destroyBody(row: StoredBody): Promise<void> {
 export function statusForBodyError(e: BodyError): number {
   switch (e.kind) {
     case "missing":
-      return 410;
+      return 410
     case "unconfigured":
-      return 503;
+      return 503
     case "unreachable":
-      return 502;
+      return 502
   }
 }

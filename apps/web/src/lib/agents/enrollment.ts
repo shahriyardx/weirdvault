@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 
 /**
  * Enrollment tokens: the one-time secret that turns a machine into an agent.
@@ -11,14 +11,14 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
  */
 
 /** Long enough that guessing is not a strategy; the prefix is for humans. */
-const TOKEN_BYTES = 32;
-const PREFIX = "ENROLL_";
+const TOKEN_BYTES = 32
+const PREFIX = "ENROLL_"
 
 /**
  * Ten minutes: long enough to walk to another room and paste it, short enough
  * that a token left in a scrollback is worthless by the time anyone reads it.
  */
-export const ENROLLMENT_TTL_MS = 10 * 60 * 1000;
+export const ENROLLMENT_TTL_MS = 10 * 60 * 1000
 
 /**
  * How many unspent tokens one account may hold at once.
@@ -27,11 +27,11 @@ export const ENROLLMENT_TTL_MS = 10 * 60 * 1000;
  * "add a machine" page that retries on error mints one per attempt, and the
  * table grows for as long as the tab is open.
  */
-export const MAX_PENDING_ENROLLMENTS = 10;
+export const MAX_PENDING_ENROLLMENTS = 10
 
 export function mintEnrollmentToken(): { token: string; hash: string } {
-  const token = PREFIX + randomBytes(TOKEN_BYTES).toString("base64url");
-  return { token, hash: hashEnrollmentToken(token) };
+  const token = PREFIX + randomBytes(TOKEN_BYTES).toString("base64url")
+  return { token, hash: hashEnrollmentToken(token) }
 }
 
 /**
@@ -44,7 +44,7 @@ export function mintEnrollmentToken(): { token: string; hash: string } {
  * work factor would buy.
  */
 export function hashEnrollmentToken(token: string): string {
-  return createHash("sha256").update(token, "utf8").digest("hex");
+  return createHash("sha256").update(token, "utf8").digest("hex")
 }
 
 /** Cheap shape check, so an obviously-wrong token never reaches the database. */
@@ -54,7 +54,7 @@ export function looksLikeEnrollmentToken(value: unknown): value is string {
     value.startsWith(PREFIX) &&
     value.length > PREFIX.length + 20 &&
     value.length < 200
-  );
+  )
 }
 
 /**
@@ -65,9 +65,9 @@ export function looksLikeEnrollmentToken(value: unknown): value is string {
  * that ever compares two tokens directly should use this rather than `===`.
  */
 export function tokensMatch(a: string, b: string): boolean {
-  const left = Buffer.from(a, "utf8");
-  const right = Buffer.from(b, "utf8");
-  return left.length === right.length && timingSafeEqual(left, right);
+  const left = Buffer.from(a, "utf8")
+  const right = Buffer.from(b, "utf8")
+  return left.length === right.length && timingSafeEqual(left, right)
 }
 
 /**
@@ -99,20 +99,20 @@ export function tokensMatch(a: string, b: string): boolean {
  * rather than an error to work around.
  */
 export function agentReleaseUrl(origin: string): string {
-  return process.env.AGENT_RELEASE_BASE_URL?.replace(/\/$/, "") || `${origin}/agent-bin`;
+  return process.env.AGENT_RELEASE_BASE_URL?.replace(/\/$/, "") || `${origin}/agent-bin`
 }
 
 export function agentRelayUrl(): string | null {
-  const relay = process.env.NEXT_PUBLIC_RELAY_URL;
-  if (!relay) return null;
+  const relay = process.env.NEXT_PUBLIC_RELAY_URL
+  if (!relay) return null
 
   try {
-    const url = new URL(relay);
-    url.pathname = "/agent";
-    url.search = "";
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
+    const url = new URL(relay)
+    url.pathname = "/agent"
+    url.search = ""
+    url.hash = ""
+    return url.toString().replace(/\/$/, "")
   } catch {
-    return null;
+    return null
   }
 }

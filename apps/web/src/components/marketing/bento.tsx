@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * The feature bento.
@@ -26,7 +26,7 @@
  * the layout.
  */
 
-import Link from "next/link";
+import Link from "next/link"
 import {
   ArrowUpRightIcon,
   CloudCheckIcon,
@@ -35,10 +35,10 @@ import {
   PlayCircleIcon,
   ShieldCheckIcon,
   TerminalWindowIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { TiltCard } from "@/components/marketing/motion";
-import { cn } from "@/lib/utils";
+import { TiltCard } from "@/components/marketing/motion"
+import { cn } from "@/lib/utils"
 
 /* -------------------------------------------------------------- sculpture */
 
@@ -55,9 +55,9 @@ function Sculpture({
   className,
   accent = false,
 }: {
-  icon: React.ReactNode;
-  className?: string;
-  accent?: boolean;
+  icon: React.ReactNode
+  className?: string
+  accent?: boolean
 }) {
   return (
     <div
@@ -85,7 +85,7 @@ function Sculpture({
         {icon}
       </div>
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ shell */
@@ -100,23 +100,23 @@ function Cell({
   above,
   children,
 }: {
-  className?: string;
+  className?: string
   /** Tonal steps, so neighbouring cells separate without a border doing it. */
-  tone?: "base" | "raised" | "sunken";
+  tone?: "base" | "raised" | "sunken"
   /**
    * Two-column cells reserve the right-hand share for the object, so the copy
    * has a column of its own rather than a width that happens to clear the
    * artwork. Getting this wrong is what made the setup cell rag badly: the
    * command sat at one width, the paragraph at another, and neither lined up.
    */
-  wide?: boolean;
-  title: string;
-  body: string;
-  href?: string;
+  wide?: boolean
+  title: string
+  body: string
+  href?: string
   /** Rendered inside the content column, above the title, at the same width. */
-  above?: React.ReactNode;
+  above?: React.ReactNode
   /** The object. Absolutely positioned by the caller. */
-  children?: React.ReactNode;
+  children?: React.ReactNode
 }) {
   const inner = (
     <div
@@ -146,7 +146,7 @@ function Cell({
         />
       )}
     </div>
-  );
+  )
 
   return (
     <TiltCard className={cn("h-full", className)}>
@@ -158,7 +158,7 @@ function Cell({
         inner
       )}
     </TiltCard>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------- grid */
@@ -243,7 +243,7 @@ export function FeatureBento() {
         />
       </Cell>
     </div>
-  );
+  )
 }
 
 /**
@@ -265,5 +265,5 @@ function SetupLine() {
       <span className="text-success/80">&apos;ssh-ed25519 AAAA…&apos;</span>
       <span className="text-foreground/80"> &gt;&gt; authorized_keys</span>
     </div>
-  );
+  )
 }

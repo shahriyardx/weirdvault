@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Activity log.
@@ -17,8 +17,8 @@
  * Each of those states says so on screen rather than looking like an empty log.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import {
   ArrowClockwiseIcon,
   ArrowsClockwiseIcon,
@@ -48,29 +48,29 @@ import {
   WarningCircleIcon,
   WarningOctagonIcon,
   XCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { PageHeader } from "@/components/shell/page-shell";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/shell/page-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -78,14 +78,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+} from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   EMITTED_EVENTS,
   EMITTED_SOURCES,
   UNEMITTED_EVENTS,
   type AuditEventType,
-} from "@/lib/audit/events";
+} from "@/lib/audit/events"
 import {
   AuditFetchError,
   buildHostLabels,
@@ -98,10 +98,10 @@ import {
   shortRef,
   type AuditRow,
   type DeviceSummary,
-} from "@/lib/audit/query";
-import { AUDIT_RETENTION_LABEL, type AuditRetentionWindow } from "@/lib/audit/retention";
-import { getAuditKey, requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
-import { cn } from "@/lib/utils";
+} from "@/lib/audit/query"
+import { AUDIT_RETENTION_LABEL, type AuditRetentionWindow } from "@/lib/audit/retention"
+import { getAuditKey, requestUnlock, useVaultUnlocked } from "@/lib/vault/session"
+import { cn } from "@/lib/utils"
 
 /* ------------------------------------------------------------------- model */
 
@@ -129,7 +129,7 @@ const EVENT_LABELS: Record<AuditEventType, string> = {
   "hostkey.pinned": "Host key pinned",
   "hostkey.mismatch": "Host key mismatch",
   "hostkey.cleared": "Host key cleared",
-};
+}
 
 const EVENT_ICONS: Record<AuditEventType, typeof KeyIcon> = {
   "auth.signin": SignInIcon,
@@ -153,13 +153,13 @@ const EVENT_ICONS: Record<AuditEventType, typeof KeyIcon> = {
   "hostkey.pinned": FingerprintIcon,
   "hostkey.mismatch": WarningOctagonIcon,
   "hostkey.cleared": FingerprintIcon,
-};
+}
 
 const SOURCE_META: Record<string, { label: string; Icon: typeof DatabaseIcon; tone: string }> = {
   server: { label: "server", Icon: DatabaseIcon, tone: "text-primary" },
   relay: { label: "relay", Icon: BroadcastIcon, tone: "text-primary" },
   client: { label: "client", Icon: MonitorIcon, tone: "text-warning" },
-};
+}
 
 const RANGES = [
   { value: "24h", label: "Last 24 hours", minutes: 60 * 24 },
@@ -167,11 +167,11 @@ const RANGES = [
   { value: "30d", label: "Last 30 days", minutes: 60 * 24 * 30 },
   { value: "12m", label: "Last 12 months", minutes: 60 * 24 * 365 },
   { value: "all", label: "Everything loaded", minutes: Number.POSITIVE_INFINITY },
-] as const;
+] as const
 
-type RangeValue = (typeof RANGES)[number]["value"];
+type RangeValue = (typeof RANGES)[number]["value"]
 
-const DEFAULT_RANGE: RangeValue = "30d";
+const DEFAULT_RANGE: RangeValue = "30d"
 
 /**
  * The retention window this page is showing, derived from what the server said.
@@ -189,15 +189,15 @@ const DEFAULT_RANGE: RangeValue = "30d";
  * being wrong for half the accounts.
  */
 interface RetentionView {
-  label: string;
+  label: string
   /** The oldest event that can exist, as the server computed it. */
-  since: Date;
+  since: Date
   /** For comparing against a selected range. */
-  minutes: number;
+  minutes: number
 }
 
 function retentionView(window: AuditRetentionWindow | null): RetentionView | null {
-  if (!window) return null;
+  if (!window) return null
   return {
     label: AUDIT_RETENTION_LABEL[window.tier],
     // The server's own cutoff rather than one recomputed here from `days`. They
@@ -205,7 +205,7 @@ function retentionView(window: AuditRetentionWindow | null): RetentionView | nul
     // bug where they stop agreeing by a few hours of clock drift.
     since: new Date(window.since),
     minutes: window.days * 24 * 60,
-  };
+  }
 }
 
 /**
@@ -215,16 +215,16 @@ function retentionView(window: AuditRetentionWindow | null): RetentionView | nul
  * searches over them as well as over the raw row.
  */
 interface DecoratedRow {
-  row: AuditRow;
+  row: AuditRow
   /** Never blank. Falls back to the shortened id, or to "Unknown device". */
-  deviceName: string;
-  deviceRevoked: boolean;
+  deviceName: string
+  deviceRevoked: boolean
   /**
    * Null when nothing here resolved the reference: no matching host in this
    * vault, or no audit key in this tab to try one with. The row still renders.
    */
-  hostLabel: string | null;
-  detail: string | null;
+  hostLabel: string | null
+  detail: string | null
 }
 
 /** How the audit request itself is doing. Everything else degrades in place. */
@@ -232,13 +232,13 @@ type LogState =
   | { phase: "loading" }
   | { phase: "ready" }
   | { phase: "unauthorized" }
-  | { phase: "error"; message: string };
+  | { phase: "error"; message: string }
 
 /**
  * How host resolution is doing. "locked" is the ordinary case after a page
  * reload — the audit key lives in memory only — and is recoverable from here.
  */
-type HostIndexState = "resolving" | "ready" | "locked" | "no-audit-key" | "failed";
+type HostIndexState = "resolving" | "ready" | "locked" | "no-audit-key" | "failed"
 
 /**
  * What to say about a reference that did not resolve.
@@ -275,158 +275,155 @@ const OPAQUE_COPY: Record<HostIndexState, { caption: string; tooltip: string }> 
     tooltip:
       "The saved host list could not be read in this browser, so there was nothing to match this reference against. The server cannot resolve it either: it has never held the name.",
   },
-};
+}
 
 /* -------------------------------------------------------------------- page */
 
 export default function ActivityPage() {
-  const unlocked = useVaultUnlocked();
+  const unlocked = useVaultUnlocked()
 
-  const [state, setState] = useState<LogState>({ phase: "loading" });
-  const [rows, setRows] = useState<AuditRow[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [state, setState] = useState<LogState>({ phase: "loading" })
+  const [rows, setRows] = useState<AuditRow[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   /**
    * The window the server applied, as it reported it. Null until the first
    * response lands, and null it stays if the response carried no usable block —
    * every sentence about retention below is suppressed rather than guessed.
    */
-  const [retentionWindow, setRetentionWindow] = useState<AuditRetentionWindow | null>(null);
+  const [retentionWindow, setRetentionWindow] = useState<AuditRetentionWindow | null>(null)
   /** Fixed when the first page lands, so every timestamp on screen agrees. */
-  const [readAt, setReadAt] = useState(() => Date.now());
-  const [attempt, setAttempt] = useState(0);
+  const [readAt, setReadAt] = useState(() => Date.now())
+  const [attempt, setAttempt] = useState(0)
 
-  const [devices, setDevices] = useState<DeviceSummary[]>([]);
-  const [devicesFailed, setDevicesFailed] = useState(false);
+  const [devices, setDevices] = useState<DeviceSummary[]>([])
+  const [devicesFailed, setDevicesFailed] = useState(false)
 
-  const [hostLabels, setHostLabels] = useState<Map<string, string>>(() => new Map());
-  const [hostIndex, setHostIndex] = useState<HostIndexState>("resolving");
+  const [hostLabels, setHostLabels] = useState<Map<string, string>>(() => new Map())
+  const [hostIndex, setHostIndex] = useState<HostIndexState>("resolving")
 
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState<"all" | string>("all");
-  const [source, setSource] = useState<"all" | string>("all");
-  const [device, setDevice] = useState<"all" | string>("all");
-  const [range, setRange] = useState<RangeValue>(DEFAULT_RANGE);
+  const [query, setQuery] = useState("")
+  const [type, setType] = useState<"all" | string>("all")
+  const [source, setSource] = useState<"all" | string>("all")
+  const [device, setDevice] = useState<"all" | string>("all")
+  const [range, setRange] = useState<RangeValue>(DEFAULT_RANGE)
 
   // The log itself. `attempt` is what the retry button bumps.
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
     void (async () => {
-      setState({ phase: "loading" });
+      setState({ phase: "loading" })
       try {
-        const page = await fetchAuditPage();
-        if (cancelled) return;
-        setRows(page.rows);
-        setCursor(page.nextCursor);
-        setRetentionWindow(page.retention);
-        setReadAt(Date.now());
-        setState({ phase: "ready" });
+        const page = await fetchAuditPage()
+        if (cancelled) return
+        setRows(page.rows)
+        setCursor(page.nextCursor)
+        setRetentionWindow(page.retention)
+        setReadAt(Date.now())
+        setState({ phase: "ready" })
       } catch (error) {
-        if (cancelled) return;
-        const kind = error instanceof AuditFetchError ? error.kind : "server";
+        if (cancelled) return
+        const kind = error instanceof AuditFetchError ? error.kind : "server"
         setState(
           kind === "unauthorized"
             ? { phase: "unauthorized" }
             : { phase: "error", message: message(error) },
-        );
+        )
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
+      cancelled = true
+    }
+  }, [attempt])
 
   // Device labels. A failure here is not the page's failure: the rows still
   // carry ids, so the column degrades to those and says why.
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
     void (async () => {
       try {
-        const list = await fetchDevices();
-        if (cancelled) return;
-        setDevices(list);
-        setDevicesFailed(false);
+        const list = await fetchDevices()
+        if (cancelled) return
+        setDevices(list)
+        setDevicesFailed(false)
       } catch {
-        if (!cancelled) setDevicesFailed(true);
+        if (!cancelled) setDevicesFailed(true)
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
+      cancelled = true
+    }
+  }, [attempt])
 
   // Host resolution. Re-runs when the vault unlocks, which is the whole reason
   // `unlocked` is read reactively rather than as a one-off.
   useEffect(() => {
-    let cancelled = false;
-    const auditKey = getAuditKey();
+    let cancelled = false
+    const auditKey = getAuditKey()
 
     void (async () => {
       if (!auditKey) {
         // Locked is the common case after a reload; unlocked-without-an-audit-key
         // means the key was derived without its HMAC branch, which needs saying
         // differently because unlocking again is not the fix.
-        setHostLabels(new Map());
-        setHostIndex(unlocked ? "no-audit-key" : "locked");
-        return;
+        setHostLabels(new Map())
+        setHostIndex(unlocked ? "no-audit-key" : "locked")
+        return
       }
 
-      setHostIndex("resolving");
+      setHostIndex("resolving")
       try {
-        const index = await buildHostLabels(auditKey);
-        if (cancelled) return;
-        setHostLabels(index);
-        setHostIndex("ready");
+        const index = await buildHostLabels(auditKey)
+        if (cancelled) return
+        setHostLabels(index)
+        setHostIndex("ready")
       } catch {
-        if (cancelled) return;
-        setHostLabels(new Map());
-        setHostIndex("failed");
+        if (cancelled) return
+        setHostLabels(new Map())
+        setHostIndex("failed")
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [unlocked]);
+      cancelled = true
+    }
+  }, [unlocked])
 
-  const deviceIndex = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
+  const deviceIndex = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices])
 
-  const deviceLabel = useCallback(
-    (id: string) => deviceIndex.get(id)?.label ?? null,
-    [deviceIndex],
-  );
+  const deviceLabel = useCallback((id: string) => deviceIndex.get(id)?.label ?? null, [deviceIndex])
 
   const decorated = useMemo<DecoratedRow[]>(
     () =>
       rows.map((row) => {
-        const known = row.deviceId ? deviceIndex.get(row.deviceId) : undefined;
+        const known = row.deviceId ? deviceIndex.get(row.deviceId) : undefined
         return {
           row,
           deviceName: describeDevice(row.deviceId, known, devicesFailed),
           deviceRevoked: known?.revokedAt != null,
           hostLabel: row.targetRef ? (hostLabels.get(row.targetRef) ?? null) : null,
           detail: describeEvent(row, deviceLabel),
-        };
+        }
       }),
     [rows, deviceIndex, devicesFailed, hostLabels, deviceLabel],
-  );
+  )
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const minutes = RANGES.find((r) => r.value === range)?.minutes ?? Infinity;
-    const cutoff = Number.isFinite(minutes) ? readAt - minutes * 60_000 : -Infinity;
+    const needle = query.trim().toLowerCase()
+    const minutes = RANGES.find((r) => r.value === range)?.minutes ?? Infinity
+    const cutoff = Number.isFinite(minutes) ? readAt - minutes * 60_000 : -Infinity
 
     return decorated.filter((item) => {
-      const { row } = item;
-      if (row.at < cutoff) return false;
-      if (type !== "all" && row.eventType !== type) return false;
-      if (source !== "all" && row.source !== source) return false;
-      if (device !== "all" && row.deviceId !== device) return false;
-      if (!needle) return true;
+      const { row } = item
+      if (row.at < cutoff) return false
+      if (type !== "all" && row.eventType !== type) return false
+      if (source !== "all" && row.source !== source) return false
+      if (device !== "all" && row.deviceId !== device) return false
+      if (!needle) return true
 
       const haystack = [
         eventLabel(row.eventType),
@@ -439,15 +436,15 @@ export default function ActivityPage() {
         item.detail ?? "",
       ]
         .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
-    });
-  }, [decorated, query, type, source, device, range, readAt]);
+        .toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [decorated, query, type, source, device, range, readAt])
 
   const unresolved = useMemo(
     () => filtered.filter((item) => item.row.targetRef && !item.hostLabel).length,
     [filtered],
-  );
+  )
 
   /**
    * The device filter lists registered devices plus any id that appears in the
@@ -458,16 +455,16 @@ export default function ActivityPage() {
     const options = devices.map((d) => ({
       id: d.id,
       label: d.revokedAt ? `${d.label} (revoked)` : d.label,
-    }));
-    const listed = new Set(devices.map((d) => d.id));
+    }))
+    const listed = new Set(devices.map((d) => d.id))
     for (const row of rows) {
       if (row.deviceId && !listed.has(row.deviceId)) {
-        listed.add(row.deviceId);
-        options.push({ id: row.deviceId, label: `Unknown device ${shortId(row.deviceId)}` });
+        listed.add(row.deviceId)
+        options.push({ id: row.deviceId, label: `Unknown device ${shortId(row.deviceId)}` })
       }
     }
-    return options;
-  }, [devices, rows]);
+    return options
+  }, [devices, rows])
 
   /**
    * The window as this page will render it, or null while it is unknown.
@@ -476,7 +473,7 @@ export default function ActivityPage() {
    * recomputed here, so the boundary on screen is the boundary in the WHERE
    * clause and not an approximation of it.
    */
-  const retention = useMemo(() => retentionView(retentionWindow), [retentionWindow]);
+  const retention = useMemo(() => retentionView(retentionWindow), [retentionWindow])
 
   /**
    * Whether the chosen range asks for more history than is kept.
@@ -490,46 +487,46 @@ export default function ActivityPage() {
    * nobody has told us about would be inventing the very number this page stopped
    * inventing.
    */
-  const selectedRange = RANGES.find((r) => r.value === range);
-  const rangeLabel = selectedRange?.label ?? "This range";
+  const selectedRange = RANGES.find((r) => r.value === range)
+  const rangeLabel = selectedRange?.label ?? "This range"
   const rangeExceedsWindow =
-    retention !== null && (selectedRange?.minutes ?? Infinity) > retention.minutes;
+    retention !== null && (selectedRange?.minutes ?? Infinity) > retention.minutes
 
   const filtersActive =
     query !== "" ||
     type !== "all" ||
     source !== "all" ||
     device !== "all" ||
-    range !== DEFAULT_RANGE;
+    range !== DEFAULT_RANGE
 
   function clearFilters() {
-    setQuery("");
-    setType("all");
-    setSource("all");
-    setDevice("all");
-    setRange(DEFAULT_RANGE);
+    setQuery("")
+    setType("all")
+    setSource("all")
+    setDevice("all")
+    setRange(DEFAULT_RANGE)
   }
 
   async function loadOlder() {
-    if (!cursor || loadingOlder) return;
-    setLoadingOlder(true);
+    if (!cursor || loadingOlder) return
+    setLoadingOlder(true)
     try {
-      const page = await fetchAuditPage({ before: cursor });
-      setRows((prev) => mergePages(prev, page.rows));
-      setCursor(page.nextCursor);
+      const page = await fetchAuditPage({ before: cursor })
+      setRows((prev) => mergePages(prev, page.rows))
+      setCursor(page.nextCursor)
       // Re-stated on every page, and taken every time: a subscription that
       // started or lapsed between two requests changes the window, and the later
       // response is the one the server is enforcing.
-      setRetentionWindow(page.retention);
+      setRetentionWindow(page.retention)
       if (page.rows.length === 0) {
         toast.message("No older events came back", {
           description: "The server had nothing before that point.",
-        });
+        })
       }
     } catch (error) {
-      toast.error("Could not load older events", { description: message(error) });
+      toast.error("Could not load older events", { description: message(error) })
     } finally {
-      setLoadingOlder(false);
+      setLoadingOlder(false)
     }
   }
 
@@ -539,7 +536,7 @@ export default function ActivityPage() {
    * host name, and it holds no device label for a row it only knows by id.
    */
   function exportEvents(format: "json" | "csv") {
-    if (filtered.length === 0) return;
+    if (filtered.length === 0) return
 
     const records = filtered.map((item) => ({
       time: new Date(item.row.at).toISOString(),
@@ -555,17 +552,17 @@ export default function ActivityPage() {
       // flattening an open-ended object into them would either lose keys or
       // grow a column per event type.
       metadata: item.row.metadata,
-    }));
+    }))
 
-    const name = `webxterm-activity-${stamp(readAt)}.${format}`;
+    const name = `webxterm-activity-${stamp(readAt)}.${format}`
     if (format === "json") {
       download(
         name,
         JSON.stringify({ exportedAt: new Date().toISOString(), events: records }, null, 2),
         "application/json",
-      );
+      )
     } else {
-      download(name, toCsv(records), "text/csv");
+      download(name, toCsv(records), "text/csv")
     }
 
     toast.success(`Exported ${filtered.length} ${filtered.length === 1 ? "event" : "events"}`, {
@@ -573,7 +570,7 @@ export default function ActivityPage() {
         unresolved > 0
           ? `${unresolved} ${unresolved === 1 ? "row keeps" : "rows keep"} an unresolved host reference, exactly as stored.`
           : "Host labels were resolved in this tab. The copy on the server holds references only.",
-    });
+    })
   }
 
   return (
@@ -897,7 +894,7 @@ export default function ActivityPage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
 
 /* --------------------------------------------------------------------- row */
@@ -907,16 +904,16 @@ function EventRow({
   now,
   hostIndex,
 }: {
-  item: DecoratedRow;
-  now: number;
+  item: DecoratedRow
+  now: number
   /** Decides what an unresolved reference means: no key here, or no such host. */
-  hostIndex: HostIndexState;
+  hostIndex: HostIndexState
 }) {
-  const { row } = item;
-  const opaque = OPAQUE_COPY[hostIndex];
-  const meta = SOURCE_META[row.source];
-  const Icon = isKnownEvent(row.eventType) ? EVENT_ICONS[row.eventType] : QuestionIcon;
-  const alarming = row.eventType === "hostkey.mismatch";
+  const { row } = item
+  const opaque = OPAQUE_COPY[hostIndex]
+  const meta = SOURCE_META[row.source]
+  const Icon = isKnownEvent(row.eventType) ? EVENT_ICONS[row.eventType] : QuestionIcon
+  const alarming = row.eventType === "hostkey.mismatch"
 
   return (
     <TableRow>
@@ -995,7 +992,7 @@ function EventRow({
         )}
       </TableCell>
     </TableRow>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ states */
@@ -1013,7 +1010,7 @@ function HostIndexNotice({ state }: { state: HostIndexState }) {
           </p>
         </AlertDescription>
       </Alert>
-    );
+    )
   }
 
   if (state === "no-audit-key") {
@@ -1029,7 +1026,7 @@ function HostIndexNotice({ state }: { state: HostIndexState }) {
           </p>
         </AlertDescription>
       </Alert>
-    );
+    )
   }
 
   return (
@@ -1047,7 +1044,7 @@ function HostIndexNotice({ state }: { state: HostIndexState }) {
         </Button>
       </AlertDescription>
     </Alert>
-  );
+  )
 }
 
 function LoadingState() {
@@ -1064,7 +1061,7 @@ function LoadingState() {
         ))}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function SignedOutState() {
@@ -1087,7 +1084,7 @@ function SignedOutState() {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -1111,7 +1108,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /**
@@ -1150,20 +1147,20 @@ function NoEvents({ retention }: { retention: RetentionView | null }) {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function NoMatches({
   onClear,
   retention,
 }: {
-  onClear: () => void;
+  onClear: () => void
   /**
    * Non-null only when the range asks for history the log does not keep, in
    * which case "widen it" is bad advice and the window is worth naming. Null
    * covers both "the range is fine" and "the window is not known yet".
    */
-  retention: RetentionView | null;
+  retention: RetentionView | null
 }) {
   return (
     <Card className="mt-4">
@@ -1193,7 +1190,7 @@ function NoMatches({
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 /* -------------------------------------------------------------- rendering */
@@ -1201,7 +1198,7 @@ function NoMatches({
 function eventLabel(type: string): string {
   // An event type this build has no label for is shown as it was stored. That
   // is uglier than a friendly name and more honest than inventing one.
-  return isKnownEvent(type) ? EVENT_LABELS[type] : type;
+  return isKnownEvent(type) ? EVENT_LABELS[type] : type
 }
 
 function describeDevice(
@@ -1209,26 +1206,26 @@ function describeDevice(
   known: DeviceSummary | undefined,
   listUnavailable: boolean,
 ): string {
-  if (!deviceId) return "No device recorded";
-  if (known) return known.label;
+  if (!deviceId) return "No device recorded"
+  if (known) return known.label
   // Two different unknowns: the registry says this id is not one of yours, or
   // the registry could not be asked. They deserve different words.
-  return listUnavailable ? `Device ${shortId(deviceId)}` : `Unknown device ${shortId(deviceId)}`;
+  return listUnavailable ? `Device ${shortId(deviceId)}` : `Unknown device ${shortId(deviceId)}`
 }
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? error.message : String(error)
 }
 
 /* --------------------------------------------------------------- download */
 
 function download(name: string, body: string, mime: string) {
-  const url = URL.createObjectURL(new Blob([body], { type: mime }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(new Blob([body], { type: mime }))
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = name
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 const CSV_COLUMNS = [
@@ -1241,14 +1238,14 @@ const CSV_COLUMNS = [
   "hostRef",
   "network",
   "detail",
-] as const;
+] as const
 
 function toCsv(records: Record<string, unknown>[]): string {
-  const lines = [CSV_COLUMNS.join(",")];
+  const lines = [CSV_COLUMNS.join(",")]
   for (const record of records) {
-    lines.push(CSV_COLUMNS.map((column) => csvCell(record[column])).join(","));
+    lines.push(CSV_COLUMNS.map((column) => csvCell(record[column])).join(","))
   }
-  return `${lines.join("\r\n")}\r\n`;
+  return `${lines.join("\r\n")}\r\n`
 }
 
 /**
@@ -1257,20 +1254,20 @@ function toCsv(records: Record<string, unknown>[]): string {
  * turns a CSV cell into a formula in a spreadsheet.
  */
 function csvCell(value: unknown): string {
-  if (value === null || value === undefined) return '""';
-  return `"${String(value).replace(/"/g, '""')}"`;
+  if (value === null || value === undefined) return '""'
+  return `"${String(value).replace(/"/g, '""')}"`
 }
 
 /* -------------------------------------------------------------- formatting */
 
 function pad(n: number): string {
-  return String(n).padStart(2, "0");
+  return String(n).padStart(2, "0")
 }
 
 /** Local time, fixed width, so the column scans as a column. */
 function absolute(at: number): string {
-  const d = new Date(at);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const d = new Date(at)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 /**
@@ -1278,13 +1275,13 @@ function absolute(at: number): string {
  * window rolls over is real but not useful — it moves while you read the page.
  */
 function day(at: number): string {
-  const d = new Date(at);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const d = new Date(at)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function stamp(at: number): string {
-  const d = new Date(at);
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  const d = new Date(at)
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
 }
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -1294,17 +1291,17 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 24 * 60 * 60 * 1000],
   ["hour", 60 * 60 * 1000],
   ["minute", 60 * 1000],
-];
+]
 
-const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 /** Relative to the moment the page read the log, so every row agrees. */
 function relative(at: number, now: number): string {
-  const delta = at - now;
-  const abs = Math.abs(delta);
-  if (abs < 60_000) return "just now";
+  const delta = at - now
+  const abs = Math.abs(delta)
+  if (abs < 60_000) return "just now"
   for (const [unit, ms] of UNITS) {
-    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit);
+    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit)
   }
-  return "just now";
+  return "just now"
 }

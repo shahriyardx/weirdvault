@@ -1,13 +1,13 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 
-import { AppSidebar } from "@/components/shell/app-sidebar";
-import { DashboardContent } from "@/components/shell/dashboard-content";
-import { DashboardTopBar } from "@/components/shell/dashboard-top-bar";
-import { VaultUnlock } from "@/components/vault-unlock";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { SessionProvider } from "@/lib/ssh/session-provider";
-import { accountGate } from "@/lib/auth";
+import { AppSidebar } from "@/components/shell/app-sidebar"
+import { DashboardContent } from "@/components/shell/dashboard-content"
+import { DashboardTopBar } from "@/components/shell/dashboard-top-bar"
+import { VaultUnlock } from "@/components/vault-unlock"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SessionProvider } from "@/lib/ssh/session-provider"
+import { accountGate } from "@/lib/auth"
 
 /**
  * The dashboard is the application, not a section of the website.
@@ -52,9 +52,9 @@ import { accountGate } from "@/lib/auth";
  * query for the account list. Both are paid once per dashboard entry.
  */
 export default async function DashboardLayout({ children }: LayoutProps<"/dashboard">) {
-  const gate = await accountGate(await headers());
-  if (gate === "signed-out") redirect("/sign-in");
-  if (gate === "no-vault-password") redirect("/set-vault-password");
+  const gate = await accountGate(await headers())
+  if (gate === "signed-out") redirect("/sign-in")
+  if (gate === "no-vault-password") redirect("/set-vault-password")
 
   return (
     <SessionProvider>
@@ -67,5 +67,5 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
         </SidebarInset>
       </SidebarProvider>
     </SessionProvider>
-  );
+  )
 }

@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
-import type Stripe from "stripe";
+import { eq } from "drizzle-orm"
+import type Stripe from "stripe"
 
-import { db, schema } from "@/lib/db";
-import { BillingNotConfiguredError, stripeClient, webhookSecret } from "@/lib/billing/stripe";
-import { mirrorSubscription } from "@/lib/billing/subscription";
+import { db, schema } from "@/lib/db"
+import { BillingNotConfiguredError, stripeClient, webhookSecret } from "@/lib/billing/stripe"
+import { mirrorSubscription } from "@/lib/billing/subscription"
 
 /**
  * Stripe's webhook. The only unauthenticated write path in this application.
@@ -71,7 +71,7 @@ const HANDLED = new Set([
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "invoice.payment_failed",
-]);
+])
 
 export async function POST(request: Request) {
   // Both the secret and the client are resolved before the verification attempt
@@ -79,73 +79,73 @@ export async function POST(request: Request) {
   // from `stripeClient()` inside the try below and be reported as a signature
   // failure, which is a 400 telling Stripe its own signature was wrong and an
   // operator to go looking for the wrong variable.
-  let secret: string;
-  let stripe: ReturnType<typeof stripeClient>;
+  let secret: string
+  let stripe: ReturnType<typeof stripeClient>
   try {
-    secret = webhookSecret();
-    stripe = stripeClient();
+    secret = webhookSecret()
+    stripe = stripeClient()
   } catch (e) {
     if (e instanceof BillingNotConfiguredError) {
       // 503 rather than 200: a deployment that cannot verify a delivery must not
       // let Stripe believe it succeeded, or the event is lost. A retry gives an
       // operator time to set the variable, which is named in the log and not in
       // the response.
-      console.error(`webhook rejected: ${e.missing} is not set`);
-      return Response.json({ error: e.message }, { status: 503 });
+      console.error(`webhook rejected: ${e.missing} is not set`)
+      return Response.json({ error: e.message }, { status: 503 })
     }
-    throw e;
+    throw e
   }
 
-  const signature = request.headers.get("stripe-signature");
+  const signature = request.headers.get("stripe-signature")
   if (!signature) {
-    return Response.json({ error: "missing stripe-signature" }, { status: 400 });
+    return Response.json({ error: "missing stripe-signature" }, { status: 400 })
   }
 
   // The raw bytes, exactly as sent. Nothing may parse this before the verifier
   // has seen it — see the note above about re-serialisation.
-  const raw = await request.text();
+  const raw = await request.text()
 
-  let event: Stripe.Event;
+  let event: Stripe.Event
   try {
-    event = await stripe.webhooks.constructEventAsync(raw, signature, secret);
+    event = await stripe.webhooks.constructEventAsync(raw, signature, secret)
   } catch (e) {
     // Deliberately vague to the caller and specific in the log. Somebody probing
     // this endpoint learns only that their signature was wrong; the operator
     // learns why, without the body or the header being written anywhere.
-    console.warn("webhook signature verification failed", e instanceof Error ? e.message : "");
-    return Response.json({ error: "signature verification failed" }, { status: 400 });
+    console.warn("webhook signature verification failed", e instanceof Error ? e.message : "")
+    return Response.json({ error: "signature verification failed" }, { status: 400 })
   }
 
   // Claim the event before doing anything with it. The insert either wins, and
   // this delivery owns the processing, or it conflicts, and some other delivery
   // already did the work.
-  let claimed: { id: string }[];
+  let claimed: { id: string }[]
   try {
     claimed = await db
       .insert(schema.stripeEvent)
       .values({ id: event.id, type: event.type })
       .onConflictDoNothing({ target: schema.stripeEvent.id })
-      .returning({ id: schema.stripeEvent.id });
+      .returning({ id: schema.stripeEvent.id })
   } catch (e) {
-    console.error(`webhook ${event.id} could not be recorded`, e instanceof Error ? e.message : e);
-    return Response.json({ error: "could not record event" }, { status: 500 });
+    console.error(`webhook ${event.id} could not be recorded`, e instanceof Error ? e.message : e)
+    return Response.json({ error: "could not record event" }, { status: 500 })
   }
 
   if (claimed.length === 0) {
     // Already processed. Not an error and not worth a log line — Stripe redelivers
     // routinely and this is the mechanism working.
-    return Response.json({ ok: true, deduplicated: true });
+    return Response.json({ ok: true, deduplicated: true })
   }
 
   if (!HANDLED.has(event.type)) {
     // 200, or Stripe retries an event we will never do anything with until it
     // gives up days later. The marker row stays, which is correct: it has been
     // dealt with, and the decision was to ignore it.
-    return Response.json({ ok: true, ignored: event.type });
+    return Response.json({ ok: true, ignored: event.type })
   }
 
   try {
-    await handle(event);
+    await handle(event)
   } catch (e) {
     // Release the claim so the retry can do the work, then fail loudly enough
     // that Stripe sends one.
@@ -158,13 +158,13 @@ export async function POST(request: Request) {
         console.error(
           `webhook ${event.id} (${event.type}) failed and its marker could not be cleared; ` +
             "the subscription mirror may be stale for that account",
-        );
-      });
-    console.error(`webhook ${event.id} (${event.type}) failed`, e instanceof Error ? e.message : e);
-    return Response.json({ error: "processing failed" }, { status: 500 });
+        )
+      })
+    console.error(`webhook ${event.id} (${event.type}) failed`, e instanceof Error ? e.message : e)
+    return Response.json({ error: "processing failed" }, { status: 500 })
   }
 
-  return Response.json({ ok: true, type: event.type });
+  return Response.json({ ok: true, type: event.type })
 }
 
 /**
@@ -177,27 +177,27 @@ export async function POST(request: Request) {
  * truth.
  */
 async function handle(event: Stripe.Event): Promise<void> {
-  const stripe = stripeClient();
+  const stripe = stripeClient()
 
   switch (event.type) {
     case "checkout.session.completed": {
-      const session = event.data.object;
+      const session = event.data.object
       // A one-off payment session, if this account ever grows one, has no
       // subscription to mirror. Ignoring it is correct rather than a gap.
-      if (session.mode !== "subscription") return;
+      if (session.mode !== "subscription") return
 
       const subscriptionId =
         typeof session.subscription === "string"
           ? session.subscription
-          : (session.subscription?.id ?? null);
-      if (!subscriptionId) return;
+          : (session.subscription?.id ?? null)
+      if (!subscriptionId) return
 
       // Fetched rather than read from the session, because the session's copy is
       // a summary and this needs the items — which is where the period end lives
       // in this API version.
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      await mirror(subscription, event);
-      return;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+      await mirror(subscription, event)
+      return
     }
 
     case "customer.subscription.created":
@@ -207,31 +207,31 @@ async function handle(event: Stripe.Event): Promise<void> {
       // there is nothing to fetch. `deleted` is not a deletion of anything here:
       // it arrives with status `canceled`, which is what gets written, and
       // tiers.ts decides whether a cancellation still grants anything.
-      await mirror(event.data.object, event);
-      return;
+      await mirror(event.data.object, event)
+      return
     }
 
     case "invoice.payment_failed": {
-      const invoice = event.data.object;
+      const invoice = event.data.object
       // `invoice.subscription` was removed from the Invoice object; a
       // subscription invoice now names its subscription under `parent`. An
       // invoice with no subscription parent is a one-off charge and is not ours
       // to act on.
-      const parent = invoice.parent?.subscription_details?.subscription;
-      const subscriptionId = typeof parent === "string" ? parent : (parent?.id ?? null);
-      if (!subscriptionId) return;
+      const parent = invoice.parent?.subscription_details?.subscription
+      const subscriptionId = typeof parent === "string" ? parent : (parent?.id ?? null)
+      if (!subscriptionId) return
 
       // Re-read rather than assume `past_due`. Stripe decides what a failed
       // payment does to a subscription — the first failure of a retry schedule
       // and the last one produce very different statuses — and guessing would be
       // this file inventing a billing state.
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      await mirror(subscription, event);
-      return;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+      await mirror(subscription, event)
+      return
     }
 
     default:
-      return;
+      return
   }
 }
 
@@ -245,31 +245,31 @@ async function handle(event: Stripe.Event): Promise<void> {
  * know which of two answers Stripe formed later, and only Stripe can say.
  */
 async function mirror(subscription: Stripe.Subscription, event: Stripe.Event): Promise<void> {
-  const { skipped } = await mirrorSubscription(subscription, new Date(event.created * 1000));
-  if (!skipped) return;
+  const { skipped } = await mirrorSubscription(subscription, new Date(event.created * 1000))
+  if (!skipped) return
 
-  const prefix = `webhook ${event.id} (${event.type}): subscription ${subscription.id}`;
+  const prefix = `webhook ${event.id} (${event.type}): subscription ${subscription.id}`
   switch (skipped) {
     case "unattributable":
       // Created directly in the Stripe dashboard against a customer we have
       // never seen, or against one whose local row has been deleted with its
       // user. Nothing is written, because the alternative is granting somebody
       // else's subscription to an account picked by guesswork.
-      console.warn(`${prefix} matches no local account; nothing was written`);
-      return;
+      console.warn(`${prefix} matches no local account; nothing was written`)
+      return
     case "stale-event":
       // A redelivery that arrived after a newer one. Routine, and the
       // deduplication working rather than failing — logged at info because a
       // run of these is how a delivery backlog looks from here.
-      console.info(`${prefix} carried an older event than the mirror already has; ignored`);
-      return;
+      console.info(`${prefix} carried an older event than the mirror already has; ignored`)
+      return
     case "other-subscription":
       // One customer with two subscriptions. Should not happen, is not fixed by
       // anything here, and somebody is probably being charged twice.
       console.error(
         `${prefix} would have overwritten a different subscription that still grants Pro for ` +
           "this account; nothing was written. That customer has two subscriptions in Stripe",
-      );
-      return;
+      )
+      return
   }
 }

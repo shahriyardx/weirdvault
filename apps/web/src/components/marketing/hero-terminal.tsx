@@ -3,7 +3,7 @@ import {
   LockKeyIcon,
   RecordIcon,
   TerminalWindowIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
 /**
  * The hero's terminal, drawn rather than screenshotted.
@@ -98,7 +98,7 @@ export function HeroTerminal() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 function Line({
@@ -106,14 +106,14 @@ function Line({
   prompt,
   muted,
 }: {
-  children: React.ReactNode;
-  prompt?: boolean;
-  muted?: boolean;
+  children: React.ReactNode
+  prompt?: boolean
+  muted?: boolean
 }) {
   return (
     <div className={muted ? "text-muted-foreground/70" : "text-foreground/90"}>
       {prompt && <span className="text-primary">$ </span>}
       {children}
     </div>
-  );
+  )
 }

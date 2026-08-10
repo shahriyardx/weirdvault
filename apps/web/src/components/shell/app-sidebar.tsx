@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import {
   ClockCounterClockwiseIcon,
   CodeIcon,
@@ -21,17 +21,17 @@ import {
   StopIcon,
   TerminalWindowIcon,
   XIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { Brand } from "@/components/shell/brand";
-import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
+import { Brand } from "@/components/shell/brand"
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "@/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,8 +39,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import {
   Sidebar,
   SidebarContent,
@@ -55,12 +55,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar";
-import type { Host } from "@/lib/hosts";
-import { useRecorders } from "@/lib/recording/capture";
-import { useSessionRecorder } from "@/lib/recording/use-session-recorder";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import { useConnectHost } from "@/lib/ssh/use-connect-host";
+} from "@/components/ui/sidebar"
+import type { Host } from "@/lib/hosts"
+import { useRecorders } from "@/lib/recording/capture"
+import { useSessionRecorder } from "@/lib/recording/use-session-recorder"
+import { useSshSession } from "@/lib/ssh/session-provider"
+import { useConnectHost } from "@/lib/ssh/use-connect-host"
 
 /**
  * The application sidebar.
@@ -79,28 +79,28 @@ import { useConnectHost } from "@/lib/ssh/use-connect-host";
  * item in it.
  */
 export function AppSidebar() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const { sessions, activeId, setActive, disconnect, renameSession, hosts, keys } = useSshSession();
+  const pathname = usePathname()
+  const router = useRouter()
+  const { sessions, activeId, setActive, disconnect, renameSession, hosts, keys } = useSshSession()
 
-  const recorders = useRecorders();
-  const { start: startRecording, stop: stopRecording } = useSessionRecorder();
-  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const recorders = useRecorders()
+  const { start: startRecording, stop: stopRecording } = useSessionRecorder()
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
 
   // The picker connects directly, so this shell owns the credential dialog: a
   // password host asks every time, and there is no page underneath to ask for
   // it. Mounted once here rather than per-page, since the sidebar outlives every
   // route it sits beside.
-  const prompt = useCredentialPrompt();
+  const prompt = useCredentialPrompt()
   const { connectToHost, connecting } = useConnectHost({
     askFor: prompt.askFor,
     onConnected: () => router.push("/dashboard/terminal"),
-  });
+  })
 
   // Most-recently-used first, so the picker's top item is usually the answer.
   const recentHosts = [...hosts]
     .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
-    .slice(0, 8);
+    .slice(0, 8)
 
   // Recordings and Snippets were shipped as routes and never linked here, so the
   // only way to reach either was to type the URL. Both are ordinary pages.
@@ -112,20 +112,20 @@ export function AppSidebar() {
     { href: "/dashboard/keys", label: "Keys", icon: KeyIcon, badge: keys.length },
     { href: "/dashboard/snippets", label: "Snippets", icon: CodeIcon },
     { href: "/dashboard/recordings", label: "Recordings", icon: FilmReelIcon },
-  ] as const;
+  ] as const
 
   const account = [
     { href: "/dashboard/devices", label: "Devices", icon: DevicesIcon },
     { href: "/dashboard/activity", label: "Activity", icon: ClockCounterClockwiseIcon },
     { href: "/dashboard/settings", label: "Settings", icon: GearSixIcon },
-  ] as const;
+  ] as const
 
   function openSession(id: string) {
-    setActive(id);
+    setActive(id)
     // These entries carry a terminal icon and are labelled with the shell they
     // belong to, so they open the shell — always. Files is its own destination
     // with its own session picker.
-    router.push("/dashboard/terminal");
+    router.push("/dashboard/terminal")
   }
 
   return (
@@ -164,9 +164,9 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               {sessions.map((s) => {
-                const isActive = s.id === activeId;
-                const recorder = recorders.find((r) => r.sessionId === s.id) ?? null;
-                const capturing = recorder?.capturing === true;
+                const isActive = s.id === activeId
+                const recorder = recorders.find((r) => r.sessionId === s.id) ?? null
+                const capturing = recorder?.capturing === true
 
                 if (renaming?.id === s.id) {
                   return (
@@ -174,9 +174,9 @@ export function AppSidebar() {
                       <form
                         className="px-2 py-1 group-data-[collapsible=icon]:hidden"
                         onSubmit={(e) => {
-                          e.preventDefault();
-                          renameSession(s.id, renaming.name);
-                          setRenaming(null);
+                          e.preventDefault()
+                          renameSession(s.id, renaming.name)
+                          setRenaming(null)
                         }}
                       >
                         <Input
@@ -189,16 +189,16 @@ export function AppSidebar() {
                           // name you have just typed reads as accepting it, and a
                           // rename is trivially repeatable if it does not.
                           onBlur={() => {
-                            renameSession(s.id, renaming.name);
-                            setRenaming(null);
+                            renameSession(s.id, renaming.name)
+                            setRenaming(null)
                           }}
                           onKeyDown={(e) => {
-                            if (e.key === "Escape") setRenaming(null);
+                            if (e.key === "Escape") setRenaming(null)
                           }}
                         />
                       </form>
                     </SidebarMenuItem>
-                  );
+                  )
                 }
 
                 return (
@@ -218,6 +218,7 @@ export function AppSidebar() {
                               the icon-collapsed rail. */}
                           {capturing && (
                             <span
+                              role="status"
                               aria-label="Recording"
                               className="bg-destructive ml-auto size-1.5 shrink-0 animate-pulse rounded-full"
                             />
@@ -269,7 +270,7 @@ export function AppSidebar() {
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
-                );
+                )
               })}
 
               {sessions.length === 0 && (
@@ -294,7 +295,7 @@ export function AppSidebar() {
 
       <CredentialPrompt pending={prompt.pending} keys={keys} onSettle={prompt.settle} />
     </Sidebar>
-  );
+  )
 }
 
 /**
@@ -312,11 +313,11 @@ function NewSessionMenu({
   onPick,
 }: {
   /** The trigger. Rendered through Radix's asChild, so it keeps its own styling. */
-  children: React.ReactNode;
-  hosts: Host[];
+  children: React.ReactNode
+  hosts: Host[]
   /** Id of the host currently being connected, so its row cannot be double-fired. */
-  connecting: string | null;
-  onPick: (host: Host) => void | Promise<unknown>;
+  connecting: string | null
+  onPick: (host: Host) => undefined | Promise<unknown>
 }) {
   return (
     <DropdownMenu>
@@ -349,7 +350,7 @@ function NewSessionMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  )
 }
 
 function NavGroup({
@@ -357,15 +358,15 @@ function NavGroup({
   items,
   pathname,
 }: {
-  label: string;
+  label: string
   items: readonly {
-    href: string;
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    exact?: boolean;
-    badge?: number;
-  }[];
-  pathname: string;
+    href: string
+    label: string
+    icon: React.ComponentType<{ className?: string }>
+    exact?: boolean
+    badge?: number
+  }[]
+  pathname: string
 }) {
   return (
     <SidebarGroup>
@@ -373,8 +374,8 @@ function NavGroup({
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {
-            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-            const Icon = item.icon;
+            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+            const Icon = item.icon
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
@@ -389,10 +390,10 @@ function NavGroup({
                   </SidebarMenuBadge>
                 ) : null}
               </SidebarMenuItem>
-            );
+            )
           })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
-  );
+  )
 }

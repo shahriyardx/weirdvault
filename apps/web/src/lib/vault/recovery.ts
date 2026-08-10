@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Recovery codes.
@@ -76,7 +76,7 @@
  * more on a phone.
  */
 
-import { argon2id } from "hash-wasm";
+import { argon2id } from "hash-wasm"
 
 import {
   importRawSecretBytes,
@@ -85,36 +85,36 @@ import {
   withRawSecretBytes_DANGEROUS,
   type DerivedSecrets,
   type RawSecretBytes,
-} from "./kdf";
-import { fromB64, toB64 } from "./crypto";
-import { getVaultKey } from "./session";
+} from "./kdf"
+import { fromB64, toB64 } from "./crypto"
+import { getVaultKey } from "./session"
 
 /* --------------------------------------------------------------- constants */
 
 /** Ten is enough to survive losing a few and small enough to print on a card. */
-export const RECOVERY_CODE_COUNT = 10;
+export const RECOVERY_CODE_COUNT = 10
 
 /** 15 bytes divides evenly into base32: 120 bits, 24 characters, no padding. */
-const CODE_BYTES = 15;
-const CODE_CHARS = 24;
-const CODE_GROUP = 4;
+const CODE_BYTES = 15
+const CODE_CHARS = 24
+const CODE_GROUP = 4
 
 /**
  * Crockford's base32 alphabet: no I, L, O or U, so a code read off a screen and
  * typed on a phone cannot be lost to 1/I or 0/O. normalise() maps the confusable
  * pairs back rather than rejecting them.
  */
-const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 const RECOVERY_ARGON2_PARAMS = {
   parallelism: 1,
   iterations: 2,
   memorySize: 19456, // 19 MiB — OWASP's second recommended point
   hashLength: 32,
-} as const;
+} as const
 
-const SALT_BYTES = 16;
-const IV_BYTES = 12;
+const SALT_BYTES = 16
+const IV_BYTES = 12
 
 /**
  * The wrapped payload, fixed length on purpose.
@@ -125,8 +125,8 @@ const IV_BYTES = 12;
  * A variable-length payload would make the decoy detectable by inspection and
  * turn the redeem endpoint back into an account-existence oracle.
  */
-const PAYLOAD_VERSION = 1;
-const PAYLOAD_BYTES = 1 + SECRET_BRANCH_BYTES * 3;
+const PAYLOAD_VERSION = 1
+const PAYLOAD_BYTES = 1 + SECRET_BRANCH_BYTES * 3
 /**
  * 113 bytes. The route validates against its own copy of this number rather
  * than importing it: this module carries "use client", and a Route Handler that
@@ -134,29 +134,29 @@ const PAYLOAD_BYTES = 1 + SECRET_BRANCH_BYTES * 3;
  * drag hash-wasm into the server bundle on the way. The duplication is noted at
  * both ends.
  */
-const CIPHERTEXT_BYTES = PAYLOAD_BYTES + 16;
+const CIPHERTEXT_BYTES = PAYLOAD_BYTES + 16
 
-const ID_INFO = "webxterm/recovery/id/v1:";
+const ID_INFO = "webxterm/recovery/id/v1:"
 /** 16 bytes of SHA-256 is 128 bits of selector — collisions are not a concern. */
-const ID_BYTES = 16;
+const ID_BYTES = 16
 
 /* ------------------------------------------------------------- wire shapes */
 
 /** One envelope per unused code, as stored in recovery_blob.envelopes. */
 export interface RecoveryEnvelope {
   /** SHA-256 of the code, truncated and hex-encoded. Selects, never opens. */
-  id: string;
-  salt: string; // base64
-  iv: string; // base64
-  ciphertext: string; // base64
+  id: string
+  salt: string // base64
+  iv: string // base64
+  ciphertext: string // base64
 }
 
 /** What the settings page shows about an enrolled set. No code material in it. */
 export interface RecoveryStatus {
-  enrolled: boolean;
-  remaining: number;
-  createdAt: string | null;
-  lastUsedAt: string | null;
+  enrolled: boolean
+  remaining: number
+  createdAt: string | null
+  lastUsedAt: string | null
 }
 
 /**
@@ -173,8 +173,8 @@ export class RecoveryCodeError extends Error {
     super(
       "That email and recovery code do not open anything. Check the code for typos, and remember each code works only once.",
       options,
-    );
-    this.name = "RecoveryCodeError";
+    )
+    this.name = "RecoveryCodeError"
   }
 }
 
@@ -196,8 +196,8 @@ export class RecoveryPasswordError extends Error {
   constructor() {
     super(
       "That is not the password this vault is unlocked with, so the codes it produced would open nothing. No codes were generated and nothing was stored.",
-    );
-    this.name = "RecoveryPasswordError";
+    )
+    this.name = "RecoveryPasswordError"
   }
 }
 
@@ -206,8 +206,8 @@ export class RecoveryLockedError extends Error {
   constructor() {
     super(
       "The vault is locked in this tab, so the password you typed cannot be checked against it. Unlock the vault first — enrolling without that check could seal keys that open nothing.",
-    );
-    this.name = "RecoveryLockedError";
+    )
+    this.name = "RecoveryLockedError"
   }
 }
 
@@ -215,7 +215,7 @@ export class RecoveryLockedError extends Error {
 
 /** Groups a bare 24-character code for display: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX. */
 export function formatRecoveryCode(bare: string): string {
-  return (bare.match(new RegExp(`.{1,${CODE_GROUP}}`, "g")) ?? []).join("-");
+  return (bare.match(new RegExp(`.{1,${CODE_GROUP}}`, "g")) ?? []).join("-")
 }
 
 /**
@@ -231,29 +231,29 @@ export function normaliseRecoveryCode(input: string): string {
     .replace(/[^0-9A-Z]/g, "")
     .split("")
     .filter((c) => ALPHABET.includes(c))
-    .join("");
+    .join("")
 }
 
 export function isPlausibleRecoveryCode(input: string): boolean {
-  return normaliseRecoveryCode(input).length === CODE_CHARS;
+  return normaliseRecoveryCode(input).length === CODE_CHARS
 }
 
 /** 15 random bytes, base32-encoded five bits at a time. */
 function newCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(CODE_BYTES));
-  let bits = 0;
-  let acc = 0;
-  let out = "";
+  const bytes = crypto.getRandomValues(new Uint8Array(CODE_BYTES))
+  let bits = 0
+  let acc = 0
+  let out = ""
   for (const byte of bytes) {
-    acc = (acc << 8) | byte;
-    bits += 8;
+    acc = (acc << 8) | byte
+    bits += 8
     while (bits >= 5) {
-      bits -= 5;
-      out += ALPHABET[(acc >> bits) & 31];
+      bits -= 5
+      out += ALPHABET[(acc >> bits) & 31]
     }
   }
-  bytes.fill(0);
-  return out;
+  bytes.fill(0)
+  return out
 }
 
 /**
@@ -265,9 +265,9 @@ function newCode(): string {
  * and a 120-bit preimage is not worth salting against.
  */
 export async function recoveryCodeId(code: string): Promise<string> {
-  const material = new TextEncoder().encode(ID_INFO + normaliseRecoveryCode(code));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", material));
-  return [...digest.slice(0, ID_BYTES)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const material = new TextEncoder().encode(ID_INFO + normaliseRecoveryCode(code))
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", material))
+  return [...digest.slice(0, ID_BYTES)].map((b) => b.toString(16).padStart(2, "0")).join("")
 }
 
 async function wrappingKeyFor(code: string, salt: Uint8Array): Promise<CryptoKey> {
@@ -276,26 +276,26 @@ async function wrappingKeyFor(code: string, salt: Uint8Array): Promise<CryptoKey
     salt,
     ...RECOVERY_ARGON2_PARAMS,
     outputType: "binary",
-  });
+  })
   try {
     return await crypto.subtle.importKey("raw", bytes as BufferSource, "AES-GCM", false, [
       "encrypt",
       "decrypt",
-    ]);
+    ])
   } finally {
-    bytes.fill(0);
+    bytes.fill(0)
   }
 }
 
 /* ---------------------------------------------------------------- payloads */
 
 function packPayload(raw: RawSecretBytes): Uint8Array {
-  const out = new Uint8Array(PAYLOAD_BYTES);
-  out[0] = PAYLOAD_VERSION;
-  out.set(raw.vaultKey, 1);
-  out.set(raw.auditKey, 1 + SECRET_BRANCH_BYTES);
-  out.set(raw.authToken, 1 + SECRET_BRANCH_BYTES * 2);
-  return out;
+  const out = new Uint8Array(PAYLOAD_BYTES)
+  out[0] = PAYLOAD_VERSION
+  out.set(raw.vaultKey, 1)
+  out.set(raw.auditKey, 1 + SECRET_BRANCH_BYTES)
+  out.set(raw.authToken, 1 + SECRET_BRANCH_BYTES * 2)
+  return out
 }
 
 function unpackPayload(payload: Uint8Array): RawSecretBytes {
@@ -304,19 +304,19 @@ function unpackPayload(payload: Uint8Array): RawSecretBytes {
     // by a build with a different format. Nothing here can do anything with it,
     // and treating it as a wrong code is the honest simplification: either way
     // this code does not open this account on this build.
-    throw new RecoveryCodeError();
+    throw new RecoveryCodeError()
   }
   return {
     vaultKey: payload.slice(1, 1 + SECRET_BRANCH_BYTES),
     auditKey: payload.slice(1 + SECRET_BRANCH_BYTES, 1 + SECRET_BRANCH_BYTES * 2),
     authToken: payload.slice(1 + SECRET_BRANCH_BYTES * 2),
-  };
+  }
 }
 
 /* -------------------------------------------------------------- enrolment */
 
 /** Sixteen bytes of nothing in particular; only whether it round-trips matters. */
-const PROBE = new TextEncoder().encode("webxterm/probe/1");
+const PROBE = new TextEncoder().encode("webxterm/probe/1")
 
 /**
  * Proves that the derived vault key is the one this session is unlocked with,
@@ -336,28 +336,28 @@ const PROBE = new TextEncoder().encode("webxterm/probe/1");
  * which is exactly the fresh account most likely to be enrolling codes.
  */
 async function assertPasswordMatchesSession(raw: RawSecretBytes): Promise<void> {
-  const sessionKey = getVaultKey();
-  if (!sessionKey) throw new RecoveryLockedError();
+  const sessionKey = getVaultKey()
+  if (!sessionKey) throw new RecoveryLockedError()
 
-  const derived = await importRawSecretBytes(raw);
-  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const derived = await importRawSecretBytes(raw)
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
   const sealed = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     sessionKey,
     PROBE as BufferSource,
-  );
+  )
 
   try {
-    await crypto.subtle.decrypt({ name: "AES-GCM", iv }, derived.vaultKey, sealed);
+    await crypto.subtle.decrypt({ name: "AES-GCM", iv }, derived.vaultKey, sealed)
   } catch {
-    throw new RecoveryPasswordError();
+    throw new RecoveryPasswordError()
   }
 }
 
 export interface EnrolmentProgress {
   /** Envelopes sealed so far, out of RECOVERY_CODE_COUNT. */
-  done: number;
-  total: number;
+  done: number
+  total: number
 }
 
 /**
@@ -383,27 +383,27 @@ export async function enrolRecoveryCodes(
   password: string,
   onProgress?: (p: EnrolmentProgress) => void,
 ): Promise<string[]> {
-  const codes: string[] = [];
-  const envelopes: RecoveryEnvelope[] = [];
+  const codes: string[] = []
+  const envelopes: RecoveryEnvelope[] = []
 
   await withRawSecretBytes_DANGEROUS(email, password, async (raw) => {
     // First, before any work and before any code exists. Ten Argon2id runs and
     // ten envelopes built on the wrong branches would still have to be thrown
     // away, and a partially-shown set of codes is worse than none.
-    await assertPasswordMatchesSession(raw);
+    await assertPasswordMatchesSession(raw)
 
-    const payload = packPayload(raw);
+    const payload = packPayload(raw)
     try {
       for (let i = 0; i < RECOVERY_CODE_COUNT; i++) {
-        const code = newCode();
-        const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-        const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-        const key = await wrappingKeyFor(code, salt);
+        const code = newCode()
+        const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES))
+        const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
+        const key = await wrappingKeyFor(code, salt)
         const ciphertext = await crypto.subtle.encrypt(
           { name: "AES-GCM", iv },
           key,
           payload as BufferSource,
-        );
+        )
         // The decoy the server serves for an unknown email is this many bytes.
         // If that ever stops matching, the redeem endpoint becomes an
         // account-existence oracle by measurement, so it is checked here rather
@@ -411,35 +411,35 @@ export async function enrolRecoveryCodes(
         if (ciphertext.byteLength !== CIPHERTEXT_BYTES) {
           throw new Error(
             `recovery envelope is ${ciphertext.byteLength} bytes, expected ${CIPHERTEXT_BYTES}`,
-          );
+          )
         }
 
-        codes.push(code);
+        codes.push(code)
         envelopes.push({
           id: await recoveryCodeId(code),
           salt: toB64(salt),
           iv: toB64(iv),
           ciphertext: toB64(new Uint8Array(ciphertext)),
-        });
-        onProgress?.({ done: i + 1, total: RECOVERY_CODE_COUNT });
+        })
+        onProgress?.({ done: i + 1, total: RECOVERY_CODE_COUNT })
       }
     } finally {
-      payload.fill(0);
+      payload.fill(0)
     }
-  });
+  })
 
   const res = await fetch("/api/recovery", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "enrol", envelopes }),
-  });
+  })
   if (!res.ok) {
     // The codes are worthless if the envelopes did not land, so this must throw
     // rather than hand back a list the user might write down.
-    throw new Error(await errorTextOf(res, "Recovery codes could not be stored"));
+    throw new Error(await errorTextOf(res, "Recovery codes could not be stored"))
   }
 
-  return codes;
+  return codes
 }
 
 /* ------------------------------------------------------------- redemption */
@@ -457,25 +457,25 @@ export async function enrolRecoveryCodes(
  * in the file header and the refusal in signInWithRecoveredToken.
  */
 export async function redeemRecoveryCode(email: string, code: string): Promise<DerivedSecrets> {
-  const codeId = await recoveryCodeId(code);
+  const codeId = await recoveryCodeId(code)
 
   const res = await fetch("/api/recovery", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "redeem", email: email.trim().toLowerCase(), codeId }),
-  });
+  })
   if (res.status === 429) {
     throw new Error(
       "Too many recovery attempts from this address. Wait a few minutes and try again.",
-    );
+    )
   }
-  if (!res.ok) throw new Error(await errorTextOf(res, "Recovery is unavailable"));
+  if (!res.ok) throw new Error(await errorTextOf(res, "Recovery is unavailable"))
 
-  const { envelope } = (await res.json()) as { envelope: RecoveryEnvelope };
+  const { envelope } = (await res.json()) as { envelope: RecoveryEnvelope }
 
-  const key = await wrappingKeyFor(code, fromB64(envelope.salt));
+  const key = await wrappingKeyFor(code, fromB64(envelope.salt))
 
-  let payload: Uint8Array;
+  let payload: Uint8Array
   try {
     payload = new Uint8Array(
       await crypto.subtle.decrypt(
@@ -483,42 +483,42 @@ export async function redeemRecoveryCode(email: string, code: string): Promise<D
         key,
         fromB64(envelope.ciphertext) as BufferSource,
       ),
-    );
+    )
   } catch (cause) {
     // The expected failure, and the only one the user is told about: this is
     // both "wrong code" and "no such account", indistinguishably.
-    throw new RecoveryCodeError({ cause });
+    throw new RecoveryCodeError({ cause })
   }
 
-  const raw = unpackPayload(payload);
+  const raw = unpackPayload(payload)
   try {
-    return await importRawSecretBytes(raw);
+    return await importRawSecretBytes(raw)
   } finally {
-    zeroRawSecretBytes(raw);
-    payload.fill(0);
+    zeroRawSecretBytes(raw)
+    payload.fill(0)
   }
 }
 
 /* ----------------------------------------------------------------- status */
 
 export async function getRecoveryStatus(): Promise<RecoveryStatus> {
-  const res = await fetch("/api/recovery", { cache: "no-store" });
-  if (res.status === 401) throw new Error("Session expired. Sign in again.");
-  if (!res.ok) throw new Error(await errorTextOf(res, "Could not read recovery status"));
-  return (await res.json()) as RecoveryStatus;
+  const res = await fetch("/api/recovery", { cache: "no-store" })
+  if (res.status === 401) throw new Error("Session expired. Sign in again.")
+  if (!res.ok) throw new Error(await errorTextOf(res, "Could not read recovery status"))
+  return (await res.json()) as RecoveryStatus
 }
 
 /** Removes every envelope. Irreversible without a fresh enrolment. */
 export async function disableRecoveryCodes(): Promise<void> {
-  const res = await fetch("/api/recovery", { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorTextOf(res, "Recovery codes were not removed"));
+  const res = await fetch("/api/recovery", { method: "DELETE" })
+  if (!res.ok) throw new Error(await errorTextOf(res, "Recovery codes were not removed"))
 }
 
 async function errorTextOf(res: Response, fallback: string): Promise<string> {
   try {
-    const body = (await res.json()) as { error?: string };
-    return body.error ? `${fallback}: ${body.error}` : `${fallback} (${res.status})`;
+    const body = (await res.json()) as { error?: string }
+    return body.error ? `${fallback}: ${body.error}` : `${fallback} (${res.status})`
   } catch {
-    return `${fallback} (${res.status})`;
+    return `${fallback} (${res.status})`
   }
 }

@@ -1,15 +1,15 @@
-import { eq } from "drizzle-orm";
-import type Stripe from "stripe";
+import { eq } from "drizzle-orm"
+import type Stripe from "stripe"
 
-import { db, schema } from "@/lib/db";
-import { dbErrorSummary } from "@/lib/db/errors";
+import { db, schema } from "@/lib/db"
+import { dbErrorSummary } from "@/lib/db/errors"
 import {
   relayAllowanceForTier,
   tierForSubscription,
   type SubscriptionAccess,
   type Tier,
-} from "@/lib/billing/tiers";
-import { stripeClient } from "@/lib/billing/stripe";
+} from "@/lib/billing/tiers"
+import { stripeClient } from "@/lib/billing/stripe"
 
 /**
  * The local mirror of Stripe's subscription state.
@@ -66,18 +66,18 @@ import { stripeClient } from "@/lib/billing/stripe";
 
 /** The subscription facts this app keeps. Nothing about money is in here. */
 export interface SubscriptionRecord {
-  stripeCustomerId: string;
-  stripeSubscriptionId: string | null;
-  status: string;
-  stripePriceId: string | null;
-  currentPeriodEnd: Date | null;
-  cancelAtPeriodEnd: boolean;
+  stripeCustomerId: string
+  stripeSubscriptionId: string | null
+  status: string
+  stripePriceId: string | null
+  currentPeriodEnd: Date | null
+  cancelAtPeriodEnd: boolean
   /**
    * Stripe's timestamp for the event this row was written from, or null when no
    * event has ever been applied to it. Read by mirrorSubscription to refuse a
    * delivery older than the one already applied; nothing else uses it.
    */
-  lastEventAt: Date | null;
+  lastEventAt: Date | null
 }
 
 /**
@@ -91,15 +91,15 @@ export interface SubscriptionRecord {
  * without evidence.
  */
 export interface BillingState {
-  tier: Tier;
+  tier: Tier
   /** Null when this account has never had a subscription row. */
-  status: string | null;
-  currentPeriodEnd: Date | null;
-  cancelAtPeriodEnd: boolean;
+  status: string | null
+  currentPeriodEnd: Date | null
+  cancelAtPeriodEnd: boolean
   /** Whether a Stripe customer exists, which is what the portal needs. */
-  hasCustomer: boolean;
+  hasCustomer: boolean
   /** True when the answer above is a fallback rather than a read. */
-  degraded: boolean;
+  degraded: boolean
 }
 
 /* --------------------------------------------------------------------- read */
@@ -118,8 +118,8 @@ export async function subscriptionFor(userId: string): Promise<SubscriptionRecor
     })
     .from(schema.subscription)
     .where(eq(schema.subscription.userId, userId))
-    .limit(1);
-  return row ?? null;
+    .limit(1)
+  return row ?? null
 }
 
 /**
@@ -132,7 +132,7 @@ export async function subscriptionFor(userId: string): Promise<SubscriptionRecor
  */
 export async function billingStateFor(userId: string): Promise<BillingState> {
   try {
-    const row = await subscriptionFor(userId);
+    const row = await subscriptionFor(userId)
     return {
       tier: tierForSubscription(row),
       status: row?.status ?? null,
@@ -140,7 +140,7 @@ export async function billingStateFor(userId: string): Promise<BillingState> {
       cancelAtPeriodEnd: row?.cancelAtPeriodEnd ?? false,
       hasCustomer: row !== null,
       degraded: false,
-    };
+    }
   } catch (e) {
     // Logged rather than swallowed silently: this branch grants a paid feature
     // on no evidence, and an incident where that happened for an hour should be
@@ -149,7 +149,7 @@ export async function billingStateFor(userId: string): Promise<BillingState> {
     // A drizzle query error's message is the SQL and its bound parameters, so
     // logging the object would write the user id this comment promises it does
     // not. See lib/db/errors.ts.
-    console.warn("subscription lookup failed; granting Pro for this request", dbErrorSummary(e));
+    console.warn("subscription lookup failed; granting Pro for this request", dbErrorSummary(e))
     return {
       tier: "pro",
       status: null,
@@ -157,7 +157,7 @@ export async function billingStateFor(userId: string): Promise<BillingState> {
       cancelAtPeriodEnd: false,
       hasCustomer: false,
       degraded: true,
-    };
+    }
   }
 }
 
@@ -169,12 +169,12 @@ export async function billingStateFor(userId: string): Promise<BillingState> {
  * a database.
  */
 export async function tierFor(userId: string): Promise<Tier> {
-  return (await billingStateFor(userId)).tier;
+  return (await billingStateFor(userId)).tier
 }
 
 /** The account's monthly relay allowance in bytes. */
 export async function relayAllowanceFor(userId: string): Promise<number> {
-  return relayAllowanceForTier(await tierFor(userId));
+  return relayAllowanceForTier(await tierFor(userId))
 }
 
 /* -------------------------------------------------------------------- write */
@@ -187,7 +187,7 @@ export async function relayAllowanceFor(userId: string): Promise<number> {
  * resolves it to Free along with every other status it does not recognise, so
  * this value granting anything would take a deliberate change there.
  */
-export const NO_SUBSCRIPTION = "none";
+export const NO_SUBSCRIPTION = "none"
 
 /**
  * Statuses that cannot start charging anybody again.
@@ -196,7 +196,7 @@ export const NO_SUBSCRIPTION = "none";
  * grant nothing today and can still turn into a charge tomorrow, so for the
  * purpose of deciding whether there is something to cancel they count as live.
  */
-const TERMINAL_STATUSES = new Set([NO_SUBSCRIPTION, "canceled", "incomplete_expired"]);
+const TERMINAL_STATUSES = new Set([NO_SUBSCRIPTION, "canceled", "incomplete_expired"])
 
 /**
  * Cancels this account's Stripe subscription, for account deletion.
@@ -222,23 +222,23 @@ const TERMINAL_STATUSES = new Set([NO_SUBSCRIPTION, "canceled", "incomplete_expi
  * Returns the subscription it cancelled, or null when there was nothing live.
  */
 export async function cancelSubscriptionForDeletion(userId: string): Promise<string | null> {
-  const row = await subscriptionFor(userId);
-  if (!row?.stripeSubscriptionId) return null;
-  if (TERMINAL_STATUSES.has(row.status)) return null;
+  const row = await subscriptionFor(userId)
+  if (!row?.stripeSubscriptionId) return null
+  if (TERMINAL_STATUSES.has(row.status)) return null
 
   try {
-    await stripeClient().subscriptions.cancel(row.stripeSubscriptionId);
+    await stripeClient().subscriptions.cancel(row.stripeSubscriptionId)
   } catch (e) {
     // A 404 means Stripe has no such subscription, which is the outcome this
     // function exists to produce. The local row is simply behind, and it is
     // about to be deleted anyway.
     if (typeof e === "object" && e !== null && (e as { statusCode?: number }).statusCode === 404) {
-      return null;
+      return null
     }
-    throw e;
+    throw e
   }
 
-  return row.stripeSubscriptionId;
+  return row.stripeSubscriptionId
 }
 
 /**
@@ -259,18 +259,18 @@ export async function cancelSubscriptionForDeletion(userId: string): Promise<str
  * the account already has; nothing new about the user is disclosed by it.
  */
 export async function customerIdFor(user: {
-  id: string;
-  email: string;
-  name?: string | null;
+  id: string
+  email: string
+  name?: string | null
 }): Promise<string> {
-  const existing = await subscriptionFor(user.id);
-  if (existing) return existing.stripeCustomerId;
+  const existing = await subscriptionFor(user.id)
+  if (existing) return existing.stripeCustomerId
 
   const customer = await stripeClient().customers.create({
     email: user.email,
     name: user.name ?? undefined,
     metadata: { userId: user.id },
-  });
+  })
 
   // `onConflictDoNothing` rather than a plain insert, because two checkout
   // attempts started in two tabs can both find no row and both get here. The
@@ -286,10 +286,10 @@ export async function customerIdFor(user: {
       stripeCustomerId: customer.id,
       status: NO_SUBSCRIPTION,
     })
-    .onConflictDoNothing({ target: schema.subscription.userId });
+    .onConflictDoNothing({ target: schema.subscription.userId })
 
-  const settled = await subscriptionFor(user.id);
-  return settled?.stripeCustomerId ?? customer.id;
+  const settled = await subscriptionFor(user.id)
+  return settled?.stripeCustomerId ?? customer.id
 }
 
 /**
@@ -308,25 +308,24 @@ export async function customerIdFor(user: {
  * not as "expired".
  */
 export function periodEndOf(subscription: Stripe.Subscription): Date | null {
-  let latest: number | null = null;
+  let latest: number | null = null
   for (const item of subscription.items.data) {
     if (typeof item.current_period_end === "number") {
-      latest =
-        latest === null ? item.current_period_end : Math.max(latest, item.current_period_end);
+      latest = latest === null ? item.current_period_end : Math.max(latest, item.current_period_end)
     }
   }
-  return latest === null ? null : new Date(latest * 1000);
+  return latest === null ? null : new Date(latest * 1000)
 }
 
 /** The price this subscription is billed at, if it has exactly one item. */
 function priceIdOf(subscription: Stripe.Subscription): string | null {
-  return subscription.items.data[0]?.price?.id ?? null;
+  return subscription.items.data[0]?.price?.id ?? null
 }
 
 /** A Stripe customer reference in any of the shapes the SDK returns it in. */
 function customerIdOf(subscription: Stripe.Subscription): string | null {
-  const c = subscription.customer;
-  return typeof c === "string" ? c : (c?.id ?? null);
+  const c = subscription.customer
+  return typeof c === "string" ? c : (c?.id ?? null)
 }
 
 /**
@@ -339,13 +338,13 @@ function customerIdOf(subscription: Stripe.Subscription): string | null {
  * `other-subscription` is a customer with two subscriptions, which should not
  * happen and needs a person.
  */
-export type MirrorSkip = "unattributable" | "stale-event" | "other-subscription";
+export type MirrorSkip = "unattributable" | "stale-event" | "other-subscription"
 
 export interface MirrorOutcome {
   /** Whose subscription this is, or null when it could not be attributed. */
-  userId: string | null;
+  userId: string | null
   /** Why the row was left alone, or null when it was written. */
-  skipped: MirrorSkip | null;
+  skipped: MirrorSkip | null
 }
 
 /**
@@ -417,27 +416,27 @@ export async function mirrorSubscription(
   subscription: Stripe.Subscription,
   eventAt: Date,
 ): Promise<MirrorOutcome> {
-  const customerId = customerIdOf(subscription);
+  const customerId = customerIdOf(subscription)
 
   const userId =
     (await userIdBySubscription(subscription.id)) ??
     (customerId ? await userIdByCustomer(customerId) : null) ??
-    metadataUserId(subscription);
+    metadataUserId(subscription)
 
-  if (!userId || !customerId) return { userId: null, skipped: "unattributable" };
+  if (!userId || !customerId) return { userId: null, skipped: "unattributable" }
 
-  const existing = await subscriptionFor(userId);
-  const sameSubscription = existing?.stripeSubscriptionId === subscription.id;
+  const existing = await subscriptionFor(userId)
+  const sameSubscription = existing?.stripeSubscriptionId === subscription.id
 
   if (sameSubscription && existing?.lastEventAt && eventAt < existing.lastEventAt) {
-    return { userId, skipped: "stale-event" };
+    return { userId, skipped: "stale-event" }
   }
 
   const incoming: SubscriptionAccess = {
     status: subscription.status,
     currentPeriodEnd: periodEndOf(subscription),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
-  };
+  }
 
   if (
     existing &&
@@ -447,7 +446,7 @@ export async function mirrorSubscription(
     tierForSubscription(incoming) !== "pro" &&
     (await stillGranting(existing.stripeSubscriptionId))
   ) {
-    return { userId, skipped: "other-subscription" };
+    return { userId, skipped: "other-subscription" }
   }
 
   const values = {
@@ -459,14 +458,14 @@ export async function mirrorSubscription(
     cancelAtPeriodEnd: incoming.cancelAtPeriodEnd,
     lastEventAt: eventAt,
     updatedAt: new Date(),
-  };
+  }
 
   await db
     .insert(schema.subscription)
     .values({ id: crypto.randomUUID(), userId, ...values })
-    .onConflictDoUpdate({ target: schema.subscription.userId, set: values });
+    .onConflictDoUpdate({ target: schema.subscription.userId, set: values })
 
-  return { userId, skipped: null };
+  return { userId, skipped: null }
 }
 
 /**
@@ -484,24 +483,24 @@ export async function mirrorSubscription(
  */
 async function stillGranting(subscriptionId: string): Promise<boolean> {
   try {
-    const current = await stripeClient().subscriptions.retrieve(subscriptionId);
+    const current = await stripeClient().subscriptions.retrieve(subscriptionId)
     return (
       tierForSubscription({
         status: current.status,
         currentPeriodEnd: periodEndOf(current),
         cancelAtPeriodEnd: current.cancel_at_period_end,
       }) === "pro"
-    );
+    )
   } catch (e) {
     if (typeof e === "object" && e !== null && (e as { statusCode?: number }).statusCode === 404) {
-      return false;
+      return false
     }
     console.warn(
       `could not check whether mirrored subscription ${subscriptionId} still grants; ` +
         "keeping the row as it is",
       e instanceof Error ? e.message : "unknown error",
-    );
-    return true;
+    )
+    return true
   }
 }
 
@@ -510,8 +509,8 @@ async function userIdBySubscription(subscriptionId: string): Promise<string | nu
     .select({ userId: schema.subscription.userId })
     .from(schema.subscription)
     .where(eq(schema.subscription.stripeSubscriptionId, subscriptionId))
-    .limit(1);
-  return row?.userId ?? null;
+    .limit(1)
+  return row?.userId ?? null
 }
 
 async function userIdByCustomer(customerId: string): Promise<string | null> {
@@ -519,11 +518,11 @@ async function userIdByCustomer(customerId: string): Promise<string | null> {
     .select({ userId: schema.subscription.userId })
     .from(schema.subscription)
     .where(eq(schema.subscription.stripeCustomerId, customerId))
-    .limit(1);
-  return row?.userId ?? null;
+    .limit(1)
+  return row?.userId ?? null
 }
 
 function metadataUserId(subscription: Stripe.Subscription): string | null {
-  const raw = subscription.metadata?.userId;
-  return typeof raw === "string" && raw !== "" ? raw : null;
+  const raw = subscription.metadata?.userId
+  return typeof raw === "string" && raw !== "" ? raw : null
 }

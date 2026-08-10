@@ -1,24 +1,24 @@
-import { and, count, desc, eq, sum } from "drizzle-orm";
-import { headers } from "next/headers";
+import { and, count, desc, eq, sum } from "drizzle-orm"
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
-import { tierFor } from "@/lib/billing/subscription";
-import { canRecordOnTier } from "@/lib/billing/tiers";
-import { db, schema } from "@/lib/db";
+import { auth } from "@/lib/auth"
+import { tierFor } from "@/lib/billing/subscription"
+import { canRecordOnTier } from "@/lib/billing/tiers"
+import { db, schema } from "@/lib/db"
 import {
   BodyError,
   discardBody,
   statusForBodyError,
   writeBody,
   type StoredBody,
-} from "@/lib/recording/blobs";
+} from "@/lib/recording/blobs"
 import {
   MAX_ACCOUNT_RECORDING_BYTES,
   MAX_BLOB_BYTES,
   RECORDING_REQUIRES_PRO,
-} from "@/lib/recording/limits";
-import { enforce } from "@/lib/rate-limit";
-import { recordingKey } from "@/lib/storage/objects";
+} from "@/lib/recording/limits"
+import { enforce } from "@/lib/rate-limit"
+import { recordingKey } from "@/lib/storage/objects"
 
 /**
  * Session recordings: list and create.
@@ -90,10 +90,10 @@ import { recordingKey } from "@/lib/storage/objects";
  */
 
 /** `duration_ms` is a 32-bit integer column; 24 days of recording is not a thing. */
-const MAX_DURATION_MS = 2_147_483_647;
+const MAX_DURATION_MS = 2_147_483_647
 
-const MAX_PAGE = 200;
-const DEFAULT_PAGE = 100;
+const MAX_PAGE = 200
+const DEFAULT_PAGE = 100
 
 /** The columns a listing may return. Never `ciphertext`. */
 const SUMMARY = {
@@ -104,12 +104,12 @@ const SUMMARY = {
   durationMs: schema.recording.durationMs,
   startedAt: schema.recording.startedAt,
   createdAt: schema.recording.createdAt,
-};
+}
 
 async function requireUser() {
   // Next.js 16: headers() is async-only.
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user ?? null;
+  const session = await auth.api.getSession({ headers: await headers() })
+  return session?.user ?? null
 }
 
 /**
@@ -122,9 +122,9 @@ async function requireUser() {
  * rather than 400ing — a bad page size is not worth refusing a listing over.
  */
 function pageSize(raw: string | null): number {
-  const n = Math.trunc(Number(raw));
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE;
-  return Math.min(n, MAX_PAGE);
+  const n = Math.trunc(Number(raw))
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE
+  return Math.min(n, MAX_PAGE)
 }
 
 /**
@@ -138,15 +138,15 @@ async function storedBytesFor(userId: string): Promise<number> {
   const [row] = await db
     .select({ bytes: sum(schema.recording.sizeBytes) })
     .from(schema.recording)
-    .where(eq(schema.recording.userId, userId));
-  return Number(row?.bytes ?? 0);
+    .where(eq(schema.recording.userId, userId))
+  return Number(row?.bytes ?? 0)
 }
 
 export async function GET(request: Request) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-  const limit = pageSize(new URL(request.url).searchParams.get("limit"));
+  const limit = pageSize(new URL(request.url).searchParams.get("limit"))
 
   // Metadata only. Selecting the whole row would put every recording's
   // ciphertext — megabytes each — into a response that exists to draw a list,
@@ -156,7 +156,7 @@ export async function GET(request: Request) {
     .from(schema.recording)
     .where(eq(schema.recording.userId, user.id))
     .orderBy(desc(schema.recording.createdAt))
-    .limit(limit);
+    .limit(limit)
 
   // The total is counted rather than inferred from the page, because the
   // sidebar badge reads it and a badge that stops at the page size would quietly
@@ -164,7 +164,7 @@ export async function GET(request: Request) {
   const [totals] = await db
     .select({ total: count() })
     .from(schema.recording)
-    .where(eq(schema.recording.userId, user.id));
+    .where(eq(schema.recording.userId, user.id))
 
   // The storage figure travels with the listing so the page that shows
   // recordings can show what they cost against the ceiling POST refuses at.
@@ -175,7 +175,7 @@ export async function GET(request: Request) {
     total: totals?.total ?? rows.length,
     storedBytes: await storedBytesFor(user.id),
     storageLimitBytes: MAX_ACCOUNT_RECORDING_BYTES,
-  });
+  })
 }
 
 /**
@@ -187,11 +187,11 @@ export async function GET(request: Request) {
  * call takes up to twelve megabytes off the wire and puts it in a bucket. The
  * account ceiling stops the total; nothing else stopped the rate.
  */
-const SAVE_LIMIT = { max: 20, windowSeconds: 3600 };
+const SAVE_LIMIT = { max: 20, windowSeconds: 3600 }
 
 export async function POST(request: Request) {
-  const user = await requireUser();
-  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser()
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   // Keyed on the account rather than the network, because there is a session
   // here and a user id is the one subject nobody can rotate.
@@ -200,8 +200,8 @@ export async function POST(request: Request) {
     message:
       "That is more recordings than this account can save in an hour. Nothing was stored and " +
       "the transcript is still in the tab that made it — wait, then save again.",
-  });
-  if (limited) return limited;
+  })
+  if (limited) return limited
 
   // Before the body is read, so a Free account is refused without a multi-
   // megabyte upload being taken off the wire first.
@@ -216,29 +216,29 @@ export async function POST(request: Request) {
         code: RECORDING_REQUIRES_PRO,
       },
       { status: 402 },
-    );
+    )
   }
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown>
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
+    return Response.json({ error: "invalid JSON" }, { status: 400 })
   }
 
-  const { blob, durationMs, startedAt, targetRef, deviceId } = body;
+  const { blob, durationMs, startedAt, targetRef, deviceId } = body
 
   if (typeof blob !== "string" || blob === "") {
-    return Response.json({ error: "blob (string) required" }, { status: 400 });
+    return Response.json({ error: "blob (string) required" }, { status: 400 })
   }
-  const sizeBytes = Buffer.byteLength(blob, "utf8");
+  const sizeBytes = Buffer.byteLength(blob, "utf8")
   if (sizeBytes > MAX_BLOB_BYTES) {
     return Response.json(
       {
         error: `That recording is ${Math.round(sizeBytes / 1024 / 1024)} MB encrypted, and the limit is ${MAX_BLOB_BYTES / 1024 / 1024} MB.`,
       },
       { status: 413 },
-    );
+    )
   }
 
   if (
@@ -250,12 +250,12 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "durationMs must be a duration in milliseconds" },
       { status: 400 },
-    );
+    )
   }
 
-  const started = typeof startedAt === "string" ? new Date(startedAt) : null;
+  const started = typeof startedAt === "string" ? new Date(startedAt) : null
   if (!started || Number.isNaN(started.valueOf())) {
-    return Response.json({ error: "startedAt must be an ISO timestamp" }, { status: 400 });
+    return Response.json({ error: "startedAt must be an ISO timestamp" }, { status: 400 })
   }
 
   // Opaque by contract; the shape is enforced so a hostname cannot be smuggled
@@ -266,7 +266,7 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "targetRef must be a blinded reference, not a hostname" },
         { status: 400 },
-      );
+      )
     }
   }
 
@@ -278,7 +278,7 @@ export async function POST(request: Request) {
   // means a transaction locking the account's rows on every write, which is a
   // real cost on every save to prevent a bounded overshoot that the next save
   // refuses anyway.
-  const storedBytes = await storedBytesFor(user.id);
+  const storedBytes = await storedBytesFor(user.id)
   if (storedBytes + sizeBytes > MAX_ACCOUNT_RECORDING_BYTES) {
     return Response.json(
       {
@@ -289,31 +289,31 @@ export async function POST(request: Request) {
           "need and save again. The recording is still in the tab that made it.",
       },
       { status: 413 },
-    );
+    )
   }
 
   // A device id is only stored once it is known to be one of this user's. The
   // foreign key would accept any device row in the table, which would let an
   // account attribute its recordings to a browser it does not own.
-  let ownedDeviceId: string | null = null;
+  let ownedDeviceId: string | null = null
   if (typeof deviceId === "string" && deviceId !== "") {
     const [owned] = await db
       .select({ id: schema.device.id })
       .from(schema.device)
       .where(and(eq(schema.device.id, deviceId), eq(schema.device.userId, user.id)))
-      .limit(1);
-    ownedDeviceId = owned?.id ?? null;
+      .limit(1)
+    ownedDeviceId = owned?.id ?? null
   }
 
   // The id is minted here rather than by the insert, because the object key is
   // built from it and the object is written first.
-  const id = crypto.randomUUID();
+  const id = crypto.randomUUID()
 
-  let stored: StoredBody;
+  let stored: StoredBody
   try {
-    stored = await writeBody(recordingKey(user.id, id), Buffer.from(blob, "utf8"));
+    stored = await writeBody(recordingKey(user.id, id), Buffer.from(blob, "utf8"))
   } catch (e) {
-    if (!(e instanceof BodyError)) throw e;
+    if (!(e instanceof BodyError)) throw e
     return Response.json(
       {
         error:
@@ -323,12 +323,11 @@ export async function POST(request: Request) {
           "before reloading.",
       },
       { status: statusForBodyError(e) },
-    );
+    )
   }
 
-  let row;
   try {
-    [row] = await db
+    const [row] = await db
       .insert(schema.recording)
       .values({
         id,
@@ -340,15 +339,15 @@ export async function POST(request: Request) {
         durationMs: Math.round(durationMs),
         startedAt: started,
       })
-      .returning(SUMMARY);
+      .returning(SUMMARY)
+
+    return Response.json({ recording: row }, { status: 201 })
   } catch (e) {
     // The bytes are already in the bucket and no row will ever name them. Taking
     // them back out here is what keeps the sweep script a backstop rather than a
     // requirement — see discardBody, which is deliberately quiet about its own
     // failures because this path is already failing.
-    await discardBody(stored);
-    throw e;
+    await discardBody(stored)
+    throw e
   }
-
-  return Response.json({ recording: row }, { status: 201 });
 }

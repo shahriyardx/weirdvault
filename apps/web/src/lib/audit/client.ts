@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Client-side audit reporting.
@@ -9,15 +9,15 @@
  * log is honest about that rather than implying completeness.
  */
 
-import type { AuditEventType } from "./events";
-import { blindHost } from "./blind";
-import { getCurrentDeviceId } from "@/lib/device";
+import type { AuditEventType } from "./events"
+import { blindHost } from "./blind"
+import { getCurrentDeviceId } from "@/lib/device"
 
 interface ReportOptions {
   /** Blinded on this device before sending. Never send a hostname. */
-  target?: { host: string; port: number };
-  metadata?: Record<string, unknown>;
-  auditKey?: CryptoKey | null;
+  target?: { host: string; port: number }
+  metadata?: Record<string, unknown>
+  auditKey?: CryptoKey | null
 }
 
 export async function reportAudit(
@@ -25,9 +25,9 @@ export async function reportAudit(
   opts: ReportOptions = {},
 ): Promise<void> {
   try {
-    let targetRef: string | undefined;
+    let targetRef: string | undefined
     if (opts.target && opts.auditKey) {
-      targetRef = await blindHost(opts.auditKey, opts.target.host, opts.target.port);
+      targetRef = await blindHost(opts.auditKey, opts.target.host, opts.target.port)
     }
 
     await fetch("/api/audit", {
@@ -40,7 +40,7 @@ export async function reportAudit(
         deviceId: await getCurrentDeviceId(),
       }),
       keepalive: true, // survive a tab closing mid-report
-    });
+    })
   } catch {
     // Signed out, offline, or the control plane is down. None of those are
     // reasons to interrupt what the user is actually doing.

@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import type { Metadata } from "next"
+import Link from "next/link"
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr"
 
-import { ArchitectureDiagram } from "@/components/diagrams/architecture";
-import { PageHeader, PageShell } from "@/components/shell/page-shell";
-import { Button } from "@/components/ui/button";
+import { ArchitectureDiagram } from "@/components/diagrams/architecture"
+import { PageHeader, PageShell } from "@/components/shell/page-shell"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -12,14 +12,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/ui/table"
 
 export const metadata: Metadata = {
   title: "Security",
   description:
     "How webxterm terminates SSH inside the browser tab, what the relay and control plane can and cannot see, " +
     "and the residual risks we have not solved.",
-};
+}
 
 /**
  * The security page.
@@ -38,13 +38,13 @@ const NAV = [
   { href: "#threat-model", label: "Threat model" },
   { href: "#residual-risks", label: "Residual risks" },
   { href: "#self-host", label: "Self-hosting" },
-] as const;
+] as const
 
 /** Visibility matrix. One row per thing that exists, one column per observer. */
 const VISIBILITY: Array<{
-  what: string;
-  relay: Verdict;
-  control: Verdict;
+  what: string
+  relay: Verdict
+  control: Verdict
 }> = [
   // "ciphertext" rather than "never" because of recordings. A session you do
   // not record is never stored anywhere; one you do is stored here, encrypted,
@@ -69,7 +69,7 @@ const VISIBILITY: Array<{
   // So these are account credentials we hold, in a way we do not hold anything
   // that opens a vault, and the row says so.
   { what: "Passkey public keys, authenticator secrets", relay: "never", control: "sees" },
-];
+]
 
 /** What a non-extractable key does and does not stop. */
 const ATTACKS: Array<{ attack: string; blocked: boolean; outcome: string }> = [
@@ -108,7 +108,7 @@ const ATTACKS: Array<{ attack: string; blocked: boolean; outcome: string }> = [
     blocked: false,
     outcome: "The key proves who you are to a host; it says nothing about what that host does.",
   },
-];
+]
 
 /** Key storage modes. Rows are the questions people actually ask. */
 const KEY_MODES: Array<{ question: string; portable: string; device: string }> = [
@@ -137,7 +137,7 @@ const KEY_MODES: Array<{ question: string; portable: string; device: string }> =
     portable: "A key you genuinely want everywhere",
     device: "A machine you do not fully control",
   },
-];
+]
 
 export default function SecurityPage() {
   return (
@@ -455,7 +455,7 @@ export default function SecurityPage() {
         </div>
       </Section>
     </PageShell>
-  );
+  )
 }
 
 /* -------------------------------------------------------------- primitives */
@@ -467,18 +467,18 @@ export default function SecurityPage() {
  * do not hold: still unreadable, but deterministic, so we can see that two
  * activity rows point at the *same* host without being able to say which.
  */
-type Verdict = "sees" | "ciphertext" | "blinded" | "never";
+type Verdict = "sees" | "ciphertext" | "blinded" | "never"
 
 const VERDICT: Record<Verdict, { label: string; className: string }> = {
   sees: { label: "Sees it", className: "text-warning" },
   ciphertext: { label: "Ciphertext", className: "text-muted-foreground" },
   blinded: { label: "Blinded", className: "text-muted-foreground" },
   never: { label: "Never has it", className: "text-success" },
-};
+}
 
 function Seen({ verdict }: { verdict: Verdict }) {
-  const v = VERDICT[verdict];
-  return <span className={v.className}>{v.label}</span>;
+  const v = VERDICT[verdict]
+  return <span className={v.className}>{v.label}</span>
 }
 
 function Section({
@@ -487,10 +487,10 @@ function Section({
   title,
   children,
 }: {
-  id: string;
-  index: string;
-  title: string;
-  children: React.ReactNode;
+  id: string
+  index: string
+  title: string
+  children: React.ReactNode
 }) {
   return (
     <section
@@ -506,7 +506,7 @@ function Section({
       </div>
       {children}
     </section>
-  );
+  )
 }
 
 function P({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -514,11 +514,11 @@ function P({ children, className }: { children: React.ReactNode; className?: str
     <p className={`max-w-3xl text-sm leading-relaxed text-muted-foreground ${className ?? ""}`}>
       {children}
     </p>
-  );
+  )
 }
 
 function H3({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <h3 className={`font-heading text-sm font-medium ${className ?? ""}`}>{children}</h3>;
+  return <h3 className={`font-heading text-sm font-medium ${className ?? ""}`}>{children}</h3>
 }
 
 function Step({ n, title, body }: { n: string; title: string; body: string }) {
@@ -530,7 +530,7 @@ function Step({ n, title, body }: { n: string; title: string; body: string }) {
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{body}</p>
       </div>
     </li>
-  );
+  )
 }
 
 function Risk({
@@ -538,9 +538,9 @@ function Risk({
   title,
   children,
 }: {
-  severity: string;
-  title: string;
-  children: React.ReactNode;
+  severity: string
+  title: string
+  children: React.ReactNode
 }) {
   return (
     <div className="grid gap-1.5 py-5 sm:grid-cols-[12rem_1fr] sm:gap-8">
@@ -550,7 +550,7 @@ function Risk({
       </dt>
       <dd className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{children}</dd>
     </div>
-  );
+  )
 }
 
 function Command({ children }: { children: string }) {
@@ -559,5 +559,5 @@ function Command({ children }: { children: string }) {
       <span className="text-muted-foreground">$ </span>
       <span className="text-foreground">{children}</span>
     </pre>
-  );
+  )
 }

@@ -17,16 +17,16 @@
  * binary being served from somewhere else, which is exactly when it is required.
  */
 
-import { agentReleaseUrl } from "@/lib/agents/enrollment";
+import { agentReleaseUrl } from "@/lib/agents/enrollment"
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
-  const origin = new URL(request.url).origin;
+  const origin = new URL(request.url).origin
   // The same resolver the enrolment route hands to agents for self-update. Two
   // copies would drift, and the failure would be an agent updating itself from
   // somewhere the installer never used.
-  const base = agentReleaseUrl(origin);
+  const base = agentReleaseUrl(origin)
 
   const script = `#!/bin/sh
 # webxterm-agent installer
@@ -105,7 +105,7 @@ fetch() {
   fi
 }
 
-fetch "\${RELEASE_BASE}/\${binary}" "\$tmp/agent" || {
+fetch "\${RELEASE_BASE}/\${binary}" "$tmp/agent" || {
   echo "error: could not download \${RELEASE_BASE}/\${binary}" >&2
   echo "       If you are self-hosting, build it and publish it there:" >&2
   echo "         GOOS=\${os} GOARCH=\${arch} go build -o \${binary} ./apps/agent" >&2
@@ -115,38 +115,38 @@ fetch "\${RELEASE_BASE}/\${binary}" "\$tmp/agent" || {
 # The checksum is required, not best-effort. It is the only thing that makes a
 # binary from a release host as trustworthy as one from this origin, and a
 # verification that is skipped when the file is missing verifies nothing at all.
-if ! fetch "\${RELEASE_BASE}/checksums.txt" "\$tmp/checksums.txt"; then
+if ! fetch "\${RELEASE_BASE}/checksums.txt" "$tmp/checksums.txt"; then
   echo "error: no checksums.txt beside the binary at \${RELEASE_BASE}" >&2
   echo "       Publish one: sha256sum webxterm-agent_* > checksums.txt" >&2
   exit 1
 fi
 
-expected="$(grep " \${binary}\$" "\$tmp/checksums.txt" | awk '{print \$1}' | head -n1)"
-if [ -z "\$expected" ]; then
+expected="$(grep " \${binary}$" "$tmp/checksums.txt" | awk '{print $1}' | head -n1)"
+if [ -z "$expected" ]; then
   echo "error: checksums.txt has no entry for \${binary}" >&2
   exit 1
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
-  actual="$(sha256sum "\$tmp/agent" | awk '{print \$1}')"
+  actual="$(sha256sum "$tmp/agent" | awk '{print $1}')"
 elif command -v shasum >/dev/null 2>&1; then
-  actual="$(shasum -a 256 "\$tmp/agent" | awk '{print \$1}')"
+  actual="$(shasum -a 256 "$tmp/agent" | awk '{print $1}')"
 else
   echo "error: no sha256sum or shasum available to verify the download" >&2
   exit 1
 fi
 
-if [ "\$actual" != "\$expected" ]; then
+if [ "$actual" != "$expected" ]; then
   echo "error: checksum mismatch — refusing to install" >&2
-  echo "       expected \$expected" >&2
-  echo "       actual   \$actual" >&2
+  echo "       expected $expected" >&2
+  echo "       actual   $actual" >&2
   exit 1
 fi
 
 # ---------------------------------------------------------------- install
 
-mkdir -p "\$INSTALL_DIR"
-install -m 0755 "\$tmp/agent" "\${INSTALL_DIR}/webxterm-agent"
+mkdir -p "$INSTALL_DIR"
+install -m 0755 "$tmp/agent" "\${INSTALL_DIR}/webxterm-agent"
 
 # A dedicated account with no shell and no home. The agent needs no privileges
 # beyond reading its own config and opening outbound sockets, and running it as
@@ -157,14 +157,14 @@ install -m 0755 "\$tmp/agent" "\${INSTALL_DIR}/webxterm-agent"
 # so on a Mac this installs the binary and enrols it, and you start it yourself.
 # Warning about a missing useradd on a platform that has never had one reads as
 # something going wrong when nothing is.
-if [ "\$os" = "darwin" ]; then
+if [ "$os" = "darwin" ]; then
   SERVICE_USER="root"
-elif ! id "\$SERVICE_USER" >/dev/null 2>&1; then
+elif ! id "$SERVICE_USER" >/dev/null 2>&1; then
   if command -v useradd >/dev/null 2>&1; then
-    useradd --system --no-create-home --shell /usr/sbin/nologin "\$SERVICE_USER" 2>/dev/null || \\
-      useradd --system --no-create-home --shell /sbin/nologin "\$SERVICE_USER"
+    useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER" 2>/dev/null || \\
+      useradd --system --no-create-home --shell /sbin/nologin "$SERVICE_USER"
   elif command -v adduser >/dev/null 2>&1; then
-    adduser --system --no-create-home --shell /sbin/nologin "\$SERVICE_USER"
+    adduser --system --no-create-home --shell /sbin/nologin "$SERVICE_USER"
   else
     echo "warning: no useradd or adduser here, so the agent will run as root" >&2
     SERVICE_USER="root"
@@ -175,13 +175,13 @@ fi
 
 echo
 "\${INSTALL_DIR}/webxterm-agent" enroll \\
-  --token="\$TOKEN" \\
-  --url="\$APP_URL" \\
+  --token="$TOKEN" \\
+  --url="$APP_URL" \\
   --config="\${CONFIG_DIR}/agent.json" \\
-  --ssh-port="\$SSH_PORT"
+  --ssh-port="$SSH_PORT"
 
-chown -R "\$SERVICE_USER" "\$CONFIG_DIR"
-chmod 0700 "\$CONFIG_DIR"
+chown -R "$SERVICE_USER" "$CONFIG_DIR"
+chmod 0700 "$CONFIG_DIR"
 chmod 0600 "\${CONFIG_DIR}/agent.json"
 
 # ---------------------------------------------------------------- service
@@ -260,7 +260,7 @@ echo
 echo "  systemctl status webxterm-agent    is it running"
 echo "  journalctl -u webxterm-agent -f    what it is doing"
 echo "  webxterm-agent status              this machine's fingerprint"
-`;
+`
 
   return new Response(script, {
     headers: {
@@ -269,5 +269,5 @@ echo "  webxterm-agent status              this machine's fingerprint"
       // operator who moves the app must not have an old one served for a day.
       "Cache-Control": "no-store",
     },
-  });
+  })
 }

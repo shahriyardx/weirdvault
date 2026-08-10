@@ -1,23 +1,23 @@
-"use client";
+"use client"
 
 // Client Component: this form owns local field state and — more importantly —
 // runs the Argon2id derivation in the browser. Neither can happen on the server
 // without defeating the point of the split KDF.
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import {
   FingerprintSimpleIcon,
   GithubLogoIcon,
   LockKeyIcon,
   SpinnerGapIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { githubSignInAvailable } from "@/app/(auth)/actions";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { githubSignInAvailable } from "@/app/(auth)/actions"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -25,9 +25,9 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   completeTwoFactorSignIn,
   PasskeyCancelledError,
@@ -36,10 +36,10 @@ import {
   signInWithVaultAndSecondFactor,
   signUpWithVault,
   type SignInOutcome,
-} from "@/lib/auth-client";
-import { setVaultKey } from "@/lib/vault/session";
+} from "@/lib/auth-client"
+import { setVaultKey } from "@/lib/vault/session"
 
-export type AuthMode = "sign-in" | "sign-up";
+export type AuthMode = "sign-in" | "sign-up"
 
 /**
  * What a failed OAuth callback comes back as, in words.
@@ -59,10 +59,10 @@ export type AuthMode = "sign-in" | "sign-up";
  * document — so there is nothing to subscribe to. useSyncExternalStore is here
  * for its server snapshot, not for its subscription.
  */
-const subscribeToNothing = () => () => {};
+const subscribeToNothing = () => () => {}
 
 function readOAuthError(): string | null {
-  return new URLSearchParams(window.location.search).get("error");
+  return new URLSearchParams(window.location.search).get("error")
 }
 
 function oauthErrorMessage(code: string): string {
@@ -73,23 +73,23 @@ function oauthErrorMessage(code: string): string {
         "created with a password, and we do not merge the two automatically. Sign in with " +
         "your email and password instead — it opens the same vault, which signing in with " +
         "GitHub could not have done anyway."
-      );
+      )
     case "email_not_found":
       return (
         "GitHub did not give us an email address for that account. We derive your vault key " +
         "from your address, so there is nothing we can do without one — add a primary email " +
         "at GitHub, or create an account with a password here."
-      );
+      )
     case "unable_to_get_user_info":
-      return "GitHub accepted the sign-in but we could not read the profile behind it. Nothing was created.";
+      return "GitHub accepted the sign-in but we could not read the profile behind it. Nothing was created."
     case "state_not_found":
     case "state_mismatch":
       return (
         "The sign-in could not be matched to the request that started it, so it was refused. " +
         "That usually means it was left too long or started in another tab. Try again."
-      );
+      )
     default:
-      return `GitHub sign-in failed: ${code.replace(/_/g, " ")}.`;
+      return `GitHub sign-in failed: ${code.replace(/_/g, " ")}.`
   }
 }
 
@@ -98,12 +98,12 @@ function oauthErrorMessage(code: string): string {
  * handling below is the security-critical path and should exist exactly once.
  */
 export function AuthForm({ mode }: { mode: AuthMode }) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
+  const [password, setPassword] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   /**
    * Whether this deployment has a GitHub OAuth app.
@@ -119,8 +119,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
    * build time, which is exactly the fallback-shaped thing that lets a button
    * outlive the configuration it describes.
    */
-  const [githubAvailable, setGithubAvailable] = useState<boolean | null>(null);
-  const [githubBusy, setGithubBusy] = useState(false);
+  const [githubAvailable, setGithubAvailable] = useState<boolean | null>(null)
+  const [githubBusy, setGithubBusy] = useState(false)
 
   /**
    * Whether this browser can do WebAuthn at all.
@@ -137,25 +137,25 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     subscribeToNothing,
     () => typeof window.PublicKeyCredential !== "undefined",
     () => false,
-  );
-  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  )
+  const [passkeyBusy, setPasskeyBusy] = useState(false)
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     void githubSignInAvailable()
       .then((available) => {
-        if (!cancelled) setGithubAvailable(available);
+        if (!cancelled) setGithubAvailable(available)
       })
       // A failed lookup means the same thing on screen as "not configured":
       // nothing is rendered. Guessing true here would put up a button whose
       // callback might 404.
       .catch(() => {
-        if (!cancelled) setGithubAvailable(false);
-      });
+        if (!cancelled) setGithubAvailable(false)
+      })
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   /**
    * The error code a failed OAuth callback comes back with.
@@ -171,10 +171,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
    * `dismissedOAuthError` retires it — an explanation of a redirect that
    * happened two attempts ago is worse than none.
    */
-  const oauthErrorCode = useSyncExternalStore(subscribeToNothing, readOAuthError, () => null);
-  const [dismissedOAuthError, setDismissedOAuthError] = useState(false);
+  const oauthErrorCode = useSyncExternalStore(subscribeToNothing, readOAuthError, () => null)
+  const [dismissedOAuthError, setDismissedOAuthError] = useState(false)
   const shownError =
-    error ?? (oauthErrorCode && !dismissedOAuthError ? oauthErrorMessage(oauthErrorCode) : null);
+    error ?? (oauthErrorCode && !dismissedOAuthError ? oauthErrorMessage(oauthErrorCode) : null)
 
   /**
    * A sign-in that stopped at a second factor, and the keys it already derived.
@@ -189,20 +189,20 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [challenge, setChallenge] = useState<Extract<
     SignInOutcome,
     { status: "two-factor-required" }
-  > | null>(null);
-  const [code, setCode] = useState("");
-  const [factor, setFactor] = useState<"totp" | "backup-code">("totp");
+  > | null>(null)
+  const [code, setCode] = useState("")
+  const [factor, setFactor] = useState<"totp" | "backup-code">("totp")
 
   async function startGithub() {
-    setGithubBusy(true);
-    setError(null);
-    setDismissedOAuthError(true);
+    setGithubBusy(true)
+    setError(null)
+    setDismissedOAuthError(true)
     try {
       // On success the browser leaves for github.com and nothing below runs.
-      await signInWithGithub();
+      await signInWithGithub()
     } catch (err) {
-      setError(String((err as Error).message ?? err));
-      setGithubBusy(false);
+      setError(String((err as Error).message ?? err))
+      setGithubBusy(false)
     }
   }
 
@@ -215,74 +215,74 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
    * and again by the unlock dialog afterwards.
    */
   async function startPasskey() {
-    setPasskeyBusy(true);
-    setError(null);
-    setDismissedOAuthError(true);
+    setPasskeyBusy(true)
+    setError(null)
+    setDismissedOAuthError(true)
     try {
-      await signInWithPasskey();
-      router.push("/dashboard");
+      await signInWithPasskey()
+      router.push("/dashboard")
     } catch (err) {
       // Closing the prompt is a decision, not a failure, and an alert about it
       // would be noise.
       if (!(err instanceof PasskeyCancelledError)) {
-        setError(String((err as Error).message ?? err));
+        setError(String((err as Error).message ?? err))
       }
-      setPasskeyBusy(false);
+      setPasskeyBusy(false)
     }
   }
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    setDismissedOAuthError(true);
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    setDismissedOAuthError(true)
     try {
       // Argon2id runs here, in the browser. What goes over the wire is an HKDF
       // branch — the server never sees anything that can open the vault.
       if (mode === "sign-up") {
-        const { vaultKey, auditKey } = await signUpWithVault(email, password, name);
+        const { vaultKey, auditKey } = await signUpWithVault(email, password, name)
         // The audit key has to travel with the vault key: without it the
         // activity log cannot blind a hostname on write, or resolve one on read.
-        setVaultKey(vaultKey, auditKey);
-        router.push("/dashboard");
-        return;
+        setVaultKey(vaultKey, auditKey)
+        router.push("/dashboard")
+        return
       }
 
-      const outcome = await signInWithVaultAndSecondFactor(email, password);
+      const outcome = await signInWithVaultAndSecondFactor(email, password)
       if (outcome.status === "two-factor-required") {
-        setChallenge(outcome);
-        setCode("");
-        setFactor("totp");
-        return;
+        setChallenge(outcome)
+        setCode("")
+        setFactor("totp")
+        return
       }
 
-      setVaultKey(outcome.vaultKey, outcome.auditKey);
-      router.push("/dashboard");
+      setVaultKey(outcome.vaultKey, outcome.auditKey)
+      router.push("/dashboard")
     } catch (err) {
-      setError(String((err as Error).message ?? err));
+      setError(String((err as Error).message ?? err))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
   /** Answer the outstanding challenge, then install the keys already derived. */
   async function verifyChallenge(e: React.FormEvent) {
-    e.preventDefault();
-    if (!challenge) return;
-    setBusy(true);
-    setError(null);
+    e.preventDefault()
+    if (!challenge) return
+    setBusy(true)
+    setError(null)
     try {
-      await completeTwoFactorSignIn(code, factor);
-      setVaultKey(challenge.vaultKey, challenge.auditKey);
-      router.push("/dashboard");
+      await completeTwoFactorSignIn(code, factor)
+      setVaultKey(challenge.vaultKey, challenge.auditKey)
+      router.push("/dashboard")
     } catch (err) {
-      setError(String((err as Error).message ?? err));
+      setError(String((err as Error).message ?? err))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
-  const signUp = mode === "sign-up";
+  const signUp = mode === "sign-up"
 
   if (challenge) {
     return (
@@ -294,13 +294,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         methods={challenge.methods}
         onCodeChange={setCode}
         onFactorChange={(next) => {
-          setFactor(next);
-          setCode("");
-          setError(null);
+          setFactor(next)
+          setCode("")
+          setError(null)
         }}
         onSubmit={verifyChallenge}
       />
-    );
+    )
   }
 
   return (
@@ -512,7 +512,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         )}
       </CardFooter>
     </Card>
-  );
+  )
 }
 
 /**
@@ -540,17 +540,17 @@ function TwoFactorChallenge({
   onFactorChange,
   onSubmit,
 }: {
-  busy: boolean;
-  code: string;
-  error: string | null;
-  factor: "totp" | "backup-code";
+  busy: boolean
+  code: string
+  error: string | null
+  factor: "totp" | "backup-code"
   /** What the server said it will accept. Empty means it did not say. */
-  methods: string[];
-  onCodeChange: (value: string) => void;
-  onFactorChange: (value: "totp" | "backup-code") => void;
-  onSubmit: (e: React.FormEvent) => void;
+  methods: string[]
+  onCodeChange: (value: string) => void
+  onFactorChange: (value: "totp" | "backup-code") => void
+  onSubmit: (e: React.FormEvent) => void
 }) {
-  const backup = factor === "backup-code";
+  const backup = factor === "backup-code"
 
   return (
     <Card className="w-full">
@@ -632,5 +632,5 @@ function TwoFactorChallenge({
         </p>
       </CardFooter>
     </Card>
-  );
+  )
 }

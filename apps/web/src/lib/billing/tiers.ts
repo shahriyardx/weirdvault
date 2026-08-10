@@ -30,7 +30,7 @@
  * paying for, and compose.prod.yaml is the whole product on one machine.
  */
 
-export type Tier = "free" | "pro";
+export type Tier = "free" | "pro"
 
 /**
  * Monthly relay transfer, in bytes. Decimal gigabytes, matching how transfer is
@@ -56,7 +56,7 @@ export type Tier = "free" | "pro";
 export const RELAY_ALLOWANCE_BYTES: Record<Tier, number> = {
   free: 1_000_000_000,
   pro: 5_000_000_000,
-};
+}
 
 /**
  * Audit retention is the other per-tier limit, and its windows are deliberately
@@ -74,7 +74,7 @@ export const RELAY_ALLOWANCE_BYTES: Record<Tier, number> = {
 export const TIER_LABELS: Record<Tier, string> = {
   free: "Free",
   pro: "Pro",
-};
+}
 
 /**
  * Whether a tier may record sessions.
@@ -97,7 +97,7 @@ export const TIER_LABELS: Record<Tier, string> = {
 export const SESSION_RECORDING: Record<Tier, boolean> = {
   free: false,
   pro: true,
-};
+}
 
 /**
  * What Pro costs, in whole US dollars a month.
@@ -114,9 +114,9 @@ export const SESSION_RECORDING: Record<Tier, boolean> = {
  * slow is a worse failure than a stale number. If the price in the Stripe
  * dashboard changes, change this too, in the same commit.
  */
-export const PRO_PRICE_USD = 5;
-export const PRO_PRICE_LABEL = `$${PRO_PRICE_USD}`;
-export const PRO_PRICE_UNIT = "per month";
+export const PRO_PRICE_USD = 5
+export const PRO_PRICE_LABEL = `$${PRO_PRICE_USD}`
+export const PRO_PRICE_UNIT = "per month"
 
 /**
  * The facts about a subscription that tier resolution reads.
@@ -127,11 +127,11 @@ export const PRO_PRICE_UNIT = "per month";
  */
 export interface SubscriptionAccess {
   /** Stripe's own status string, or the local "none" sentinel. See subscription.ts. */
-  status: string;
+  status: string
   /** When access lapses if nothing renews it. Null when Stripe never told us. */
-  currentPeriodEnd: Date | null;
+  currentPeriodEnd: Date | null
   /** Set when the customer has cancelled but paid through the period. */
-  cancelAtPeriodEnd: boolean;
+  cancelAtPeriodEnd: boolean
 }
 
 /**
@@ -140,7 +140,7 @@ export interface SubscriptionAccess {
  * `trialing` is in here because a trial is a subscription that is working; a
  * trial that did not grant the thing being trialled would be a strange product.
  */
-const GRANTS_OUTRIGHT = new Set(["active", "trialing"]);
+const GRANTS_OUTRIGHT = new Set(["active", "trialing"])
 
 /**
  * Statuses that are a card still being retried, and grant until the period ends.
@@ -154,7 +154,7 @@ const GRANTS_OUTRIGHT = new Set(["active", "trialing"]);
  * attempts run out, the subscription is cancelled and `customer.subscription.
  * deleted` arrives, which is the event that ends this.
  */
-const GRANTS_WHILE_RETRYING = new Set(["past_due", "unpaid"]);
+const GRANTS_WHILE_RETRYING = new Set(["past_due", "unpaid"])
 
 /**
  * The tier a subscription row amounts to. The whole rule, in one place.
@@ -176,16 +176,16 @@ const GRANTS_WHILE_RETRYING = new Set(["past_due", "unpaid"]);
  * invisible one (a lapsed account keeps Pro forever) is not.
  */
 export function tierForSubscription(sub: SubscriptionAccess | null, now: Date = new Date()): Tier {
-  if (!sub) return "free";
+  if (!sub) return "free"
 
-  if (GRANTS_OUTRIGHT.has(sub.status)) return "pro";
+  if (GRANTS_OUTRIGHT.has(sub.status)) return "pro"
 
   if (GRANTS_WHILE_RETRYING.has(sub.status)) {
     // A null period end means Stripe never told us when this one ends, which is
     // not the same as "it has ended". Granting is the fail-toward-access
     // direction this whole module takes, and it is bounded in practice by the
     // cancellation event that ends every retry schedule.
-    return sub.currentPeriodEnd === null || now < sub.currentPeriodEnd ? "pro" : "free";
+    return sub.currentPeriodEnd === null || now < sub.currentPeriodEnd ? "pro" : "free"
   }
 
   /**
@@ -202,20 +202,20 @@ export function tierForSubscription(sub: SubscriptionAccess | null, now: Date = 
   if (sub.status === "canceled") {
     return sub.cancelAtPeriodEnd && sub.currentPeriodEnd !== null && now < sub.currentPeriodEnd
       ? "pro"
-      : "free";
+      : "free"
   }
 
-  return "free";
+  return "free"
 }
 
 /** The relay allowance a tier gets, in bytes. */
 export function relayAllowanceForTier(tier: Tier): number {
-  return RELAY_ALLOWANCE_BYTES[tier];
+  return RELAY_ALLOWANCE_BYTES[tier]
 }
 
 /** Whether a tier may save new session recordings. */
 export function canRecordOnTier(tier: Tier): boolean {
-  return SESSION_RECORDING[tier];
+  return SESSION_RECORDING[tier]
 }
 
 /**
@@ -234,10 +234,10 @@ export function canRecordOnTier(tier: Tier): boolean {
  * the user to discover.
  */
 export function periodFor(at: Date = new Date()): string {
-  return `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, "0")}`;
+  return `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
 /** Midnight UTC on the first of the following month: when the counter resets. */
 export function periodResetsAt(at: Date = new Date()): Date {
-  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1));
+  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1))
 }

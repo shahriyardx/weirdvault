@@ -1,6 +1,6 @@
-import Link from "next/link";
+import Link from "next/link"
 
-import { Brand } from "@/components/shell/brand";
+import { Brand } from "@/components/shell/brand"
 
 const GROUPS = [
   {
@@ -27,7 +27,7 @@ const GROUPS = [
       { href: "/docs#keys", label: "Keys" },
     ],
   },
-] as const;
+] as const
 
 export function SiteFooter() {
   return (
@@ -69,5 +69,5 @@ export function SiteFooter() {
         </div>
       </div>
     </footer>
-  );
+  )
 }

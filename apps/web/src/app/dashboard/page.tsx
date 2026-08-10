@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 /**
  * Dashboard overview.
@@ -10,9 +10,9 @@
  * holds the vault.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowRightIcon,
   CaretRightIcon,
@@ -30,11 +30,11 @@ import {
   ShieldWarningIcon,
   TerminalWindowIcon,
   WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react/dist/ssr"
 
-import { PageHeader } from "@/components/shell/page-shell";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/shell/page-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardAction,
@@ -42,48 +42,48 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
-import { listPins, type PinnedHostKey } from "@/lib/hostkeys";
-import { listHosts, type Host } from "@/lib/hosts";
-import { listStoredKeys, type StoredKey } from "@/lib/keys";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import { useConnectHost } from "@/lib/ssh/use-connect-host";
-import { cn } from "@/lib/utils";
+} from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt"
+import { listPins, type PinnedHostKey } from "@/lib/hostkeys"
+import { listHosts, type Host } from "@/lib/hosts"
+import { listStoredKeys, type StoredKey } from "@/lib/keys"
+import { useSshSession } from "@/lib/ssh/session-provider"
+import { useConnectHost } from "@/lib/ssh/use-connect-host"
+import { cn } from "@/lib/utils"
 
-const WEEK = 7 * 24 * 60 * 60 * 1000;
+const WEEK = 7 * 24 * 60 * 60 * 1000
 
 interface VaultSnapshot {
-  hosts: Host[];
-  keys: StoredKey[];
-  pins: PinnedHostKey[];
+  hosts: Host[]
+  keys: StoredKey[]
+  pins: PinnedHostKey[]
   /** Captured once per load so every relative timestamp agrees. */
-  readAt: number;
+  readAt: number
 }
 
 export default function DashboardOverview() {
-  const [snapshot, setSnapshot] = useState<VaultSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<VaultSnapshot | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
-    (async () => {
+    ;(async () => {
       try {
-        const [hosts, keys, pins] = await Promise.all([listHosts(), listStoredKeys(), listPins()]);
-        if (!cancelled) setSnapshot({ hosts, keys, pins, readAt: Date.now() });
+        const [hosts, keys, pins] = await Promise.all([listHosts(), listStoredKeys(), listPins()])
+        if (!cancelled) setSnapshot({ hosts, keys, pins, readAt: Date.now() })
       } catch (e) {
-        if (cancelled) return;
-        setError((e as Error)?.message ?? "IndexedDB is unavailable in this browser context.");
-        setSnapshot({ hosts: [], keys: [], pins: [], readAt: Date.now() });
+        if (cancelled) return
+        setError((e as Error)?.message ?? "IndexedDB is unavailable in this browser context.")
+        setSnapshot({ hosts: [], keys: [], pins: [], readAt: Date.now() })
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div className="min-w-0">
@@ -123,14 +123,14 @@ export default function DashboardOverview() {
         <PopulatedState snapshot={snapshot} />
       )}
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ states */
 
 function LoadingState() {
   return (
-    <div className="mt-6 space-y-6" aria-busy="true" aria-label="Reading local vault">
+    <div className="mt-6 space-y-6" role="status" aria-busy="true" aria-label="Reading local vault">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <Card key={i} size="sm">
@@ -174,7 +174,7 @@ function LoadingState() {
         </Card>
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -249,7 +249,7 @@ function EmptyState() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
 
 function Step({
@@ -258,10 +258,10 @@ function Step({
   body,
   children,
 }: {
-  n: number;
-  title: string;
-  body: string;
-  children?: React.ReactNode;
+  n: number
+  title: string
+  body: string
+  children?: React.ReactNode
 }) {
   return (
     <div className="flex gap-3">
@@ -277,35 +277,35 @@ function Step({
         {children}
       </div>
     </div>
-  );
+  )
 }
 
 /* --------------------------------------------------------------- populated */
 
 function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
-  const { hosts, keys, pins, readAt } = snapshot;
+  const { hosts, keys, pins, readAt } = snapshot
 
-  const router = useRouter();
-  const { keys: usableKeys } = useSshSession();
-  const prompt = useCredentialPrompt();
+  const router = useRouter()
+  const { keys: usableKeys } = useSshSession()
+  const prompt = useCredentialPrompt()
   const { connectToHost, connecting } = useConnectHost({
     askFor: prompt.askFor,
     onConnected: () => router.push("/dashboard/terminal"),
-  });
+  })
 
   const derived = useMemo(() => {
-    const portable = keys.filter((k) => k.mode === "portable").length;
-    const deviceBound = keys.length - portable;
+    const portable = keys.filter((k) => k.mode === "portable").length
+    const deviceBound = keys.length - portable
     const activeThisWeek = hosts.filter(
       (h) => h.lastUsedAt !== undefined && readAt - h.lastUsedAt < WEEK,
-    ).length;
-    const lastUsed = hosts.reduce<number>((max, h) => Math.max(max, h.lastUsedAt ?? 0), 0);
+    ).length
+    const lastUsed = hosts.reduce<number>((max, h) => Math.max(max, h.lastUsedAt ?? 0), 0)
 
-    return { portable, deviceBound, activeThisWeek, lastUsed };
-  }, [hosts, keys, readAt]);
+    return { portable, deviceBound, activeThisWeek, lastUsed }
+  }, [hosts, keys, readAt])
 
-  const activity = useMemo(() => buildActivity(hosts, keys, pins), [hosts, keys, pins]);
-  const posture = useMemo(() => buildPosture({ keys, ...derived }), [keys, derived]);
+  const activity = useMemo(() => buildActivity(hosts, keys, pins), [hosts, keys, pins])
+  const posture = useMemo(() => buildPosture({ keys, ...derived }), [keys, derived])
 
   return (
     <div className="mt-6 space-y-6">
@@ -522,7 +522,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 /* ----------------------------------------------------------------- pieces */
@@ -533,10 +533,10 @@ function Stat({
   value,
   caption,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  caption: string;
+  icon: React.ReactNode
+  label: string
+  value: number
+  caption: string
 }) {
   return (
     <Card size="sm">
@@ -551,7 +551,7 @@ function Stat({
         <p className="mt-1.5 text-muted-foreground">{caption}</p>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function InlineEmpty({
@@ -560,10 +560,10 @@ function InlineEmpty({
   body,
   action,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  action?: { href: string; label: string };
+  icon: React.ReactNode
+  title: string
+  body: string
+  action?: { href: string; label: string }
 }) {
   return (
     <div className="flex flex-col items-start gap-2 px-(--card-spacing) py-6">
@@ -581,17 +581,17 @@ function InlineEmpty({
         </Button>
       )}
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------- derivation */
 
 interface ActivityEntry {
-  id: string;
-  at: number;
-  title: string;
-  detail: string;
-  icon: React.ReactNode;
+  id: string
+  at: number
+  title: string
+  detail: string
+  icon: React.ReactNode
 }
 
 /**
@@ -601,7 +601,7 @@ interface ActivityEntry {
  * one entry per record, not one per event.
  */
 function buildActivity(hosts: Host[], keys: StoredKey[], pins: PinnedHostKey[]): ActivityEntry[] {
-  const entries: ActivityEntry[] = [];
+  const entries: ActivityEntry[] = []
 
   for (const h of hosts) {
     if (h.lastUsedAt) {
@@ -611,7 +611,7 @@ function buildActivity(hosts: Host[], keys: StoredKey[], pins: PinnedHostKey[]):
         title: `Connected to ${h.label}`,
         detail: `${h.username}@${h.hostname}:${h.port}`,
         icon: <PlugsConnectedIcon className="size-3.5" />,
-      });
+      })
     } else {
       entries.push({
         id: `host-added-${h.id}`,
@@ -619,7 +619,7 @@ function buildActivity(hosts: Host[], keys: StoredKey[], pins: PinnedHostKey[]):
         title: `Saved host ${h.label}`,
         detail: `${h.username}@${h.hostname}:${h.port}`,
         icon: <HardDrivesIcon className="size-3.5" />,
-      });
+      })
     }
   }
 
@@ -630,7 +630,7 @@ function buildActivity(hosts: Host[], keys: StoredKey[], pins: PinnedHostKey[]):
       title: `Pinned ${p.type} host key for ${p.id}`,
       detail: shortFingerprint(p.fingerprint),
       icon: <FingerprintIcon className="size-3.5" />,
-    });
+    })
   }
 
   for (const k of keys) {
@@ -643,16 +643,16 @@ function buildActivity(hosts: Host[], keys: StoredKey[], pins: PinnedHostKey[]):
           ? "Wrapped with the vault key, syncs as ciphertext"
           : "Stays in this browser, never synced",
       icon: <KeyIcon className="size-3.5" />,
-    });
+    })
   }
 
-  return entries.sort((a, b) => b.at - a.at);
+  return entries.sort((a, b) => b.at - a.at)
 }
 
 interface PostureLine {
-  tone: "ok" | "warn" | "info";
-  text: string;
-  hint?: string;
+  tone: "ok" | "warn" | "info"
+  text: string
+  hint?: string
 }
 
 function buildPosture({
@@ -660,30 +660,30 @@ function buildPosture({
   portable,
   deviceBound,
 }: {
-  keys: StoredKey[];
-  portable: number;
-  deviceBound: number;
+  keys: StoredKey[]
+  portable: number
+  deviceBound: number
 }): PostureLine[] {
-  const lines: PostureLine[] = [];
+  const lines: PostureLine[] = []
 
   if (keys.length === 0) {
     lines.push({
       tone: "warn",
       text: "No SSH key on this device",
       hint: "Generate one to connect without sending a password.",
-    });
+    })
   } else if (portable > 0) {
     lines.push({
       tone: "ok",
       text: `Vault sync enabled · ${portable} portable ${plural(portable, "key")}`,
       hint: "Wrapped with your vault key before it leaves the tab.",
-    });
+    })
   } else {
     lines.push({
       tone: "info",
       text: "No portable keys",
       hint: "Nothing here will appear on your other devices.",
-    });
+    })
   }
 
   /* Host-key pinning used to contribute two lines here, one of them a warning
@@ -696,26 +696,26 @@ function buildPosture({
       tone: "info",
       text: `${deviceBound} device-bound ${plural(deviceBound, "key")} won't sync`,
       hint: "Deliberate: it never leaves this browser, so another device needs its own key in authorized_keys.",
-    });
+    })
   }
 
   lines.push({
     tone: "ok",
     text: "Private keys are non-extractable",
     hint: "WebCrypto refuses to export them — this page cannot read them either.",
-  });
+  })
 
-  return lines;
+  return lines
 }
 
 /* ------------------------------------------------------------ formatting */
 
 function plural(n: number, word: string): string {
-  return n === 1 ? word : `${word}s`;
+  return n === 1 ? word : `${word}s`
 }
 
 function shortFingerprint(fp: string): string {
-  return fp.length > 30 ? `${fp.slice(0, 30)}…` : fp;
+  return fp.length > 30 ? `${fp.slice(0, 30)}…` : fp
 }
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -725,17 +725,17 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 24 * 60 * 60 * 1000],
   ["hour", 60 * 60 * 1000],
   ["minute", 60 * 1000],
-];
+]
 
-const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 /** Relative to the snapshot's read time, so every row on the page agrees. */
 function relative(at: number, now: number): string {
-  const delta = at - now;
-  const abs = Math.abs(delta);
-  if (abs < 60_000) return "just now";
+  const delta = at - now
+  const abs = Math.abs(delta)
+  if (abs < 60_000) return "just now"
   for (const [unit, ms] of UNITS) {
-    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit);
+    if (abs >= ms) return RTF.format(Math.round(delta / ms), unit)
   }
-  return "just now";
+  return "just now"
 }

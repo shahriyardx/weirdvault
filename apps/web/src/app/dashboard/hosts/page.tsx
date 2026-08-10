@@ -1,12 +1,12 @@
-"use client";
+"use client"
 
 // Client component: hosts live in IndexedDB and the encrypted vault, so the
 // list can only be read after decryption in the browser. There is no server
 // render of this data — the server holds ciphertext it cannot open.
 
-import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import * as React from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   DotsThreeIcon,
   FingerprintIcon,
@@ -20,10 +20,10 @@ import {
   TrashIcon,
   UploadSimpleIcon,
   WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+} from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
-import { PageHeader } from "@/components/shell/page-shell";
+import { PageHeader } from "@/components/shell/page-shell"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,11 +33,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+} from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogClose,
@@ -46,25 +46,25 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -72,37 +72,37 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { deleteHost, listHosts, saveHost, type Host, type HostAuth } from "@/lib/hosts";
-import { listPins, type PinnedHostKey } from "@/lib/hostkeys";
-import { listStoredKeys, type StoredKey } from "@/lib/keys";
-import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt";
-import { useSshSession } from "@/lib/ssh/session-provider";
-import { useConnectHost } from "@/lib/ssh/use-connect-host";
-import type { ParsedConfigHost } from "@/lib/ssh/types";
-import { loadSSH, parseSSHConfig, type SshLoadProgress } from "@/lib/ssh/wasm";
-import { getVaultKey } from "@/lib/vault/session";
-import { syncVault } from "@/lib/vault/sync";
-import { noAutofillText } from "@/lib/no-autofill";
+} from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { deleteHost, listHosts, saveHost, type Host, type HostAuth } from "@/lib/hosts"
+import { listPins, type PinnedHostKey } from "@/lib/hostkeys"
+import { listStoredKeys, type StoredKey } from "@/lib/keys"
+import { CredentialPrompt, useCredentialPrompt } from "@/components/ssh/credential-prompt"
+import { useSshSession } from "@/lib/ssh/session-provider"
+import { useConnectHost } from "@/lib/ssh/use-connect-host"
+import type { ParsedConfigHost } from "@/lib/ssh/types"
+import { loadSSH, parseSSHConfig, type SshLoadProgress } from "@/lib/ssh/wasm"
+import { getVaultKey } from "@/lib/vault/session"
+import { syncVault } from "@/lib/vault/sync"
+import { noAutofillText } from "@/lib/no-autofill"
 
 /* -------------------------------------------------------------------- form */
 
 interface HostForm {
-  id?: string;
-  createdAt?: number;
-  lastUsedAt?: number;
-  label: string;
-  hostname: string;
-  port: string;
-  username: string;
-  auth: HostAuth;
-  keyId: string;
-  folder: string;
-  tags: string;
+  id?: string
+  createdAt?: number
+  lastUsedAt?: number
+  label: string
+  hostname: string
+  port: string
+  username: string
+  auth: HostAuth
+  keyId: string
+  folder: string
+  tags: string
 }
 
-const NO_KEY = "__none__";
+const NO_KEY = "__none__"
 
 const blankForm = (): HostForm => ({
   label: "",
@@ -113,7 +113,7 @@ const blankForm = (): HostForm => ({
   keyId: NO_KEY,
   folder: "",
   tags: "",
-});
+})
 
 const formFor = (host: Host): HostForm => ({
   id: host.id,
@@ -127,76 +127,76 @@ const formFor = (host: Host): HostForm => ({
   keyId: host.keyId ?? NO_KEY,
   folder: host.folder ?? "",
   tags: (host.tags ?? []).join(", "),
-});
+})
 
 /* -------------------------------------------------------------------- page */
 
 export default function HostsPage() {
-  const router = useRouter();
-  const { keys: usableKeys } = useSshSession();
+  const router = useRouter()
+  const { keys: usableKeys } = useSshSession()
 
   // Connecting straight from the list: a saved host already carries everything
   // the connect form would ask for, so sending someone back to that form to
   // retype it is friction. Whatever it genuinely lacks, the prompt asks for.
-  const prompt = useCredentialPrompt();
+  const prompt = useCredentialPrompt()
   const { connectToHost, connecting } = useConnectHost({
     askFor: prompt.askFor,
     onConnected: () => router.push("/dashboard/terminal"),
-  });
+  })
 
-  const [hosts, setHosts] = React.useState<Host[]>([]);
-  const [pins, setPins] = React.useState<PinnedHostKey[]>([]);
-  const [keys, setKeys] = React.useState<StoredKey[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [query, setQuery] = React.useState("");
+  const [hosts, setHosts] = React.useState<Host[]>([])
+  const [pins, setPins] = React.useState<PinnedHostKey[]>([])
+  const [keys, setKeys] = React.useState<StoredKey[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [query, setQuery] = React.useState("")
 
-  const [form, setForm] = React.useState<HostForm | null>(null);
-  const [saving, setSaving] = React.useState(false);
-  const [pendingDelete, setPendingDelete] = React.useState<Host | null>(null);
-  const [importOpen, setImportOpen] = React.useState(false);
+  const [form, setForm] = React.useState<HostForm | null>(null)
+  const [saving, setSaving] = React.useState(false)
+  const [pendingDelete, setPendingDelete] = React.useState<Host | null>(null)
+  const [importOpen, setImportOpen] = React.useState(false)
 
   const refresh = React.useCallback(async () => {
-    const [h, p, k] = await Promise.all([listHosts(), listPins(), listStoredKeys()]);
-    setHosts(h);
-    setPins(p);
-    setKeys(k);
-  }, []);
+    const [h, p, k] = await Promise.all([listHosts(), listPins(), listStoredKeys()])
+    setHosts(h)
+    setPins(p)
+    setKeys(k)
+  }, [])
 
   React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    let cancelled = false
+    ;(async () => {
       try {
-        const [h, p, k] = await Promise.all([listHosts(), listPins(), listStoredKeys()]);
-        if (cancelled) return;
-        setHosts(h);
-        setPins(p);
-        setKeys(k);
+        const [h, p, k] = await Promise.all([listHosts(), listPins(), listStoredKeys()])
+        if (cancelled) return
+        setHosts(h)
+        setPins(p)
+        setKeys(k)
       } catch {
-        if (!cancelled) toast.error("Could not read the local host store.");
+        if (!cancelled) toast.error("Could not read the local host store.")
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoading(false)
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   const pinFor = React.useCallback(
     (host: Host) => pins.find((p) => p.id === `${host.hostname}:${host.port}`),
     [pins],
-  );
+  )
 
   const keyLabel = React.useCallback(
     (id?: string) => (id ? keys.find((k) => k.id === id)?.label : undefined),
     [keys],
-  );
+  )
 
   // Search is client-side because it has to be: the vault is a blob the server
   // cannot index. Matching on the fields a person actually remembers.
   const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return hosts;
+    const q = query.trim().toLowerCase()
+    if (!q) return hosts
     return hosts.filter((h) =>
       [
         h.label,
@@ -209,32 +209,32 @@ export default function HostsPage() {
         .join(" ")
         .toLowerCase()
         .includes(q),
-    );
-  }, [hosts, query]);
+    )
+  }, [hosts, query])
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!form) return;
+    event.preventDefault()
+    if (!form) return
 
-    const hostname = form.hostname.trim();
-    const username = form.username.trim();
-    const port = Number(form.port);
+    const hostname = form.hostname.trim()
+    const username = form.username.trim()
+    const port = Number(form.port)
 
     if (!hostname || !username) {
-      toast.error("Hostname and username are both required.");
-      return;
+      toast.error("Hostname and username are both required.")
+      return
     }
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      toast.error("Port must be a whole number between 1 and 65535.");
-      return;
+      toast.error("Port must be a whole number between 1 and 65535.")
+      return
     }
 
-    setSaving(true);
+    setSaving(true)
     try {
       const tags = form.tags
         .split(",")
         .map((t) => t.trim())
-        .filter(Boolean);
+        .filter(Boolean)
 
       await saveHost({
         id: form.id,
@@ -250,15 +250,15 @@ export default function HostsPage() {
         keyId: form.auth === "password" || form.keyId === NO_KEY ? undefined : form.keyId,
         folder: form.folder.trim() || undefined,
         tags: tags.length ? tags : undefined,
-      });
+      })
 
-      await refresh();
-      setForm(null);
-      toast.success(form.id ? "Host updated." : "Host added.");
+      await refresh()
+      setForm(null)
+      toast.success(form.id ? "Host updated." : "Host added.")
     } catch {
-      toast.error("Could not write to the local host store.");
+      toast.error("Could not write to the local host store.")
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
   }
 
@@ -269,44 +269,44 @@ export default function HostsPage() {
    * — the records are already in this browser — so it is reported as such.
    */
   async function handleImported(count: number) {
-    await refresh();
+    await refresh()
 
-    const vaultKey = getVaultKey();
+    const vaultKey = getVaultKey()
     if (!vaultKey) {
       toast.success(
         `Imported ${count} ${count === 1 ? "host" : "hosts"}. The vault is locked in this tab, so they stay here until you sign in.`,
-      );
-      return;
+      )
+      return
     }
     try {
       // Read the result: an unreachable server is reported as a returned
       // status rather than a throw, so the catch below does not cover it and
       // "and synced" would be a claim about devices that got nothing.
-      const result = await syncVault(vaultKey);
+      const result = await syncVault(vaultKey)
       if (result.status === "offline") {
         toast.message(
           `Imported ${count} ${count === 1 ? "host" : "hosts"} on this device. The server could not be reached, so they will sync on the next attempt.`,
-        );
-        return;
+        )
+        return
       }
-      toast.success(`Imported ${count} ${count === 1 ? "host" : "hosts"} and synced.`);
+      toast.success(`Imported ${count} ${count === 1 ? "host" : "hosts"} and synced.`)
     } catch {
       toast.message(
         `Imported ${count} ${count === 1 ? "host" : "hosts"} on this device. The vault will sync on the next attempt.`,
-      );
+      )
     }
   }
 
   async function handleDelete() {
-    if (!pendingDelete) return;
-    const { id, label } = pendingDelete;
-    setPendingDelete(null);
+    if (!pendingDelete) return
+    const { id, label } = pendingDelete
+    setPendingDelete(null)
     try {
-      await deleteHost(id);
-      await refresh();
-      toast.success(`Removed ${label}.`);
+      await deleteHost(id)
+      await refresh()
+      toast.success(`Removed ${label}.`)
     } catch {
-      toast.error("Could not remove the host.");
+      toast.error("Could not remove the host.")
     }
   }
 
@@ -577,20 +577,20 @@ export default function HostsPage() {
 
       <CredentialPrompt pending={prompt.pending} keys={usableKeys} onSettle={prompt.settle} />
     </>
-  );
+  )
 }
 
 /* -------------------------------------------------------- ssh_config import */
 
 interface ConfigSkip {
-  pattern: string;
-  reason: string;
+  pattern: string
+  reason: string
 }
 
 interface ConfigAudit {
-  skipped: ConfigSkip[];
-  includes: number;
-  matches: number;
+  skipped: ConfigSkip[]
+  includes: number
+  matches: number
 }
 
 /**
@@ -603,32 +603,32 @@ interface ConfigAudit {
  * dialog can name each omission instead of quietly rounding down.
  */
 function auditConfig(text: string): ConfigAudit {
-  const skipped: ConfigSkip[] = [];
-  let includes = 0;
-  let matches = 0;
+  const skipped: ConfigSkip[] = []
+  let includes = 0
+  let matches = 0
 
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
+    const line = raw.trim()
+    if (!line || line.startsWith("#")) continue
 
-    const split = line.search(/[ \t=]/);
-    if (split <= 0) continue;
-    const directive = line.slice(0, split).toLowerCase();
+    const split = line.search(/[ \t=]/)
+    if (split <= 0) continue
+    const directive = line.slice(0, split).toLowerCase()
     const value = line
       .slice(split)
       .replace(/^[ \t=]+/, "")
       .trim()
-      .replace(/^"|"$/g, "");
+      .replace(/^"|"$/g, "")
 
-    if (directive === "include") includes++;
-    if (directive === "match") matches++;
-    if (directive !== "host" || !/[*?!]/.test(value)) continue;
+    if (directive === "include") includes++
+    if (directive === "match") matches++
+    if (directive !== "host" || !/[*?!]/.test(value)) continue
 
     // "Host prod prod-*" is the case worth naming separately: one of those two
     // is a real machine, but the parser takes a Host block whole and drops all
     // of it. Saying "a pattern rather than an address" there would be untrue,
     // and the concrete name is exactly what someone needs to add by hand.
-    const concrete = value.split(/\s+/).filter((name) => !/[*?!]/.test(name));
+    const concrete = value.split(/\s+/).filter((name) => !/[*?!]/.test(name))
 
     skipped.push({
       pattern: value,
@@ -638,18 +638,18 @@ function auditConfig(text: string): ConfigAudit {
           : concrete.length > 0
             ? `Names ${concrete.join(", ")} alongside a pattern. A Host block is read whole or not at all, so this one is skipped rather than half-understood — add ${concrete.length === 1 ? "it" : "them"} by hand if you need ${concrete.length === 1 ? "it" : "them"}.`
             : "A pattern rather than an address. Which machines it stands for depends on what you type at the ssh prompt, so there is nothing concrete to save.",
-    });
+    })
   }
 
-  return { skipped, includes, matches };
+  return { skipped, includes, matches }
 }
 
 interface Candidate {
-  key: string;
-  entry: ParsedConfigHost;
+  key: string
+  entry: ParsedConfigHost
 }
 
-const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
+const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
 
 /**
  * Bulk import from ~/.ssh/config.
@@ -664,79 +664,79 @@ function ImportConfigDialog({
   existing,
   onImported,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  existing: Host[];
-  onImported: (count: number) => Promise<void>;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  existing: Host[]
+  onImported: (count: number) => Promise<void>
 }) {
-  const [text, setText] = React.useState("");
-  const [fileName, setFileName] = React.useState("");
-  const [candidates, setCandidates] = React.useState<Candidate[] | null>(null);
-  const [audit, setAudit] = React.useState<ConfigAudit | null>(null);
-  const [chosen, setChosen] = React.useState<Record<string, boolean>>({});
-  const [fallbackUser, setFallbackUser] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [core, setCore] = React.useState<SshLoadProgress | null>(null);
-  const [coreError, setCoreError] = React.useState<string | null>(null);
+  const [text, setText] = React.useState("")
+  const [fileName, setFileName] = React.useState("")
+  const [candidates, setCandidates] = React.useState<Candidate[] | null>(null)
+  const [audit, setAudit] = React.useState<ConfigAudit | null>(null)
+  const [chosen, setChosen] = React.useState<Record<string, boolean>>({})
+  const [fallbackUser, setFallbackUser] = React.useState("")
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [core, setCore] = React.useState<SshLoadProgress | null>(null)
+  const [coreError, setCoreError] = React.useState<string | null>(null)
   // Bumped by the retry button. loadSSH() forgets a failed attempt, so calling
   // it again is a genuine second try rather than a replay of the same rejection.
-  const [coreAttempt, setCoreAttempt] = React.useState(0);
+  const [coreAttempt, setCoreAttempt] = React.useState(0)
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) return
     // Same 6 MB core the terminal uses; start it now so the parse is instant.
     // The previous attempt's error is cleared by whatever starts a new attempt
     // — closing the dialog, or the retry button — not from here. Clearing it in
     // the effect body would be a state write on every open that renders a
     // second time for no new information.
-    let cancelled = false;
+    let cancelled = false
     void loadSSH((p) => {
-      if (!cancelled) setCore(p);
+      if (!cancelled) setCore(p)
     }).catch((failure: unknown) => {
-      if (cancelled) return;
+      if (cancelled) return
       // The progress line has to go with it. Nothing is downloading any more,
       // and a byte count left on screen claims otherwise.
-      setCore(null);
-      setCoreError(String((failure as Error).message ?? failure));
-    });
+      setCore(null)
+      setCoreError(String((failure as Error).message ?? failure))
+    })
     return () => {
-      cancelled = true;
-    };
-  }, [open, coreAttempt]);
+      cancelled = true
+    }
+  }, [open, coreAttempt])
 
   /** Closing discards the review, so reopening never shows a stale file. */
   function handleOpenChange(next: boolean) {
     if (!next) {
-      setText("");
-      setFileName("");
-      setCandidates(null);
-      setAudit(null);
-      setChosen({});
-      setFallbackUser("");
-      setError(null);
-      setCoreError(null);
+      setText("")
+      setFileName("")
+      setCandidates(null)
+      setAudit(null)
+      setChosen({})
+      setFallbackUser("")
+      setError(null)
+      setCoreError(null)
     }
-    onOpenChange(next);
+    onOpenChange(next)
   }
 
   const userFor = React.useCallback(
     (entry: ParsedConfigHost) => entry.user || fallbackUser.trim(),
     [fallbackUser],
-  );
+  )
 
   const isDuplicate = React.useCallback(
     (entry: ParsedConfigHost) => {
-      const user = userFor(entry);
+      const user = userFor(entry)
       return (
         user !== "" &&
         existing.some(
           (h) => h.hostname === entry.hostname && h.port === entry.port && h.username === user,
         )
-      );
+      )
     },
     [existing, userFor],
-  );
+  )
 
   const selected = React.useMemo(
     () =>
@@ -744,48 +744,48 @@ function ImportConfigDialog({
         (c) => chosen[c.key] && userFor(c.entry) !== "" && !isDuplicate(c.entry),
       ),
     [candidates, chosen, isDuplicate, userFor],
-  );
+  )
 
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
     if (file.size > 512_000) {
-      setError(`${file.name} is ${megabytes(file.size)}, which is not an ssh_config.`);
-      return;
+      setError(`${file.name} is ${megabytes(file.size)}, which is not an ssh_config.`)
+      return
     }
-    setError(null);
-    setFileName(file.name);
-    setText(await file.text());
+    setError(null)
+    setFileName(file.name)
+    setText(await file.text())
   }
 
   async function handleParse(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
     try {
-      const parsed = await parseSSHConfig(text);
-      const found = parsed.map((entry, i) => ({ key: `${entry.alias}-${i}`, entry }));
-      setCandidates(found);
-      setAudit(auditConfig(text));
+      const parsed = await parseSSHConfig(text)
+      const found = parsed.map((entry, i) => ({ key: `${entry.alias}-${i}`, entry }))
+      setCandidates(found)
+      setAudit(auditConfig(text))
       // Everything on by default; the rows that cannot be saved as they stand
       // untick themselves below, where the reason can be shown next to them.
-      setChosen(Object.fromEntries(found.map((c) => [c.key, true])));
+      setChosen(Object.fromEntries(found.map((c) => [c.key, true])))
     } catch (failure) {
-      setError(String((failure as Error).message ?? failure));
+      setError(String((failure as Error).message ?? failure))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
   async function handleImport() {
-    const targets = selected;
-    setBusy(true);
-    setError(null);
+    const targets = selected
+    setBusy(true)
+    setError(null)
 
     // Counted rather than assumed: if the store gives up halfway, the number
     // reported has to be the number actually written.
-    let written = 0;
+    let written = 0
     try {
       for (const { entry } of targets) {
         await saveHost({
@@ -797,32 +797,32 @@ function ImportConfigDialog({
           // the key is left unset and asked for at connect time rather than
           // pointing at a key that does not exist here.
           auth: "key",
-        });
-        written++;
+        })
+        written++
       }
     } catch {
-      setBusy(false);
+      setBusy(false)
       setError(
         written === 0
           ? "Could not write to the local host store. Nothing was imported."
           : `The local host store failed after ${written} of ${targets.length}. Those ${written} are saved; the rest are not.`,
-      );
-      return;
+      )
+      return
     }
 
     try {
-      handleOpenChange(false);
-      await onImported(written);
+      handleOpenChange(false)
+      await onImported(written)
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
-  const loadingCore = core !== null && !core.done;
+  const loadingCore = core !== null && !core.done
   const percent =
-    core && core.total > 0 ? Math.min(100, Math.round((core.loaded / core.total) * 100)) : null;
-  const needsFallback = (candidates ?? []).some((c) => c.entry.user === "");
-  const duplicates = (candidates ?? []).filter((c) => isDuplicate(c.entry)).length;
+    core && core.total > 0 ? Math.min(100, Math.round((core.loaded / core.total) * 100)) : null
+  const needsFallback = (candidates ?? []).some((c) => c.entry.user === "")
+  const duplicates = (candidates ?? []).filter((c) => isDuplicate(c.entry)).length
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -893,8 +893,8 @@ function ImportConfigDialog({
                       variant="outline"
                       size="xs"
                       onClick={() => {
-                        setCoreError(null);
-                        setCoreAttempt((n) => n + 1);
+                        setCoreError(null)
+                        setCoreAttempt((n) => n + 1)
                       }}
                     >
                       Try again
@@ -960,9 +960,9 @@ function ImportConfigDialog({
               <div className="max-h-72 overflow-y-auto rounded-sm border border-border">
                 <ul className="divide-y divide-border">
                   {candidates.map(({ key, entry }) => {
-                    const duplicate = isDuplicate(entry);
-                    const user = userFor(entry);
-                    const blocked = duplicate || user === "";
+                    const duplicate = isDuplicate(entry)
+                    const user = userFor(entry)
+                    const blocked = duplicate || user === ""
                     return (
                       <li key={key} className="p-2.5">
                         <label className="flex cursor-pointer items-start gap-2.5">
@@ -1009,7 +1009,7 @@ function ImportConfigDialog({
                           </span>
                         </label>
                       </li>
-                    );
+                    )
                   })}
                 </ul>
               </div>
@@ -1081,9 +1081,9 @@ function ImportConfigDialog({
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setCandidates(null);
-                  setAudit(null);
-                  setError(null);
+                  setCandidates(null)
+                  setAudit(null)
+                  setError(null)
                 }}
               >
                 Back
@@ -1100,7 +1100,7 @@ function ImportConfigDialog({
         )}
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 /* --------------------------------------------------------------- table row */
@@ -1114,15 +1114,15 @@ function HostRow({
   onEdit,
   onDelete,
 }: {
-  host: Host;
-  pin?: PinnedHostKey;
-  keyLabel?: string;
-  busy: boolean;
-  onConnect: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  host: Host
+  pin?: PinnedHostKey
+  keyLabel?: string
+  busy: boolean
+  onConnect: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
-  const target = `${host.username}@${host.hostname}:${host.port}`;
+  const target = `${host.username}@${host.hostname}:${host.port}`
 
   return (
     <TableRow>
@@ -1193,7 +1193,7 @@ function HostRow({
         </div>
       </TableCell>
     </TableRow>
-  );
+  )
 }
 
 function Fingerprint({ pin }: { pin?: PinnedHostKey }) {
@@ -1211,7 +1211,7 @@ function Fingerprint({ pin }: { pin?: PinnedHostKey }) {
           reconnect after that is checked against it.
         </TooltipContent>
       </Tooltip>
-    );
+    )
   }
 
   return (
@@ -1231,7 +1231,7 @@ function Fingerprint({ pin }: { pin?: PinnedHostKey }) {
         </span>
       </TooltipContent>
     </Tooltip>
-  );
+  )
 }
 
 /* ------------------------------------------------------------ empty states */
@@ -1269,7 +1269,7 @@ function EmptyState({ onAdd, onImport }: { onAdd: () => void; onImport: () => vo
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
@@ -1286,7 +1286,7 @@ function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
         </Button>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function LoadingRows() {
@@ -1305,7 +1305,7 @@ function LoadingRows() {
         ))}
       </div>
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ pieces */
@@ -1316,10 +1316,10 @@ function Field({
   required,
   children,
 }: {
-  id: string;
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
+  id: string
+  label: string
+  required?: boolean
+  children: React.ReactNode
 }) {
   return (
     <div className="grid gap-1.5">
@@ -1333,14 +1333,14 @@ function Field({
       </Label>
       {children}
     </div>
-  );
+  )
 }
 
 /* ------------------------------------------------------------------ format */
 
 /** SHA256:base64 fingerprints are too long for a column; the tooltip has it all. */
 function truncate(fingerprint: string) {
-  return fingerprint.length > 22 ? `${fingerprint.slice(0, 22)}…` : fingerprint;
+  return fingerprint.length > 22 ? `${fingerprint.slice(0, 22)}…` : fingerprint
 }
 
 function formatDate(ts: number) {
@@ -1348,7 +1348,7 @@ function formatDate(ts: number) {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  })
 }
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -1358,17 +1358,17 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 86_400_000],
   ["hour", 3_600_000],
   ["minute", 60_000],
-];
+]
 
 function lastUsed(host: Host) {
-  if (!host.lastUsedAt) return "Never connected";
-  const delta = host.lastUsedAt - Date.now();
-  const abs = Math.abs(delta);
-  if (abs < 60_000) return "Just now";
+  if (!host.lastUsedAt) return "Never connected"
+  const delta = host.lastUsedAt - Date.now()
+  const abs = Math.abs(delta)
+  if (abs < 60_000) return "Just now"
 
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
   for (const [unit, ms] of UNITS) {
-    if (abs >= ms) return rtf.format(Math.round(delta / ms), unit);
+    if (abs >= ms) return rtf.format(Math.round(delta / ms), unit)
   }
-  return "Just now";
+  return "Just now"
 }

@@ -1,15 +1,15 @@
-import { headers } from "next/headers";
+import { headers } from "next/headers"
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth"
 import {
   BillingNotConfiguredError,
   STRIPE_PRICE_ENV,
   appOrigin,
   proPriceId,
   stripeClient,
-} from "@/lib/billing/stripe";
-import { billingStateFor, customerIdFor, periodEndOf } from "@/lib/billing/subscription";
-import { tierForSubscription } from "@/lib/billing/tiers";
+} from "@/lib/billing/stripe"
+import { billingStateFor, customerIdFor, periodEndOf } from "@/lib/billing/subscription"
+import { tierForSubscription } from "@/lib/billing/tiers"
 
 /**
  * Starts a Stripe Checkout Session for the signed-in user.
@@ -57,24 +57,24 @@ import { tierForSubscription } from "@/lib/billing/tiers";
  */
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
 
   try {
     // Read before the Stripe call so that an account already on Pro is not
     // offered a second subscription. Stripe would happily create one, and the
     // customer would be charged twice for a product that has no quantity.
-    const state = await billingStateFor(session.user.id);
+    const state = await billingStateFor(session.user.id)
     if (state.tier === "pro" && !state.degraded) {
-      return Response.json(alreadySubscribed(), { status: 409 });
+      return Response.json(alreadySubscribed(), { status: 409 })
     }
 
-    const origin = appOrigin(request);
+    const origin = appOrigin(request)
     const customer = await customerIdFor({
       id: session.user.id,
       email: session.user.email,
       name: session.user.name,
-    });
+    })
 
     // The second guard, at Stripe. Same rule as everywhere else — the Stripe
     // objects are put through `tierForSubscription` rather than compared against
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       customer,
       status: "all",
       limit: 20,
-    });
+    })
     const existing = live.data.find(
       (s) =>
         tierForSubscription({
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
           currentPeriodEnd: periodEndOf(s),
           cancelAtPeriodEnd: s.cancel_at_period_end,
         }) === "pro",
-    );
+    )
     if (existing) {
       // The mirror said Free and Stripe says otherwise, which means the webhook
       // has not landed or never will. Logged with ids only, because a mirror
@@ -105,8 +105,8 @@ export async function POST(request: Request) {
       console.warn(
         `checkout refused: customer ${customer} already has subscription ${existing.id} ` +
           `(${existing.status}) that the local mirror does not reflect`,
-      );
-      return Response.json(alreadySubscribed(), { status: 409 });
+      )
+      return Response.json(alreadySubscribed(), { status: 409 })
     }
 
     const checkout = await stripeClient().checkout.sessions.create({
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       client_reference_id: session.user.id,
       subscription_data: { metadata: { userId: session.user.id } },
       allow_promotion_codes: true,
-    });
+    })
 
     if (!checkout.url) {
       // Stripe returns a null url for session types this app does not create
@@ -141,10 +141,10 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "Stripe created a checkout session with no URL to send you to." },
         { status: 502 },
-      );
+      )
     }
 
-    return Response.json({ url: checkout.url });
+    return Response.json({ url: checkout.url })
   } catch (e) {
     if (e instanceof BillingNotConfiguredError) {
       // Names the variable, carries none of its value, and answers 503 because
@@ -152,12 +152,12 @@ export async function POST(request: Request) {
       return Response.json(
         { error: e.message, missing: e.missing, code: "billing-not-configured" },
         { status: 503 },
-      );
+      )
     }
     // Logged without the payload. A Stripe error carries request ids and
     // parameters, not keys, but the habit of logging whole error objects on the
     // money path is how a secret ends up in an aggregator eventually.
-    console.error("checkout session could not be created", e instanceof Error ? e.message : e);
+    console.error("checkout session could not be created", e instanceof Error ? e.message : e)
     return Response.json(
       {
         error:
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
           `${STRIPE_PRICE_ENV} names a live recurring price.`,
       },
       { status: 502 },
-    );
+    )
   }
 }
 
@@ -182,5 +182,5 @@ function alreadySubscribed() {
       "This account is already on Pro. Manage the subscription from the billing portal " +
       "rather than starting a second one.",
     code: "already-subscribed",
-  };
+  }
 }
