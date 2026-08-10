@@ -92,8 +92,13 @@ services:
     # it fetches an object, and the relay never touches a recording.
     env_file:
       - .env
+    # Bound to loopback, because the documented topology puts a TLS terminator
+    # in front. Published on 0.0.0.0 — which is what `"3000:3000"` means — the
+    # app is reachable on a VPS as plain HTTP on port 3000, bypassing the proxy,
+    # the certificate and anything in front of it. Set WEB_BIND=0.0.0.0 only if
+    # something other than a local reverse proxy has to reach it.
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"
 
   relay:
     build:
@@ -145,8 +150,11 @@ services:
       RELAY_AGENT_VERIFY_URL: ${RELAY_AGENT_VERIFY_URL:-http://web:3000/api/agents/verify}
       RELAY_AGENT_SECRET: ${RELAY_AGENT_SECRET:-}
       RUST_LOG: ${RUST_LOG:-weirdvault_relay=info}
+    # Loopback for the same reason as the web service above. The relay speaks
+    # plain HTTP and has no TLS stack, so anything that reaches this port
+    # directly is talking to it unencrypted.
     ports:
-      - "${RELAY_PORT:-8080}:8080"
+      - "${RELAY_BIND:-127.0.0.1}:${RELAY_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD", "/usr/local/bin/weirdvault-relay", "--healthcheck"]
       interval: 30s
