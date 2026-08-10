@@ -112,7 +112,9 @@ export async function POST(request: Request) {
   if (typeof id !== "string" || typeof label !== "string" || typeof signingKey !== "string") {
     return Response.json({ error: "id, label and signingKey required" }, { status: 400 })
   }
-  if (label.length > 80 || signingKey.length > 128) {
+  // `id` is bounded too: it is a client-chosen primary key, and the column is
+  // `text` with no length of its own.
+  if (id.length > 64 || label.length > 80 || signingKey.length > 128) {
     return Response.json({ error: "field too long" }, { status: 400 })
   }
 
@@ -141,8 +143,33 @@ export async function POST(request: Request) {
     return Response.json({ id: existing.id })
   }
 
+  /**
+   * The client's id is a proposal, and the server has the last word.
+   *
+   * `device.id` is the primary key across every account, and the browser picks
+   * it — so two accounts used in one browser propose the same id. The first
+   * registration wins the key; the second is a duplicate-key violation, which
+   * reached the caller as a 500 and reached `registerDevice` as a null it
+   * silently swallowed. The second account then had no device row at all: no
+   * entry in "where am I signed in", a `session.device_id` nobody ever stamped
+   * so revoking that browser could not end its sessions, and audit events
+   * carrying a device id belonging to the *other* account.
+   *
+   * Taking the id is safe because it identifies nothing on its own — the
+   * identity is (userId, signingKey), which is what the lookup above keys on.
+   * `registerDevice` stores whatever comes back, so the browser and the server
+   * agree from here on.
+   */
+  const [taken] = await db
+    .select({ id: schema.device.id })
+    .from(schema.device)
+    .where(eq(schema.device.id, id))
+    .limit(1)
+
+  const deviceId = taken ? crypto.randomUUID() : id
+
   await db.insert(schema.device).values({
-    id,
+    id: deviceId,
     userId: user.id,
     label,
     platform: typeof platform === "string" ? platform : null,
@@ -153,16 +180,16 @@ export async function POST(request: Request) {
   await db.insert(schema.auditEvent).values({
     id: crypto.randomUUID(),
     userId: user.id,
-    deviceId: id,
+    deviceId,
     eventType: "device.registered",
     source: "server",
     ipPrefix: prefix,
     metadata: typeof platform === "string" ? { platform } : {},
   })
 
-  await bindSessionToDevice(session.session.id, id)
+  await bindSessionToDevice(session.session.id, deviceId)
 
-  return Response.json({ id }, { status: 201 })
+  return Response.json({ id: deviceId }, { status: 201 })
 }
 
 export async function DELETE(request: Request) {

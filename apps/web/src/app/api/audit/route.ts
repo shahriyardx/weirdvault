@@ -56,6 +56,39 @@ async function clientIp(): Promise<string | null> {
   return clientAddress(await headers())
 }
 
+/**
+ * The device id, but only if it is one of this account's.
+ *
+ * `audit_event.device_id` is a foreign key into `device`, and a foreign key on
+ * its own is not an ownership check — it would happily accept another account's
+ * device row and attribute this event to a browser the caller does not own,
+ * permanently, on the one page in the product whose whole job is to be believed.
+ * POST /api/recordings has made exactly this check for the same reason since it
+ * was written; this route was taking the client's word for it.
+ *
+ * It also stops a 500. `reportAudit` sends whatever device id this browser has
+ * in IndexedDB, and that id outlives the server row in ordinary use — sign in as
+ * a second account in the same browser, or have the first account deleted — so
+ * an id naming no row at all reached Postgres and came back as a foreign key
+ * violation. The report is fire-and-forget, so nobody saw it; the log filled up
+ * regardless.
+ *
+ * An unrecognised id is dropped rather than refused. The event is worth
+ * recording either way, and the honest version of "which browser was this" is
+ * empty rather than wrong.
+ */
+async function ownedDeviceId(userId: string, value: unknown): Promise<string | null> {
+  if (typeof value !== "string" || value === "") return null
+
+  const [owned] = await db
+    .select({ id: schema.device.id })
+    .from(schema.device)
+    .where(and(eq(schema.device.id, value), eq(schema.device.userId, userId)))
+    .limit(1)
+
+  return owned?.id ?? null
+}
+
 export async function GET(request: Request) {
   const session = await requireUser()
   if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 })
@@ -81,8 +114,8 @@ export async function GET(request: Request) {
    *
    * The pruner is the one place the two enforcements can now disagree, because
    * it cannot resolve a tier the way this can. It compensates by over-keeping:
-   * see the note at the top of scripts/prune-audit.mjs. Over-keeping means a row
-   * on disk this query refuses to return, which is the survivable direction.
+   * see lib/maintenance/audit.ts. Over-keeping means a row on disk this query
+   * refuses to return, which is the survivable direction.
    */
   const tier = await tierFor(session.user.id)
   const cutoff = auditRetentionCutoff(tier)
@@ -186,7 +219,7 @@ export async function POST(request: Request) {
     id: crypto.randomUUID(),
     userId: session.user.id,
     // organizationId is not set. See the note in GET above.
-    deviceId: typeof deviceId === "string" ? deviceId : null,
+    deviceId: await ownedDeviceId(session.user.id, deviceId),
     eventType,
     source: AUDIT_EVENTS[eventType].source,
     targetRef: (targetRef as string) ?? null,

@@ -125,6 +125,15 @@ function b64(buf: ArrayBuffer): string {
  * Registers this browser with the control plane. Idempotent — the server keys
  * on (userId, signingKey), so calling it on every sign-in refreshes last-seen
  * without creating duplicates.
+ *
+ * The id we send is a proposal and the id that comes back is the answer, which
+ * is why the response is adopted rather than discarded. They differ in one case
+ * and it is not exotic: `device.id` is a primary key across every account, so a
+ * second account signed into the same browser proposes an id the first one
+ * already holds, and the server mints a fresh one instead of failing. Keeping
+ * the local copy in step is what makes getCurrentDeviceId name a row that is
+ * actually this account's — an audit event or a recording carrying the *other*
+ * account's device id is the failure this closes.
  */
 export async function registerDevice(): Promise<{ id: string } | null> {
   try {
@@ -140,7 +149,14 @@ export async function registerDevice(): Promise<{ id: string } | null> {
       }),
     })
     if (!res.ok) return null
-    return (await res.json()) as { id: string }
+
+    const registered = (await res.json()) as { id: string }
+    if (registered.id && registered.id !== identity.id) {
+      // Only the id is rewritten. The keypair is this browser's identity and
+      // regenerating it would orphan the very row we have just been given.
+      await idbPut(STORE, KEY, { ...identity, id: registered.id })
+    }
+    return registered
   } catch {
     return null
   }
