@@ -150,9 +150,55 @@ re-enrolling silently orphans the old agent row: the machine comes back under a
 new id, the host record in somebody's vault still points at the old one, and the
 only symptom is a host that is permanently offline.
 
-`status` prints the fingerprint. That is what someone compares against the
-dashboard when they are not sure the machine in front of them is the one the
-browser is showing.
+`status` prints the fingerprint — what someone compares against the dashboard
+when they are not sure the machine in front of them is the one the browser is
+showing — and whether the agent is running, and whether it will be after a
+reboot.
+
+## Running it, and stopping it
+
+| | |
+|---|---|
+| `start [--boot-only]` | Start now, and at every boot |
+| `stop [--keep-enabled]` | Stop now, and stay stopped across reboots |
+| `restart` | Restart, leaving boot behaviour alone |
+| `enable` / `disable` | Change only whether it starts at boot |
+| `list` | Every agent on this machine, and what each is doing |
+| `logs [-f] [-n N]` | What the service has been saying |
+| `upgrade [--check]` | Install the build this deployment publishes, now |
+
+These wrap systemd on Linux and launchd on macOS. They exist because the
+alternative was knowing that a unit exists, knowing its name, and knowing that
+`systemctl stop` is undone by the next reboot.
+
+**`stop` also stops it at boot**, and says so. "Stop the agent" is said by
+somebody who wants the machine off the network until they say otherwise, and a
+reboot two days later silently undoing that leaves a machine reachable while its
+owner believes it is not. `--keep-enabled` is there for the person who meant
+only this run; `start` turns it back on.
+
+`list` finds agents by looking at the process table rather than at a pidfile, so
+it sees the copy somebody started in a terminal to debug something and forgot —
+which is what produces two agents claiming one machine and a dashboard that
+flickers between online and offline.
+
+`upgrade` is the same self-update that happens at startup, asked for on purpose,
+and it restarts the service afterwards so the running process is the build that
+was just installed. `--check` prints what is published against what is running
+and touches nothing.
+
+### macOS
+
+`install-service` writes `/Library/LaunchDaemons/com.weirdvault.agent.plist` for
+the enrolment already on the machine, and `uninstall-service` removes it. The
+installer runs the first of those, so a Mac survives a reboot the same way a
+Linux box does — before this, macOS was enrolled and then left with "start it
+yourself".
+
+launchd has no equivalent of systemd's `RestartPreventExitStatus`, so a revoked
+agent — which exits 3 on purpose and would be right to stay down — is started
+again every ten seconds. The agent says so in the log line it prints before
+exiting, and `weirdvault-agent stop` is what ends it.
 
 ## Relay configuration
 

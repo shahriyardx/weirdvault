@@ -154,6 +154,11 @@ func runEnroll(args []string) error {
 // The fingerprint is the point: it is what somebody compares against the
 // dashboard when they are not sure whether the machine in front of them is the
 // one the browser is showing.
+//
+// It also answers the question people were actually asking when they ran it.
+// Identity alone left "is this thing even running?" to systemctl, which meant
+// knowing the unit's name — so the running state is here too, in the words the
+// rest of the CLI uses.
 func runStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
@@ -180,7 +185,62 @@ func runStatus(args []string) error {
 	} else {
 		fmt.Printf("Updates:     %s\n", cfg.ReleaseURL)
 	}
+
+	printRunningState(*configPath)
 	return nil
+}
+
+// printRunningState says whether the agent is up, and whether it will be after
+// a reboot.
+//
+// The process list is what makes this trustworthy rather than merely
+// supervisor-shaped. A service reporting "inactive" while somebody's
+// hand-started copy holds the connection open is the exact state that makes
+// people distrust the whole command, so both are printed and neither is
+// inferred from the other.
+func printRunningState(configPath string) {
+	st := currentState()
+	procs := agentProcesses()
+
+	fmt.Println()
+	switch {
+	case st.Installed && st.Active:
+		fmt.Printf("Running:     yes, as a %s service", st.Kind)
+		if st.PID != 0 {
+			fmt.Printf(" (pid %d)", st.PID)
+		}
+		fmt.Println()
+	case st.Installed:
+		fmt.Printf("Running:     no — %s service is %s\n", st.Kind, st.Detail)
+	case len(procs) > 0:
+		fmt.Printf("Running:     yes, started by hand (pid %s)\n", pidList(procs))
+	default:
+		fmt.Printf("Running:     no\n")
+	}
+
+	switch {
+	case !st.Installed:
+		fmt.Printf("At boot:     nothing will start it — no service is registered here\n")
+	case st.Enabled:
+		fmt.Printf("At boot:     starts automatically\n")
+	default:
+		fmt.Printf("At boot:     stays stopped (weirdvault-agent start changes that)\n")
+	}
+
+	// Only when it adds something: a supervised agent whose one process is the
+	// service's own does not need the same pid printed twice.
+	if strays := strayProcesses(st); len(strays) > 0 && st.Installed {
+		fmt.Printf("Also:        %d process(es) running outside the service (pid %s)\n",
+			len(strays), pidList(strays))
+	}
+
+	// The identity printed above and the one the service runs are the same file
+	// almost always — and when they are not, every line above is about a machine
+	// the dashboard is not showing. Saying which file the service uses is the
+	// difference between that being obvious and being invisible.
+	if service := serviceConfigPath(st); st.Installed && service != configPath {
+		fmt.Printf("Note:        the service runs a different identity: %s\n", service)
+	}
 }
 
 // privateKey decodes the stored seed.

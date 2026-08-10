@@ -14,10 +14,11 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
-	"unicode/utf8"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 )
@@ -153,6 +154,15 @@ func runAgent(args []string) error {
 				log.Printf("  1. Dashboard -> Machines -> Add a machine")
 				log.Printf("  2. rm %s", *configPath)
 				log.Printf("  3. run the install command it gives you")
+				// systemd honours the exit code and leaves it down;
+				// launchd has no equivalent of RestartPreventExitStatus, so on a
+				// Mac this same message repeats every ten seconds until somebody
+				// stops the service. Naming the command beats leaving them to
+				// discover that the loop is not a bug they can fix by waiting.
+				if runtime.GOOS == "darwin" {
+					log.Printf("")
+					log.Printf("launchd will keep restarting it until then: weirdvault-agent stop")
+				}
 				return errRejected
 			}
 			log.Printf("connection ended: %v", err)

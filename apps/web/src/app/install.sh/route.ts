@@ -52,6 +52,8 @@ RELEASE_BASE="${base}"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/weirdvault-agent"
 SERVICE_USER="weirdvault-agent"
+LAUNCHD_LABEL="com.weirdvault.agent"
+LAUNCHD_PLIST="/Library/LaunchDaemons/com.weirdvault.agent.plist"
 SSH_PORT="22"
 TOKEN=""
 MODE="install"
@@ -91,11 +93,20 @@ if [ "$MODE" = "uninstall" ]; then
       systemctl daemon-reload 2>/dev/null || true
       removed="\${removed}  /etc/systemd/system/weirdvault-agent.service\\n"
     fi
+  elif [ -f "$LAUNCHD_PLIST" ]; then
+    # macOS. Booted out and removed from the disabled database as well as
+    # deleted: a label left disabled there outlives the plist, and a later
+    # reinstall would write a daemon that silently never starts.
+    launchctl bootout "system/\${LAUNCHD_LABEL}" 2>/dev/null || true
+    launchctl enable "system/\${LAUNCHD_LABEL}" 2>/dev/null || true
+    rm -f "$LAUNCHD_PLIST"
+    removed="\${removed}  the launchd daemon (stopped and removed)\\n"
   else
-    # No systemd: whatever is running was started by hand or by a supervisor
-    # this script did not write, so it says so rather than guessing.
+    # No service manager we wrote to: whatever is running was started by hand or
+    # by a supervisor this script did not write, so it says so rather than
+    # guessing.
     if pgrep -f "weirdvault-agent run" >/dev/null 2>&1; then
-      echo "note: an agent process is running and this machine has no systemd," >&2
+      echo "note: an agent process is running and this machine has no service," >&2
       echo "      so stop it however you started it (or: pkill -f 'weirdvault-agent run')." >&2
       echo >&2
     fi
@@ -262,13 +273,27 @@ chmod 0600 "\${CONFIG_DIR}/agent.json"
 
 # ---------------------------------------------------------------- service
 
+# macOS: the agent writes its own launchd daemon, because the plist has to name
+# the binary and config that were just installed and duplicating that template
+# here would be a second copy to keep in step. It starts it too.
+if [ "$os" = "darwin" ]; then
+  echo
+  "\${INSTALL_DIR}/weirdvault-agent" install-service --config="\${CONFIG_DIR}/agent.json"
+  echo
+  echo "  weirdvault-agent status              is it running, and will it start at boot"
+  echo "  weirdvault-agent stop                stop it, and keep it stopped"
+  echo "  weirdvault-agent logs -f             what it is doing"
+  exit 0
+fi
+
 if ! command -v systemctl >/dev/null 2>&1; then
   echo
-  echo "Enrolled. There is no systemd here, so start the agent yourself:"
+  echo "Enrolled. There is no service manager here that this script knows, so start"
+  echo "the agent yourself:"
   echo "  sudo \${INSTALL_DIR}/weirdvault-agent run --config=\${CONFIG_DIR}/agent.json"
   echo
-  echo "To keep it running across reboots, wrap that in whatever this machine"
-  echo "uses — launchd on macOS, an rc script, or a supervisor of your choice."
+  echo "To keep it running across reboots, wrap that in whatever this machine uses —"
+  echo "an rc script, or a supervisor of your choice."
   exit 0
 fi
 
@@ -333,9 +358,10 @@ systemctl enable --now weirdvault-agent
 echo
 echo "Done. The agent is running and should appear at \${APP_URL} within a few seconds."
 echo
-echo "  systemctl status weirdvault-agent    is it running"
-echo "  journalctl -u weirdvault-agent -f    what it is doing"
-echo "  weirdvault-agent status              this machine's fingerprint"
+echo "  weirdvault-agent status              is it running, and its fingerprint"
+echo "  weirdvault-agent stop                stop it, and keep it stopped at boot"
+echo "  weirdvault-agent start               start it again"
+echo "  weirdvault-agent logs -f             what it is doing"
 `
 
   return new Response(script, {

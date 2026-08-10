@@ -79,6 +79,26 @@ func main() {
 		err = runAgent(os.Args[2:])
 	case "status":
 		err = runStatus(os.Args[2:])
+	case "start":
+		err = runStart(os.Args[2:])
+	case "stop":
+		err = runStop(os.Args[2:])
+	case "restart":
+		err = runRestart(os.Args[2:])
+	case "enable":
+		err = runEnable(os.Args[2:])
+	case "disable":
+		err = runDisable(os.Args[2:])
+	case "list", "ps":
+		err = runList(os.Args[2:])
+	case "logs":
+		err = runLogs(os.Args[2:])
+	case "upgrade":
+		err = runUpgrade(os.Args[2:])
+	case "install-service":
+		err = runInstallService(os.Args[2:])
+	case "uninstall-service":
+		err = runUninstallService(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Println(version)
 	case "help", "--help", "-h":
@@ -106,11 +126,24 @@ func usage() {
 	fmt.Fprint(os.Stderr, `weirdvault-agent — reach this machine without opening a port
 
   enroll --token=… --url=…   register this machine with your account
-  run [--config=…]           hold the connection open (what systemd runs)
-  status [--config=…]        print this machine's identity
+  run [--config=…]           hold the connection open (what the service runs)
+  status [--config=…]        this machine's identity, and whether it is running
+
+Running it, and whether it comes back:
+
+  start [--boot-only]        start now, and at every boot
+  stop [--keep-enabled]      stop now, and stay stopped across reboots
+  restart                    restart without changing boot behaviour
+  enable | disable           change only whether it starts at boot
+  list                       every agent on this machine, and what it is doing
+  logs [-f] [-n N]           what the service has been saying
+  upgrade [--check]          install the build this deployment publishes
+
+  install-service            macOS: register the launchd daemon (Linux: the
+  uninstall-service          installer writes the systemd unit)
   version
 
 Enrollment is one-time. The token is single-use and expires; get one from
-Dashboard → Hosts → Add a machine with no public IP.
+Dashboard → Machines → Add a machine.
 `)
 }

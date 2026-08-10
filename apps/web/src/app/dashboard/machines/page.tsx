@@ -657,9 +657,9 @@ function RemovalDialog({
 
           <p className="text-muted-foreground text-sm leading-relaxed">
             {mac
-              ? "On macOS there is no service to stop — if you started the agent yourself, that " +
-                "process is stopped too. It leaves your SSH configuration and everything in " +
-                "~/.ssh untouched."
+              ? "It stops the launchd daemon, removes it, and deletes the binary and the config " +
+                "directory. It leaves your SSH configuration, Remote Login and everything in " +
+                "~/.ssh untouched — the agent never had anything to do with them."
               : "It stops and disables the service, removes the unit, the binary, the config " +
                 "directory and the service user. It leaves your SSH configuration, sshd and " +
                 "everything in ~/.ssh untouched — the agent never had anything to do with them."}
@@ -672,12 +672,12 @@ function RemovalDialog({
             <div className="mt-2 space-y-1 font-mono">
               {(mac
                 ? [
-                    "sudo pkill -f 'weirdvault-agent run'",
+                    "sudo weirdvault-agent uninstall-service",
                     "sudo rm /usr/local/bin/weirdvault-agent",
                     "sudo rm -rf /etc/weirdvault-agent",
                   ]
                 : [
-                    "sudo systemctl disable --now weirdvault-agent",
+                    "sudo weirdvault-agent stop",
                     "sudo rm /etc/systemd/system/weirdvault-agent.service",
                     "sudo systemctl daemon-reload",
                     "sudo rm /usr/local/bin/weirdvault-agent",

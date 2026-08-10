@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -116,6 +117,100 @@ func selfUpdate(ctx context.Context, cfg *Config) bool {
 
 	log.Printf("self-update: installed %s, restarting", manifest.Version)
 	return true
+}
+
+/*
+runUpgrade is the same update, asked for on purpose.
+
+The automatic one happens at startup and nowhere else, which is right for a
+machine nobody is sitting at — and wrong for the person who is. They have just
+been told a fix exists, and their options were to restart a service and hope
+that was what "checks at startup" meant, or to read this file. Neither is an
+answer to "update it".
+
+It also gives an honest way to look without touching anything: --check prints
+what the deployment publishes against what is running, which is the question
+behind most of the times somebody would have run the upgrade.
+*/
+func runUpgrade(args []string) error {
+	fs := flag.NewFlagSet("upgrade", flag.ExitOnError)
+	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	check := fs.Bool("check", false, "say what is published, and install nothing")
+	force := fs.Bool("force", false, "reinstall even when the published build reports the same version")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := loadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	if cfg.ReleaseURL == "" {
+		return fmt.Errorf("this agent has no release URL, so there is nowhere to upgrade from.\n\n" +
+			"It was enrolled before self-update existed. Re-enrolling from the dashboard fixes\n" +
+			"that permanently — and until then, replacing the binary by hand is the only route")
+	}
+
+	base, err := releaseBase(cfg.ReleaseURL)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	manifest, err := fetchManifest(ctx, base)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Running:   %s\n", version)
+	fmt.Printf("Published: %s (%s)\n", manifest.Version, base)
+
+	target := runtime.GOOS + "_" + runtime.GOARCH
+	entry, ok := manifest.Binaries[target]
+	if !ok {
+		return fmt.Errorf("%s publishes no build for %s", base, target)
+	}
+
+	// Same rule as the automatic path: different means update, because these are
+	// `git describe` strings and an ordering invented for them would be wrong in
+	// exactly the case that matters — a deployment rolling its fleet back.
+	same := manifest.Version == version
+	if *check {
+		if same {
+			fmt.Println("\nUp to date.")
+		} else {
+			fmt.Println("\nA different build is published. Install it: weirdvault-agent upgrade")
+		}
+		return nil
+	}
+	if same && !*force {
+		fmt.Println("\nUp to date. Nothing to do (--force reinstalls anyway).")
+		return nil
+	}
+
+	if err := replaceSelf(ctx, base, entry.File, entry.SHA256); err != nil {
+		// Writing next to the running binary is the step that needs root, and it
+		// is the one people hit — /usr/local/bin is not theirs to write.
+		return sudoHint(fmt.Errorf("could not install %s: %w", manifest.Version, err), "upgrade")
+	}
+	fmt.Printf("\nInstalled %s.\n", manifest.Version)
+
+	// The new binary is on disk; the process holding the connection is still the
+	// old one. Restarting is the whole point of having asked, so it happens here
+	// rather than being left as a sentence somebody has to notice.
+	st := currentState()
+	switch {
+	case st.Installed && st.Active:
+		if err := runRestart(nil); err != nil {
+			return fmt.Errorf("installed, but could not restart the service: %w", err)
+		}
+	case st.Installed:
+		fmt.Println("The service is not running, so nothing needed restarting.")
+	case len(agentProcesses()) > 0:
+		fmt.Println("An agent started by hand is still running the old build. Stop and start it")
+		fmt.Println("to pick this up: weirdvault-agent stop")
+	}
+	return nil
 }
 
 // releaseBase validates where updates may come from.
