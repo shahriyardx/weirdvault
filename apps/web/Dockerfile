@@ -20,7 +20,17 @@ RUN cd apps/ssh \
  && GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /ssh.wasm . \
  && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /wasm_exec.js
 
-FROM oven/bun:1 AS build
+# Node, not bun, and the reason is a crash rather than a preference. Bun is
+# still what resolves and installs the dependencies above — bun.lock is the
+# lockfile and stays authoritative — but `next build` under bun 1.3.14 on
+# linux/arm64 segfaults as it exits, after the build has already completed. The
+# layer fails with exit 133 and reads as a broken build.
+#
+# `node` inside oven/bun is bun wearing a shim, so calling node there does not
+# avoid it; the build has to happen in an image where node is node. The runtime
+# stage below is the same base, so this is one fewer image in the graph rather
+# than one more.
+FROM node:22-slim AS build
 WORKDIR /app
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
@@ -31,7 +41,7 @@ COPY --from=wasm /wasm_exec.js apps/web/public/wasm_exec.js
 ARG NEXT_PUBLIC_RELAY_URL
 ENV NEXT_PUBLIC_RELAY_URL=$NEXT_PUBLIC_RELAY_URL
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN bun run --cwd apps/web build
+RUN cd apps/web && node node_modules/.bin/next build
 
 FROM node:22-slim AS runtime
 WORKDIR /app
@@ -39,9 +49,14 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
 
 RUN groupadd -r weirdvault && useradd -r -g weirdvault weirdvault
 
+# Next's standalone output is rooted at /app: it emits server.js, .next/ and a
+# trimmed node_modules there, and server.js resolves `.next/static` and `public`
+# relative to itself. So static and public go beside it, NOT under apps/web/ —
+# putting them there leaves a server that starts and serves no CSS, no
+# JavaScript and no ssh.wasm, which is a working container and a blank page.
 COPY --from=build --chown=weirdvault:weirdvault /app/apps/web/.next/standalone ./
-COPY --from=build --chown=weirdvault:weirdvault /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build --chown=weirdvault:weirdvault /app/apps/web/public ./apps/web/public
+COPY --from=build --chown=weirdvault:weirdvault /app/apps/web/.next/static ./.next/static
+COPY --from=build --chown=weirdvault:weirdvault /app/apps/web/public ./public
 
 # The schema travels with the image that expects it, so a container can never
 # come up against a database older than the code it is running. Applied at
@@ -53,4 +68,4 @@ COPY --chmod=755 apps/web/entrypoint.sh /usr/local/bin/entrypoint.sh
 USER weirdvault
 EXPOSE 3000
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "server.js"]
