@@ -109,9 +109,11 @@ Set on Vercel:
 | `RELAY_AGENT_SECRET` | **must match the relay exactly.** Blank means machines with no public address cannot be enrolled at all — the relay refuses agent connections and the dashboard says so rather than minting a token for an agent that could never connect |
 | `NEXT_PUBLIC_RELAY_URL` | `wss://your-relay/ws` |
 | `AGENT_RELEASE_BASE_URL` | Where agent binaries are published. Defaults to `<your origin>/agent-bin`, which is what `bun run agent` writes — set it if you serve them from a release host instead |
-| `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where session recordings are stored. All four or none; see below |
-| `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address; unset means no address is recorded **and every unauthenticated rate limit shares one bucket** |
-| `TRUSTED_PROXY_IPS` | The addresses those proxies connect from, for Better Auth's limits on `/api/auth/*`. See the note above about why this is a second variable |
+| `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address |
+| `TRUSTED_PROXY_IPS` | The addresses those proxies connect from |
+
+Everything else, and what each one means when left blank, is in
+[Configuration](#configuration).
 
 `NEXT_PUBLIC_*` is inlined at build time, so changing the relay URL means a
 rebuild, not a restart.
@@ -128,6 +130,65 @@ Schema changes are made by editing `src/lib/db/schema.ts` and running
 history; without them, an upgrade has no way to tell a fresh database from one
 that is three versions behind. `db:push` diffs the schema straight against a
 live database and is for local development only.
+
+---
+
+## Configuration
+
+`.env.example` is the template; this is what each variable means. Everything is
+read at runtime except `NEXT_PUBLIC_RELAY_URL`, which is inlined into the
+browser bundle at build time — changing that one needs `docker compose build
+web`, not a restart.
+
+### Required
+
+| Variable | |
+|---|---|
+| `BETTER_AUTH_SECRET` | Signs session cookies. Rotating it signs everyone out |
+| `RELAY_SECRET` | Shared with the relay. The control plane signs a token naming the exact host and port; the relay verifies it. **If these two do not match, every connection is refused with 401** |
+| `POSTGRES_PASSWORD` | |
+| `DATABASE_URL` | Written out rather than assembled from `POSTGRES_*`, because `env_file` does no interpolation. Keep the password in step with the one above |
+| `BETTER_AUTH_URL` | Where users reach the app |
+| `NEXT_PUBLIC_RELAY_URL` | Where the browser reaches the relay. **Must be `wss://` if the app is `https://`** — browsers refuse a plaintext WebSocket from a secure page |
+| `CRON_SECRET` | Bearer token for `POST /api/cron`. Blank means scheduled cleanup never runs |
+
+### Optional — blank switches the feature off
+
+Blank is a supported deployment for every one of these. Nothing 500s and nothing
+is silently granted: the app says on screen that the feature is not configured
+rather than showing a control that fails when pressed.
+
+| Variable | Blank means |
+|---|---|
+| `RELAY_USAGE_SECRET` | Bytes are counted in memory and discarded; the monthly transfer allowance is never enforced. The right default for a relay you host — the cap exists because relay bandwidth costs the hosted deployment money, and bandwidth you already pay for is not ours to ration |
+| `RELAY_AGENT_SECRET` | Machines with no public address cannot be enrolled. The relay refuses agent connections and the dashboard says so, rather than minting a token for an agent that could never connect |
+| `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO`, `STRIPE_WEBHOOK_SECRET` | Nothing is sold. Every account is whatever the `subscription` table says, which on an install that has never taken a payment is Free. **All three or none** — with the webhook secret missing, checkout would work and no subscription would ever be recorded |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | No "Continue with GitHub" button. Register the app with callback `<BETTER_AUTH_URL>/api/auth/callback/github` |
+| `R2_*` (four, plus optional `R2_REGION`) | Recordings are stored as a `bytea` column in Postgres. **All four or none** — three of four is a typo and is treated as one. See [Recording storage](#recording-storage) |
+| `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_IPS` | No client address is recorded on any audit row, and every unauthenticated rate limit shares one bucket that any caller can spend for everybody. Set both once a proxy is in front |
+| `AGENT_RELEASE_BASE_URL` | Agent binaries are served from `<your origin>/agent-bin`, which is what `bun run agent` writes |
+
+**Why three separate relay secrets.** `RELAY_SECRET` is an HMAC signing key that
+is never transmitted, and whose compromise turns the relay into an open proxy.
+`RELAY_USAGE_SECRET` and `RELAY_AGENT_SECRET` are bearer tokens that travel on
+the wire on every call and will end up in a proxy log somewhere. Different
+lifetimes, different blast radii — and separating usage from agents means
+turning one on cannot silently turn the other on. `CRON_SECRET` is a fourth for
+the same reason.
+
+### Defaults
+
+| Variable | Default | |
+|---|---|---|
+| `POSTGRES_USER`, `POSTGRES_DB` | `weirdvault` | |
+| `WEB_PORT`, `RELAY_PORT` | `3000`, `8080` | Published on the host |
+| `RELAY_PORTS` | `22` | Destination port allowlist. Every extra port widens what the relay can be aimed at |
+| `CRON_SCHEDULE` | `15 4 * * *` | Read only by the `cron` service |
+| `RELAY_USAGE_INTERVAL_SECS` | `60` | Also the most one failed flush can lose — a batch that cannot be delivered is dropped rather than retried |
+| `RUST_LOG` | `weirdvault_relay=info` | |
+
+`RELAY_ALLOW_PRIVATE` is deliberately absent from the template. It disables the
+SSRF guard; see the production checklist.
 
 ---
 
