@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -28,10 +29,12 @@ type enrollRequest struct {
 }
 
 type enrollResponse struct {
-	AgentID    string `json:"agentId"`
-	RelayURL   string `json:"relayUrl"`
-	ReleaseURL string `json:"releaseUrl"`
-	Error      string `json:"error"`
+	AgentID     string   `json:"agentId"`
+	RelayURL    string   `json:"relayUrl"`
+	ReleaseURL  string   `json:"releaseUrl"`
+	CommandKeys []string `json:"commandKeys"`
+	AccountRef  string   `json:"accountRef"`
+	Error       string   `json:"error"`
 }
 
 // runEnroll trades a one-time token for a lasting identity.
@@ -44,9 +47,10 @@ func runEnroll(args []string) error {
 	fs := flag.NewFlagSet("enroll", flag.ExitOnError)
 	token := fs.String("token", "", "one-time enrollment token from the dashboard")
 	appURL := fs.String("url", "", "base URL of your weirdvault deployment")
-	configPath := fs.String("config", DefaultConfigPath, "where to write the agent identity")
+	configPath := fs.String("config", "", "write the identity to exactly this path")
+	configDir := fs.String("config-dir", DefaultConfigDir, "write the identity into this directory")
 	port := fs.Int("ssh-port", 22, "the local sshd port to forward to")
-	force := fs.Bool("force", false, "overwrite an existing enrollment")
+	force := fs.Bool("force", false, "enrol even if this account already has an identity here")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -55,14 +59,17 @@ func runEnroll(args []string) error {
 		return fmt.Errorf("both --token and --url are required")
 	}
 
-	// Refusing rather than overwriting. An accidental re-enrol would orphan the
-	// existing agent row: the machine would come back under a new id, the old
-	// host entry in somebody's vault would point at an agent that never
+	// A named path is a promise about one file, so the old check still applies to
+	// it exactly as before: refuse rather than overwrite, because an accidental
+	// re-enrol orphans the existing agent row — the machine comes back under a
+	// new id, the host entry in somebody's vault points at an agent that never
 	// reconnects, and the only symptom is a host that is permanently offline.
-	if _, err := os.Stat(*configPath); err == nil && !*force {
-		return fmt.Errorf(
-			"%s already exists — this machine is already enrolled. Pass --force to replace it, "+
-				"and revoke the old agent in the dashboard afterwards", *configPath)
+	if *configPath != "" {
+		if _, err := os.Stat(*configPath); err == nil && !*force {
+			return fmt.Errorf(
+				"%s already exists — this machine is already enrolled. Pass --force to replace it, "+
+					"and revoke the old agent in the dashboard afterwards", *configPath)
+		}
 	}
 
 	base := strings.TrimRight(*appURL, "/")
@@ -127,6 +134,30 @@ func runEnroll(args []string) error {
 		return fmt.Errorf("the server accepted the enrollment but returned no identity")
 	}
 
+	// The identity is named after the agent id the server just chose, because
+	// everybody pastes an identical install command and only the token in it
+	// differs — so there is no name to ask for and one has to be derived. Short,
+	// so `weirdvault-agent stop 3959f21b` is typeable.
+	path := *configPath
+	if path == "" {
+		path = configPathFor(*configDir, shortAgentID(out.AgentID))
+	}
+
+	// The duplicate check that "does agent.json exist" used to be. It cannot be
+	// that any more — several accounts sharing this directory is the point — so
+	// it asks the question that actually matters: does *this account* already
+	// have an identity on this machine.
+	if !*force && out.AccountRef != "" {
+		if existing := identityForAccount(*configDir, out.AccountRef); existing != "" {
+			return fmt.Errorf(
+				"this account already has an identity on this machine (%s).\n\n"+
+					"Enrolling again would leave two agents for one account, both online, and the\n"+
+					"machine would appear twice in the dashboard. Pass --force if that is what you\n"+
+					"want, or remove the existing one:\n"+
+					"  weirdvault-agent stop %s", existing, existing)
+		}
+	}
+
 	cfg := &Config{
 		AgentID: out.AgentID,
 		// The seed, not the 64-byte expanded key: it is half the bytes and the
@@ -136,17 +167,73 @@ func runEnroll(args []string) error {
 		RelayURL:     out.RelayURL,
 		ReleaseURL:   out.ReleaseURL,
 		AllowedPorts: []int{*port},
+		CommandKeys:  out.CommandKeys,
+		AccountRef:   out.AccountRef,
 	}
-	if err := saveConfig(*configPath, cfg); err != nil {
-		return fmt.Errorf("could not write %s: %w", *configPath, err)
+	if err := saveConfig(path, cfg); err != nil {
+		return fmt.Errorf("could not write %s: %w", path, err)
 	}
 
 	fmt.Printf("Enrolled as %s\n", out.AgentID)
+	fmt.Printf("Identity:    %s\n", identityNameFor(path))
 	fmt.Printf("Fingerprint: %s\n", fingerprint(pub))
-	fmt.Printf("Forwarding to 127.0.0.1:%d\n\n", *port)
-	fmt.Printf("Check that fingerprint against the one on the enrollment page before\n")
-	fmt.Printf("you adopt this machine. Then: systemctl enable --now weirdvault-agent\n")
+	fmt.Printf("Forwarding to 127.0.0.1:%d\n", *port)
+	if len(out.CommandKeys) == 0 {
+		// Worth saying: it is the difference between a dashboard that can
+		// restart this machine and one that can only watch it.
+		fmt.Printf("Remote control: off (this deployment has no command signing key)\n")
+	}
+	fmt.Printf("\nCheck that fingerprint against the one on the enrollment page before\n")
+	fmt.Printf("you adopt this machine.\n")
 	return nil
+}
+
+/*
+shortAgentID is the name an identity gets on disk.
+
+Eight characters of a UUID, which is enough to be unique among the handful of
+accounts that share a machine and short enough to type. Collisions are checked
+by the caller writing the file, not assumed away — see uniqueIdentityPath.
+*/
+func shortAgentID(agentID string) string {
+	cleaned := strings.ReplaceAll(agentID, "-", "")
+	if len(cleaned) > 8 {
+		return cleaned[:8]
+	}
+	if cleaned == "" {
+		return "agent"
+	}
+	return cleaned
+}
+
+// identityForAccount finds this account's existing identity here, if any.
+//
+// Reads every config in the directory, which on a shared machine means reading
+// other accounts' files — it only ever compares an opaque reference, and the
+// process doing it already has to be able to read them to serve them.
+func identityForAccount(dir, ref string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var cfg Config
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			continue
+		}
+		if cfg.AccountRef != "" && cfg.AccountRef == ref {
+			return identityNameFor(path)
+		}
+	}
+	return ""
 }
 
 // runStatus prints what this machine's identity is, without connecting.

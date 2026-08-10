@@ -352,6 +352,11 @@ function AgentRow({
   // — and its dialog — with it.
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [forgetOpen, setForgetOpen] = useState(false)
+  const [stopOpen, setStopOpen] = useState(false)
+  // Which command is in flight, so the menu can say so rather than looking
+  // inert for the several seconds a round trip to somebody's home connection
+  // takes.
+  const [busyCommand, setBusyCommand] = useState<string | null>(null)
   const revoked = Boolean(agent.revokedAt)
 
   const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null
@@ -388,6 +393,41 @@ function AgentRow({
     // row turns into its revoked form rather than appearing a beat later.
     setRemovalOpen(true)
     await onChanged()
+  }
+
+  /*
+   * Sending one instruction, and saying what came back.
+   *
+   * The answer is the point. "aaaa1111 has 3 sessions open" and "already
+   * running the published build" are the agent's own words, and a dashboard
+   * that replaced them with "sent" would make a refusal indistinguishable from
+   * a machine that had stopped listening.
+   */
+  async function command(kind: "restart" | "upgrade" | "stop", pending: string) {
+    setBusyCommand(pending)
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: kind }),
+      })
+      const body = (await res.json()) as { ok?: boolean; detail?: string; error?: string }
+
+      if (!res.ok) {
+        toast.error(body.error ?? "That machine could not be reached")
+        return
+      }
+      if (body.ok) {
+        toast.success(body.detail ?? "Done")
+      } else {
+        // Not an error toast for a refusal with a reason: the machine answered,
+        // and the answer is information rather than a failure.
+        toast.warning(body.detail ?? "The machine refused that")
+      }
+      await onChanged()
+    } finally {
+      setBusyCommand(null)
+    }
   }
 
   async function forget() {
@@ -497,6 +537,24 @@ function AgentRow({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => setRenaming(true)}>Rename</DropdownMenuItem>
+                {/* Absent rather than disabled when they cannot work: a greyed
+                    out control implies a state in which it would. */}
+                {!revoked && state === "online" && (
+                  <>
+                    <DropdownMenuItem
+                      disabled={busyCommand !== null}
+                      onSelect={() => void command("restart", "restart")}
+                    >
+                      {busyCommand === "restart" ? "Restarting…" : "Restart the agent"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={busyCommand !== null}
+                      onSelect={() => setStopOpen(true)}
+                    >
+                      Stop the agent
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {revoked ? (
                   <>
                     <DropdownMenuItem onSelect={() => setRemovalOpen(true)}>
@@ -516,6 +574,27 @@ function AgentRow({
           </div>
         </div>
       </div>
+
+      <AlertDialog open={stopOpen} onOpenChange={setStopOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop the agent on {agent.label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It stops now and stays stopped across reboots.{" "}
+              <strong>There is no start button</strong> — the connection a start command would
+              arrive on is the thing being stopped, so turning it back on needs a shell on that
+              machine: <span className="font-mono">weirdvault-agent start</span>. Sessions already
+              open keep running until they end.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Leave it running</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void command("stop", "stop")}>
+              Stop it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={revokeOpen} onOpenChange={setRevokeOpen}>
         <AlertDialogContent>
@@ -560,6 +639,12 @@ function AgentRow({
         open={upgradeOpen}
         onOpenChange={setUpgradeOpen}
         onChanged={onChanged}
+        onUpgrade={
+          state === "online"
+            ? () => command("upgrade", "upgrade").then(() => setUpgradeOpen(false))
+            : undefined
+        }
+        upgrading={busyCommand === "upgrade"}
       />
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
@@ -766,12 +851,17 @@ function UpgradeDialog({
   open,
   onOpenChange,
   onChanged,
+  onUpgrade,
+  upgrading,
 }: {
   agent: Agent
   published: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onChanged: () => Promise<void>
+  /** Absent when the machine is not reachable, or cannot verify commands. */
+  onUpgrade?: () => Promise<void>
+  upgrading: boolean
 }) {
   // Self-reported at enrolment. Nothing trusts it for anything that matters;
   // here it only picks which command is the right one to print.
@@ -791,6 +881,27 @@ function UpgradeDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {onUpgrade && (
+            <div className="border-border rounded-lg border p-3">
+              <p className="text-sm">
+                This machine is connected, so it can be told to update from here.
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                It restarts to pick the new build up, which ends any session it is carrying — so it
+                refuses while one is open and says which. Nothing is replaced mid-session.
+              </p>
+              <Button
+                className="mt-3"
+                size="sm"
+                disabled={upgrading}
+                onClick={() => void onUpgrade()}
+              >
+                <ArrowsClockwiseIcon />
+                {upgrading ? "Updating…" : "Update now"}
+              </Button>
+            </div>
+          )}
+
           <div>
             <Label className="text-muted-foreground text-xs">On that machine</Label>
             <div className="mt-1">

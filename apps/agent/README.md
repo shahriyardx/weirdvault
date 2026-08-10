@@ -48,7 +48,16 @@ relay → agent   {"type":"challenge","nonce":"<32 random bytes, base64>"}
 agent → relay   {"type":"proof","signature":"<Ed25519, base64>"}
 relay → agent   {"type":"ready"}
 relay → agent   {"type":"open","ticket":"…","port":22}     (per session)
+relay → agent   {"type":"command","id":…,"command":…,"nonce":…,
+                 "expiresAt":…,"signature":…}
+agent → relay   {"type":"result","id":…,"ok":…,"detail":…}
 ```
+
+`command` is the one message the agent does *not* take on trust. Everything else
+here arrives on a socket the relay owns and is acted on because it can only cause
+the agent to offer a connection it was going to offer anyway; a command can stop
+a daemon or delete an identity, so it carries a signature from the control plane
+and the agent checks it. See the header of `command.go`.
 
 `version` is a label, not a claim. It rides on hello because that is the only
 frame that already exists per reconnect, it is sent before anything is verified,
@@ -191,6 +200,8 @@ reboot.
 | `list` | Every agent on this machine, and what each is doing |
 | `logs [-f] [-n N]` | What the service has been saying |
 | `upgrade [--check]` | Install the build this deployment publishes, now |
+| `list` | Every account with an identity here, and what each is doing |
+| `stop <id>` / `start <id>` | One identity, leaving the others alone |
 
 These wrap systemd on Linux and launchd on macOS. They exist because the
 alternative was knowing that a unit exists, knowing its name, and knowing that
@@ -242,3 +253,53 @@ identical to one where agents were switched off on purpose.
 balancer needs the browser's `/ws` and the agent's `/agent/control` to land on
 the same instance, or agents appear offline at random. A single relay is
 unaffected.
+
+## Several accounts, one machine
+
+A machine is often shared, and the product has no teams by design — so the
+answer is one identity per person. Each enrols from their own dashboard with
+their own token, and gets their own agent id, key and row. Revoking one says
+nothing about the others, and nobody shares a secret.
+
+```
+/etc/weirdvault-agent/
+  3959f21b.json        one identity, named after its agent id
+  3959f21b.stopped     marker: this one is stopped
+  a41c0b93.json
+/var/lib/weirdvault-agent/bin/weirdvault-agent   one binary, shared
+/run/weirdvault-agent/state.json                 what each identity is doing
+```
+
+**An agent grants no login.** It is a pipe to a loopback port; a second identity
+gives someone who *already has* access their own path in, and hands out nothing
+they did not have.
+
+One process serves all of them, with one control connection each. The directory
+is re-read every few seconds, so enrolling somebody new is a file write that
+nobody else notices — which matters because a restart would drop everyone's
+sessions, and this daemon refuses a restart while a session is open.
+
+A rejected identity stops on its own and the rest carry on. The process exits 3
+only when nothing is left running, which keeps `RestartPreventExitStatus`
+meaningful for the ordinary single-identity install.
+
+`agent.json` and a unit passing `--config` keep working exactly as they did.
+
+## Being told what to do
+
+`restart`, `upgrade`, `stop` and `revoke` can arrive from the dashboard. Each is
+signed by the control plane with a key whose public half was written into the
+identity file at enrolment, and each is checked — signature, agent id, expiry,
+and a nonce that has not been seen — before anything happens.
+
+`restart` and `upgrade` replace the process, so they are refused while **any**
+identity is carrying a session, and the refusal names which. `stop` and `revoke`
+touch one identity: `stop` leaves the config and marks it, `revoke` removes it.
+
+There is no `start` from the dashboard, and there will not be: the connection a
+start would arrive on is the thing that was stopped. Starting again needs a
+shell on the machine.
+
+An identity enrolled before this existed has no key to check against, refuses
+every command, and says so — the same shape of gap as one enrolled before
+self-update.

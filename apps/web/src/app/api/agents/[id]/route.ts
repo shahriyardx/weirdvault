@@ -2,7 +2,10 @@ import { headers } from "next/headers"
 import { and, eq, isNotNull, isNull } from "drizzle-orm"
 
 import { auth } from "@/lib/auth"
+import { clientAddress } from "@/lib/audit/address"
+import { ipPrefix } from "@/lib/audit/events"
 import { db, schema } from "@/lib/db"
+import { dispatchCommand } from "@/lib/agents/dispatch"
 
 /**
  * One agent: rename it, or revoke it.
@@ -132,5 +135,37 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     .returning({ id: schema.agent.id })
 
   if (revoked.length === 0) return Response.json({ error: "not found" }, { status: 404 })
-  return Response.json({ ok: true })
+
+  /*
+   * Tell the machine, if it is listening.
+   *
+   * The revocation above is what protects the account and it is already
+   * complete: the relay asks the control plane on every reconnect, so that
+   * agent's next attempt fails whatever happens next. This is the other half of
+   * the promise — the copy of the key sitting in /etc on somebody's machine,
+   * which "I revoked it" says nothing about.
+   *
+   * Best effort, and deliberately not awaited into the outcome. A machine that
+   * is asleep cannot be told, and the revocation must not appear to fail
+   * because of that; the dashboard reports what happened as a note rather than
+   * as the result. Signed, so an agent can tell this instruction from one a
+   * compromised relay invented — which is what makes it safe for it to delete a
+   * private key.
+   */
+  const told = await dispatchCommand(user.id, id, "revoke")
+
+  try {
+    await db.insert(schema.auditEvent).values({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      eventType: "agent.commanded",
+      source: "server",
+      ipPrefix: ipPrefix(clientAddress(request.headers)),
+      metadata: { command: "revoke", ok: told.ok },
+    })
+  } catch (e) {
+    console.warn("could not record agent.commanded", e)
+  }
+
+  return Response.json({ ok: true, removedFromMachine: told.ok, detail: told.detail })
 }

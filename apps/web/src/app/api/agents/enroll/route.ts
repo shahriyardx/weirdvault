@@ -8,6 +8,7 @@ import {
   hashEnrollmentToken,
   looksLikeEnrollmentToken,
 } from "@/lib/agents/enrollment"
+import { accountRef, commandPublicKey } from "@/lib/agents/commands"
 import { fingerprintFor } from "@/lib/agents/verify"
 import { publicOrigin } from "@/lib/origin"
 import { enforce } from "@/lib/rate-limit"
@@ -133,6 +134,11 @@ export async function POST(request: Request) {
    * and no agent exists — which previously needed a hand-written "release the
    * token" write that was itself a thing that could fail.
    */
+  // Set inside the transaction, read when the response is built. The account is
+  // not known until the token is claimed, and the claim is the only place it is
+  // learned.
+  let enrolledFor = ""
+
   let outcome: { ok: true } | { ok: false; status: number; error: string }
   try {
     outcome = await db.transaction(async (tx) => {
@@ -156,6 +162,7 @@ export async function POST(request: Request) {
       }
 
       const { userId, id: enrollmentId } = claimed[0]
+      enrolledFor = userId
 
       await tx.insert(schema.agent).values({
         id: agentId,
@@ -201,7 +208,25 @@ export async function POST(request: Request) {
     return Response.json({ error: outcome.error }, { status: outcome.status })
   }
 
-  return Response.json({ agentId, relayUrl, releaseUrl })
+  return Response.json({
+    agentId,
+    relayUrl,
+    releaseUrl,
+    /**
+     * The public half of this deployment's command signing key, so the agent can
+     * tell an instruction the owner authorised from one the relay invented. Null
+     * when remote control is not configured, which the agent stores as an empty
+     * list and treats as "refuse every command".
+     */
+    commandKeys: [commandPublicKey()].filter(Boolean),
+    /**
+     * Opaque and stable per account, so the installer can refuse a second
+     * enrolment for an account that already has an identity on this machine.
+     * It identifies nobody: a person reading another account's identity file
+     * learns that it is not theirs and nothing else.
+     */
+    accountRef: enrolledFor ? accountRef(enrolledFor) : undefined,
+  })
 }
 
 /** Not a browser endpoint; a GET here is a misconfiguration worth naming. */

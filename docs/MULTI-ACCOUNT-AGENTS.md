@@ -366,14 +366,31 @@ deliver or fail to deliver instructions it cannot read the authority of.
 
 Each phase is separately shippable and separately verifiable.
 
+All six have landed. Kept as written so the order — and the reason phases 1 and
+2 came first — is recoverable.
+
 | | | |
 |---|---|---|
-| **1** | Presence | Relay endpoint, web fold-in, three states. No protocol change, no agent change |
-| **2** | Card | The layout above, against real reachability from phase 1 |
-| **3** | Multi-identity | Config directory, per-identity loops, hot reload, runtime state, CLI selectors, `install.sh` naming and the duplicate-enrolment guard |
-| **4** | Signing | Key, enrolment delivery, `serverPublicKeys`, verification in Go, cross-language fixture |
-| **5** | Commands | Channel, `restart`/`upgrade`/`stop`, session refusal, audit, rate limit, dashboard controls |
-| **6** | Revoke | Signed revoke, identity deletion, `forget`, the macOS backoff fix |
+| **1** ✓ | Presence | Relay endpoint, web fold-in, three states. No protocol change, no agent change |
+| **2** ✓ | Card | The layout above, against real reachability from phase 1 |
+| **3** ✓ | Multi-identity | Config directory, per-identity loops, hot reload, runtime state, CLI selectors, `install.sh` naming and the duplicate-enrolment guard |
+| **4** ✓ | Signing | Key, enrolment delivery, `commandKeys`, verification in Go, cross-language fixture |
+| **5** ✓ | Commands | Channel, `restart`/`upgrade`/`stop`, session refusal, audit, rate limit, dashboard controls |
+| **6** ✓ | Revoke | Signed revoke, identity deletion, the macOS fix |
+
+Two things came out differently from the plan, both for the better:
+
+- **The field is `commandKeys`, not `serverPublicKeys`.** Same list, same
+  rotation story, a name that says what it is for.
+- **macOS does not back off hourly on a rejection; it stays resident and idle.**
+  Backing off still leaves launchd restarting the process forever, just more
+  slowly. Staying alive with nothing to run is the only way to stop without a
+  supervisor undoing it, short of the self-disable this document argues against.
+
+The duplicate-enrolment question is answered: the enrolment response carries an
+opaque `accountRef`, the identity file stores it, and the installer refuses a
+second enrolment for an account that already has one here. It identifies nobody
+— another account's file says only that it is not yours.
 
 Phases 1 and 2 are independent of the rest and worth landing first — they are
 also what makes phases 5 and 6 legible, since a control you cannot see the effect

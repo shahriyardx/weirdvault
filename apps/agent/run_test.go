@@ -111,7 +111,7 @@ func TestServeGivesUpOnARelayThatStopsAnswering(t *testing.T) {
 	defer cancel()
 
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, id) }()
+	go func() { done <- serve(ctx, newSupervisor(t.TempDir(), ""), id) }()
 
 	select {
 	case err := <-done:
@@ -135,7 +135,7 @@ func TestServeStaysUpWhileTheRelayAnswers(t *testing.T) {
 	defer cancel()
 
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, id) }()
+	go func() { done <- serve(ctx, newSupervisor(t.TempDir(), ""), id) }()
 
 	// Ten ping intervals with nothing else happening on the connection.
 	select {

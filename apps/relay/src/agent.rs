@@ -84,6 +84,14 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 /// when it is wanted.
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 
+/// How long to wait for an agent to answer a command.
+///
+/// Generous: the agent may be checking for an update before it replies, and the
+/// caller is a person who pressed a button and is watching. Shorter than any
+/// sensible HTTP timeout in front of it, so the answer is this one rather than a
+/// proxy's.
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// Queue depth for control messages to one agent. These are tiny JSON objects
 /// sent at human speed; a backlog means the agent's socket has stopped draining,
 /// and failing the open is better than growing a queue nobody will read.
@@ -107,6 +115,14 @@ pub struct Agents {
     control: DashMap<String, Registration>,
     /// Tickets waiting to be claimed by an agent dialling back.
     pending: DashMap<String, oneshot::Sender<WebSocket>>,
+    /// Commands sent to an agent and not yet answered, by command id.
+    ///
+    /// The relay carries the answer and does not read it: what it forwards is an
+    /// envelope the control plane signed and the agent verified, and the reply
+    /// is the agent's own words about what it did. Holding the caller open until
+    /// the agent speaks is what lets the dashboard say "three sessions are open"
+    /// instead of "sent".
+    awaiting: DashMap<String, oneshot::Sender<String>>,
     next_conn: AtomicU64,
     verifier: Option<Verifier>,
     /// Why agents are off, when they are. Named at startup so a half-configured
@@ -141,6 +157,19 @@ struct Hello {
 #[derive(Debug, Deserialize)]
 struct Proof {
     signature: String,
+}
+
+/// What an agent says after carrying out — or refusing — a command.
+///
+/// The relay reads only enough of this to route it: which command it answers,
+/// and that it is an answer at all. What it says happened is the agent's word
+/// to the control plane, passed through unread.
+#[derive(Debug, Deserialize)]
+struct CommandResult {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -221,6 +250,7 @@ impl Agents {
         Ok(Arc::new(Self {
             control: DashMap::new(),
             pending: DashMap::new(),
+            awaiting: DashMap::new(),
             next_conn: AtomicU64::new(0),
             verifier,
             disabled,
@@ -233,6 +263,54 @@ impl Agents {
 
     pub fn connected(&self) -> usize {
         self.control.len()
+    }
+
+    /// Sends a signed command to an agent and waits for its answer.
+    ///
+    /// The envelope is opaque here: the control plane signed it, the agent
+    /// verifies it, and this process is a courier that cannot forge one. What
+    /// it *can* do is fail to deliver, which is why every failure below is
+    /// reported rather than swallowed — a command that silently went nowhere
+    /// looks exactly like a machine that ignored it.
+    ///
+    /// The account is checked as well as the id, for the same reason the
+    /// presence query is scoped: an agent somebody else owns must be
+    /// indistinguishable from one that is offline.
+    pub async fn command(
+        &self,
+        account: &str,
+        agent_id: &str,
+        id: &str,
+        envelope: String,
+    ) -> Result<String, OpenError> {
+        let Some(reg) = self.control.get(agent_id) else {
+            return Err(OpenError::Offline);
+        };
+        if reg.account != account {
+            // Deliberately the same answer as "not connected".
+            return Err(OpenError::Offline);
+        }
+        let tx = reg.tx.clone();
+        drop(reg); // the map guard must not be held across an await
+
+        let (result_tx, result_rx) = oneshot::channel();
+        self.awaiting.insert(id.to_string(), result_tx);
+
+        if tx.send(envelope).await.is_err() {
+            self.awaiting.remove(id);
+            return Err(OpenError::Offline);
+        }
+
+        match tokio::time::timeout(COMMAND_TIMEOUT, result_rx).await {
+            Ok(Ok(reply)) => Ok(reply),
+            // The agent went away between the send and the answer, or never
+            // answered. Both are "we do not know what happened", which is worth
+            // saying plainly: a command may well have been carried out.
+            _ => {
+                self.awaiting.remove(id);
+                Err(OpenError::Timeout)
+            }
+        }
     }
 
     /// Which of these agent ids are connected and belong to this account.
@@ -435,14 +513,28 @@ impl Agents {
             }
         };
 
-        // Nothing is expected from the agent after the handshake; this exists to
-        // notice the socket dying. Pongs arrive here and are discarded, which is
-        // enough — a dead peer surfaces as a failed send from the writer or an
-        // end of stream here.
+        // Two jobs. It notices the socket dying — pongs arrive here and are
+        // discarded, and a dead peer surfaces as an end of stream — and it
+        // carries command results back to whoever is waiting on one.
+        let results = Arc::clone(&self);
         let reader = async move {
             while let Some(Ok(msg)) = ws_rx.next().await {
-                if matches!(msg, Message::Close(_)) {
-                    break;
+                match msg {
+                    Message::Close(_) => break,
+                    Message::Text(text) => {
+                        // Anything unparseable is ignored rather than fatal: an
+                        // agent newer than this relay may say things it does not
+                        // know, and dropping a working connection over an
+                        // unexpected frame would be the worse failure.
+                        if let Ok(result) = serde_json::from_str::<CommandResult>(text.as_str()) {
+                            if result.kind == "result" {
+                                if let Some((_, waiting)) = results.awaiting.remove(&result.id) {
+                                    let _ = waiting.send(text.to_string());
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         };

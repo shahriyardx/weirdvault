@@ -159,6 +159,10 @@ async fn main() {
         // destination — see the scope field in token.rs for why it is not the
         // same kind of token as the two routes above take.
         .route("/agents/presence", post(presence))
+        // One signed instruction, forwarded to one agent, with its answer. The
+        // relay cannot read the authority in the envelope and cannot forge one;
+        // see agent.rs and apps/agent/command.go.
+        .route("/agents/command", post(command))
         .route("/healthz", get(health))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state.clone());
@@ -292,6 +296,77 @@ struct PresenceRequest {
 #[derive(Debug, Serialize)]
 struct PresenceResponse {
     online: Vec<String>,
+}
+
+/*
+Forwards one signed command and returns what the agent said.
+
+Everything that authorises this happened before the request arrived: the control
+plane checked the session and the ownership, signed an envelope this process
+cannot produce, and minted the token below. What is left here is delivery, and
+the three ways it can fail are each worth telling apart.
+*/
+async fn command(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(req): Json<CommandRequest>,
+) -> Response {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or_default();
+
+    // The same scoped token the presence query uses: it names the account, and
+    // the account is what scopes which agents may be addressed.
+    let claims = match token::verify_presence(&state.secret, token, now) {
+        Ok(claims) => claims,
+        Err(e) => {
+            debug!(error = %e, "command refused");
+            return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+        }
+    };
+
+    if req.agent_id.is_empty() || req.id.is_empty() || req.envelope.is_empty() {
+        return (StatusCode::BAD_REQUEST, "agentId, id and envelope are required").into_response();
+    }
+
+    match state
+        .agents
+        .command(&claims.sub, &req.agent_id, &req.id, req.envelope)
+        .await
+    {
+        Ok(reply) => ([(axum::http::header::CONTENT_TYPE, "application/json")], reply).into_response(),
+        // Not an error status: the machine being offline is an answer, and one
+        // the dashboard shows as a sentence rather than a failure.
+        Err(agent::OpenError::Offline) => Json(serde_json::json!({
+            "ok": false,
+            "detail": "that machine is not connected, so it cannot be given a command",
+        }))
+        .into_response(),
+        // Delivered, and then silence. Deliberately not reported as "it did not
+        // happen" — it may well have.
+        Err(agent::OpenError::Timeout) => Json(serde_json::json!({
+            "ok": false,
+            "detail": "the machine did not answer in time; it may still have carried this out",
+        }))
+        .into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CommandRequest {
+    #[serde(rename = "agentId")]
+    agent_id: String,
+    /// Correlates the answer with this request. The control plane chooses it.
+    id: String,
+    /// The signed command, verbatim, as the agent will verify it.
+    envelope: String,
 }
 
 async fn ws_handler(

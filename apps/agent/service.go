@@ -839,7 +839,8 @@ which config to point at, so the only thing it can start is this agent.
 
 func runInstallService(args []string) error {
 	fs := flag.NewFlagSet("install-service", flag.ExitOnError)
-	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	configPath := fs.String("config", "", "serve a single identity from this file")
+	configDir := fs.String("config-dir", DefaultConfigDir, "serve every identity in this directory")
 	noUpdate := fs.Bool("no-update", false, "do not let the agent replace its own binary")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -854,11 +855,15 @@ func runInstallService(args []string) error {
 		return errors.New("writing to /Library/LaunchDaemons needs root: sudo weirdvault-agent install-service")
 	}
 
-	// Refuse before writing a service that cannot start: a plist pointing at a
-	// config that is not there produces a job launchd retries and fails forever,
-	// with the reason in a log nobody is looking at yet.
-	if _, err := loadConfig(*configPath); err != nil {
-		return err
+	// Refuse before writing a service that cannot start: a plist pointing at
+	// nothing produces a job launchd retries and fails forever, with the reason
+	// in a log nobody is looking at yet.
+	if *configPath != "" {
+		if _, err := loadConfig(*configPath); err != nil {
+			return err
+		}
+	} else if len(gatherIdentities(*configDir, "")) == 0 {
+		return fmt.Errorf("no identity in %s — run `weirdvault-agent enroll` first", *configDir)
 	}
 
 	self, err := os.Executable()
@@ -870,7 +875,7 @@ func runInstallService(args []string) error {
 		return err
 	}
 
-	plist := launchdPlist(self, *configPath, *noUpdate)
+	plist := launchdPlist(self, *configPath, *configDir, *noUpdate)
 	if err := os.WriteFile(launchdPlistPath, []byte(plist), 0o644); err != nil {
 		return fmt.Errorf("could not write %s: %w", launchdPlistPath, err)
 	}
@@ -926,8 +931,14 @@ func runUninstallService(args []string) error {
 // agent, which exits 3 on purpose and would be right to stay down, is started
 // again every ten seconds. The agent says so in the log line it prints before
 // exiting, and `weirdvault-agent stop` is what ends it.
-func launchdPlist(binary, configPath string, noUpdate bool) string {
-	args := []string{binary, "run", "--config=" + configPath}
+func launchdPlist(binary, configPath, configDir string, noUpdate bool) string {
+	// A directory unless one file was named, so a Mac shared by two accounts
+	// behaves the way a Linux box does.
+	target := "--config-dir=" + configDir
+	if configPath != "" {
+		target = "--config=" + configPath
+	}
+	args := []string{binary, "run", target}
 	if noUpdate {
 		args = append(args, "--no-update")
 	}

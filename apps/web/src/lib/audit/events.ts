@@ -57,6 +57,16 @@ export const AUDIT_EVENTS = {
   "passkey.registered": { source: "server", ip: "prefix" },
   "passkey.removed": { source: "server", ip: "prefix" },
   "passkey.used": { source: "server", ip: "prefix" },
+  /**
+   * A machine was told to do something from the dashboard.
+   *
+   * Server-written, because the row records that this account authorised an
+   * instruction — the fact a person needs when a machine restarts and nobody
+   * admits to it. The agent's own answer is recorded with it, so a refusal
+   * ("three sessions are open") is in the log rather than only on the screen of
+   * whoever pressed the button.
+   */
+  "agent.commanded": { source: "server", ip: "prefix" },
   "connection.opened": { source: "relay", ip: "prefix" },
   "connection.closed": { source: "relay", ip: "prefix" },
   "key.installed": { source: "client", ip: "prefix" },
@@ -126,6 +136,10 @@ export const AUDIT_METADATA: Record<AuditEventType, Record<string, Validator>> =
   "passkey.registered": { backedUp: isBoolean, deviceType: isEnum("singleDevice", "multiDevice") },
   "passkey.removed": {},
   "passkey.used": {},
+  // What was asked for and whether the machine did it. No agent id: the row is
+  // already scoped to the account, and the machine's label is a thing the user
+  // can rename — the id belongs in the response, not the timeline.
+  "agent.commanded": { command: isEnum("restart", "upgrade", "stop", "revoke"), ok: isBoolean },
   "connection.opened": { port: isSmallInt },
   "connection.closed": { bytesUp: isSmallInt, bytesDown: isSmallInt, durationMs: isSmallInt },
   "key.installed": {

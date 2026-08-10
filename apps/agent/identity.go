@@ -39,6 +39,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +74,10 @@ type identity struct {
 	path string
 	cfg  *Config
 	priv ed25519.PrivateKey
+
+	// What this identity has already carried out, so the relay cannot have a
+	// command run twice by sending it twice.
+	nonces *seenNonces
 
 	// Guards everything below. Read by the state writer on another goroutine.
 	mu        sync.Mutex
@@ -276,7 +281,15 @@ func (s *supervisor) start(ctx context.Context, name, path string) {
 		return
 	}
 
-	id := &identity{name: name, path: path, cfg: cfg, priv: priv, state: stateStarting, since: time.Now()}
+	id := &identity{
+		name:   name,
+		path:   path,
+		cfg:    cfg,
+		priv:   priv,
+		nonces: newSeenNonces(),
+		state:  stateStarting,
+		since:  time.Now(),
+	}
 	idCtx, cancel := context.WithCancel(ctx)
 
 	s.mu.Lock()
@@ -320,7 +333,7 @@ func (s *supervisor) serveIdentity(ctx context.Context, id *identity) (rejected 
 
 	for ctx.Err() == nil {
 		start := time.Now()
-		err := serve(ctx, id)
+		err := serve(ctx, s, id)
 
 		if ctx.Err() != nil {
 			break
@@ -427,6 +440,24 @@ func (s *supervisor) run(ctx context.Context) error {
 			// every five seconds forever to be told no — and what lets systemd's
 			// RestartPreventExitStatus do its job.
 			if running == 0 && rejected > 0 {
+				// launchd has no equivalent of systemd's
+				// RestartPreventExitStatus, so exiting there means being started
+				// again ten seconds later to be refused again, forever. Staying
+				// alive and idle is the only way to stop without a supervisor
+				// undoing it — and it is strictly better than the alternative
+				// that was considered and rejected: disabling the service on the
+				// strength of a close code the agent cannot verify, which would
+				// let a compromised relay strand a whole fleet.
+				//
+				// It is not a silent park. The rejection was logged in full, and
+				// `weirdvault-agent status` says what happened.
+				if runtime.GOOS == "darwin" {
+					log.Printf("nothing left to run. Staying resident so launchd does not restart this")
+					log.Printf("every ten seconds; `weirdvault-agent stop` ends it.")
+					<-ctx.Done()
+					log.Printf("shutting down")
+					return finish(nil)
+				}
 				return finish(errRejected)
 			}
 		}

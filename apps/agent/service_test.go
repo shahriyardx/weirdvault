@@ -92,7 +92,7 @@ func TestParseETime(t *testing.T) {
 // make it safe rather than merely working are pinned here: the exact config it
 // was told to use, and a KeepAlive that does not undo a deliberate stop.
 func TestLaunchdPlist(t *testing.T) {
-	plist := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/weirdvault-agent/agent.json", false)
+	plist := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/weirdvault-agent/agent.json", DefaultConfigDir, false)
 
 	for _, want := range []string{
 		"<string>" + launchdLabel + "</string>",
@@ -110,7 +110,7 @@ func TestLaunchdPlist(t *testing.T) {
 	if strings.Contains(plist, "--no-update") {
 		t.Error("plist disabled updates without being asked to")
 	}
-	if got := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/a.json", true); !strings.Contains(got, "<string>--no-update</string>") {
+	if got := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/a.json", DefaultConfigDir, true); !strings.Contains(got, "<string>--no-update</string>") {
 		t.Error("--no-update was asked for and did not reach the plist")
 	}
 }
@@ -118,7 +118,7 @@ func TestLaunchdPlist(t *testing.T) {
 // A path with an ampersand in it is legal and produces a plist launchd rejects
 // as malformed — complaining about the file, not the character.
 func TestLaunchdPlistEscapes(t *testing.T) {
-	plist := launchdPlist("/opt/a&b/weirdvault-agent", "/etc/x.json", false)
+	plist := launchdPlist("/opt/a&b/weirdvault-agent", "/etc/x.json", DefaultConfigDir, false)
 	if !strings.Contains(plist, "/opt/a&amp;b/weirdvault-agent") {
 		t.Errorf("path was not escaped:\n%s", plist)
 	}
@@ -134,7 +134,7 @@ func TestServiceConfigPathParsing(t *testing.T) {
 		t.Errorf("systemd ExecStart: got %q", got)
 	}
 
-	plist := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/weirdvault-agent/agent.json", false)
+	plist := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/weirdvault-agent/agent.json", DefaultConfigDir, false)
 	if got := extractConfigFlag(plist); got != "/etc/weirdvault-agent/agent.json" {
 		t.Errorf("launchd plist: got %q", got)
 	}

@@ -94,6 +94,16 @@ type controlMessage struct {
 	Reason    string `json:"reason"`
 	AgentID   string `json:"agentId,omitempty"`
 	Signature string `json:"signature,omitempty"`
+	// The signed-command envelope. Only ever populated on a message coming
+	// *from* the relay; see command.go for what is checked before any of it is
+	// acted on.
+	ID        string `json:"id,omitempty"`
+	Command   string `json:"command,omitempty"`
+	ExpiresAt int64  `json:"expiresAt,omitempty"`
+	OK        bool   `json:"ok,omitempty"`
+	Detail    string `json:"detail,omitempty"`
+	// (Both above are only read on messages from the relay; replies use
+	// commandReply, which spells `ok` out even when it is false.)
 	// What build this is, sent on every reconnect.
 	//
 	// The version was recorded once, at enrolment, and never again — so the
@@ -190,7 +200,7 @@ func (s *supervisor) updateSource() *Config {
 }
 
 // serve holds one control connection until it dies.
-func serve(ctx context.Context, id *identity) error {
+func serve(ctx context.Context, sup *supervisor, id *identity) error {
 	cfg := id.cfg
 
 	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
@@ -225,6 +235,12 @@ func serve(ctx context.Context, id *identity) error {
 		}
 
 		switch msg.Type {
+		case "command":
+			// Answered on the same connection, and deliberately not in a
+			// goroutine: commands arrive at human speed, one at a time, and
+			// serialising them means a restart cannot race a stop.
+			handleCommand(ctx, sup, id, conn, msg)
+
 		case "open":
 			// Deliberately not awaited. A machine can carry several sessions at
 			// once, and a dial to a wedged local port must not stop the control
@@ -508,4 +524,66 @@ func closeText(err error) string {
 // a thundering herd that the backoff was supposed to prevent.
 func jitter(d time.Duration) time.Duration {
 	return d/2 + time.Duration(rand.Int63n(int64(d/2)+1))
+}
+
+/*
+handleCommand verifies one instruction, carries it out, and always answers.
+
+The reply is what makes this usable: "three sessions are open" and "already on
+the published build" are answers somebody can act on, and a dashboard that only
+ever said "sent" would make a refusal indistinguishable from a machine that had
+stopped listening.
+
+A failure to verify is logged as well as answered. The reply goes to whoever
+asked; the log is for the person standing at the machine wondering why the
+dashboard says its command was refused.
+*/
+func handleCommand(ctx context.Context, sup *supervisor, id *identity, conn *websocket.Conn, msg controlMessage) {
+	command, err := id.verifyCommand(msg, time.Now())
+	if err != nil {
+		log.Printf("[%s] refused command %q: %v", id.name, msg.Command, err)
+		replyToCommand(ctx, conn, msg.ID, false, err.Error())
+		return
+	}
+
+	log.Printf("[%s] command: %s", id.name, command)
+	detail, err := sup.runCommand(id, command)
+	if err != nil {
+		log.Printf("[%s] command %s failed: %v", id.name, command, err)
+		replyToCommand(ctx, conn, msg.ID, false, err.Error())
+		return
+	}
+	replyToCommand(ctx, conn, msg.ID, true, detail)
+}
+
+// commandReply is its own type rather than a reused controlMessage.
+//
+// The control message carries a dozen fields for the other direction, and
+// marshalling one as a reply put empty tickets and ports in every answer — noise
+// in a log that a person reads when something has gone wrong, and a shape that
+// invites a reader to think those fields mean something here.
+type commandReply struct {
+	Type   string `json:"type"`
+	ID     string `json:"id"`
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
+}
+
+func replyToCommand(ctx context.Context, conn *websocket.Conn, id string, ok bool, detail string) {
+	reply, err := json.Marshal(commandReply{Type: "result", ID: id, OK: ok, Detail: detail})
+	if err != nil {
+		return
+	}
+	// Detached from the identity's context, and then given its own deadline.
+	//
+	// Several commands end by cancelling exactly the context this connection
+	// runs on — stop and revoke by design, restart a moment later. Writing the
+	// answer through that context means the answer races its own effect, and
+	// losing that race reports "the machine did not answer" for a command that
+	// worked perfectly.
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := conn.Write(writeCtx, websocket.MessageText, reply); err != nil {
+		log.Printf("could not answer command %s: %v", id, err)
+	}
 }

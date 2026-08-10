@@ -55,6 +55,21 @@ type Config struct {
 	// disables the check rather than guessing a URL to download root-executed
 	// binaries from.
 	ReleaseURL string `json:"releaseUrl,omitempty"`
+	// Public halves of the control plane's command signing key, base64.
+	//
+	// A list so a deployment can rotate one out without re-enrolling every
+	// machine. Empty on an identity enrolled before remote control existed,
+	// which refuses every command rather than trusting the relay to have meant
+	// well — see command.go for why that distinction is the whole point.
+	CommandKeys []string `json:"commandKeys,omitempty"`
+	// Opaque, stable reference to the account this identity belongs to.
+	//
+	// Written so the installer can refuse a second enrolment for an account that
+	// already has an identity here — the check that used to be "does agent.json
+	// exist", which stops working when several accounts legitimately share the
+	// directory. It identifies nobody: another account's file says only that it
+	// is not yours.
+	AccountRef string `json:"accountRef,omitempty"`
 }
 
 func (c *Config) controlURL() string { return c.RelayURL + "/control" }

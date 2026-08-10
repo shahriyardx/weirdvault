@@ -158,6 +158,7 @@ openssl rand -base64 48    # RELAY_SECRET          — same value on web and rel
 openssl rand -base64 48    # CRON_SECRET
 openssl rand -base64 48    # RELAY_USAGE_SECRET    — optional
 openssl rand -base64 48    # RELAY_AGENT_SECRET    — optional
+openssl rand -base64 32    # AGENT_COMMAND_SECRET  — optional, and exactly 32 bytes
 openssl rand -base64 32    # POSTGRES_PASSWORD
 ```
 
@@ -202,6 +203,7 @@ rather than showing a control that fails when pressed.
 |---|---|
 | `RELAY_USAGE_SECRET` | Bytes are counted in memory and discarded; the monthly transfer allowance is never enforced. The right default for a relay you host — the cap exists because relay bandwidth costs the hosted deployment money, and bandwidth you already pay for is not ours to ration |
 | `RELAY_AGENT_SECRET` | Machines with no public address cannot be enrolled. The relay refuses agent connections and the dashboard says so, rather than minting a token for an agent that could never connect |
+| `AGENT_COMMAND_SECRET` | No machine can be restarted, updated or stopped from the dashboard, and a revoke stops at the database rather than also clearing the key off the machine. The controls are absent rather than broken. Set it (`openssl rand -base64 32`) and re-enrol the machines that should accept commands — the public half travels in the identity file at enrolment, and it is what lets an agent tell an instruction you authorised from one a compromised relay invented |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO`, `STRIPE_WEBHOOK_SECRET` | Nothing is sold. Every account is whatever the `subscription` table says, which on an install that has never taken a payment is Free. **All three or none** — with the webhook secret missing, checkout would work and no subscription would ever be recorded |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | No "Continue with GitHub" button. Register the app with callback `<BETTER_AUTH_URL>/api/auth/callback/github` |
 | `R2_*` (four, plus optional `R2_REGION`) | Recordings are stored as a `bytea` column in Postgres. **All four or none** — three of four is a typo and is treated as one. See [Recording storage](#recording-storage) |

@@ -188,8 +188,10 @@ if [ "$MODE" = "uninstall" ]; then
 fi
 
 if [ "$MODE" = "repair" ]; then
-  if [ ! -f "\${CONFIG_DIR}/agent.json" ]; then
-    echo "error: nothing to repair — \${CONFIG_DIR}/agent.json does not exist." >&2
+  # Any identity will do. A machine shared by several accounts has one file per
+  # account, and a machine installed before that had exactly agent.json.
+  if [ -z "$(ls "\${CONFIG_DIR}"/*.json 2>/dev/null)" ]; then
+    echo "error: nothing to repair — no identity in \${CONFIG_DIR}." >&2
     echo "       This machine is not enrolled. Add it from $APP_URL/dashboard/machines" >&2
     exit 1
   fi
@@ -325,16 +327,21 @@ if [ "$MODE" = "repair" ]; then
   echo "Its identity and key in \${CONFIG_DIR} are untouched."
 else
   echo
+  # No --config: the identity is named after the agent id the server chooses,
+  # because everybody pastes an identical command and only the token differs.
+  # That is what lets several accounts share one machine.
   "$BIN_TARGET" enroll \\
     --token="$TOKEN" \\
     --url="$APP_URL" \\
-    --config="\${CONFIG_DIR}/agent.json" \\
+    --config-dir="$CONFIG_DIR" \\
     --ssh-port="$SSH_PORT"
 fi
 
 chown -R "$SERVICE_USER" "$CONFIG_DIR"
 chmod 0700 "$CONFIG_DIR"
-chmod 0600 "\${CONFIG_DIR}/agent.json"
+# Every identity, not one named file: this directory holds one private key per
+# account on the machine, and a new one has just been added to it.
+chmod 0600 "\${CONFIG_DIR}"/*.json 2>/dev/null || true
 
 # The service account has to own the binary it replaces, which is the entire
 # point of putting it here. Without this the update downloads, verifies its
@@ -350,7 +357,7 @@ fi
 # here would be a second copy to keep in step. It starts it too.
 if [ "$os" = "darwin" ]; then
   echo
-  "$BIN_TARGET" install-service --config="\${CONFIG_DIR}/agent.json"
+  "$BIN_TARGET" install-service --config-dir="$CONFIG_DIR"
   echo
   echo "  weirdvault-agent status              is it running, and will it start at boot"
   echo "  weirdvault-agent stop                stop it, and keep it stopped"
@@ -379,7 +386,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=\${SERVICE_USER}
-ExecStart=\${BIN_TARGET} run --config=\${CONFIG_DIR}/agent.json
+ExecStart=\${BIN_TARGET} run --config-dir=\${CONFIG_DIR}
 Restart=always
 RestartSec=5
 
@@ -426,6 +433,11 @@ ReadOnlyPaths=\${CONFIG_DIR}
 # the agent then never touches its own binary.
 StateDirectory=weirdvault-agent
 
+# /run/weirdvault-agent, owned by the account below, where the daemon publishes
+# what each identity is doing. One process can serve several accounts, so the
+# CLI cannot learn that from the process table — see runtimestate.go.
+RuntimeDirectory=weirdvault-agent
+
 # MemoryDenyWriteExecute is deliberately absent. The Go runtime does not need
 # W+X pages, but re-exec after an update trips it on some kernels, and a
 # hardening flag that turns updates into a crash loop is worse than the
@@ -447,9 +459,13 @@ else
 fi
 echo
 echo "  weirdvault-agent status              is it running, and its fingerprint"
-echo "  weirdvault-agent stop                stop it, and keep it stopped at boot"
-echo "  weirdvault-agent start               start it again"
+echo "  weirdvault-agent list                every account with an agent here"
+echo "  weirdvault-agent stop [id]           stop one identity, or all of them"
+echo "  weirdvault-agent start [id]          start it again"
 echo "  weirdvault-agent logs -f             what it is doing"
+echo
+echo "Another person can add this same machine to their own account: they run"
+echo "their own install command, and the two identities are independent."
 `
 
   return new Response(script, {
