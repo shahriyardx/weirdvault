@@ -3,6 +3,7 @@ import { Geist, JetBrains_Mono } from "next/font/google"
 
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { metadataBase, SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo"
 import { cn } from "@/lib/utils"
 
 import "./globals.css"
@@ -33,14 +34,37 @@ const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
+  // Every relative URL below — canonicals, Open Graph URLs, the OG image —
+  // resolves against this. Without it Next cannot make them absolute, and a
+  // relative canonical is worse than none.
+  ...(metadataBase() ? { metadataBase: metadataBase() } : {}),
   title: {
-    default: "weirdvault — SSH in your browser",
-    template: "%s · weirdvault",
+    default: `${SITE_NAME} — SSH in your browser`,
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    "A zero-install SSH client. Generate a key in the browser, connect to any server, " +
-    "and get a terminal, file explorer and remote editor — with keys that never leave your device.",
-  applicationName: "weirdvault",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  // The home page is the canonical entry. Pages override this with their own.
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — SSH in your browser`,
+    description: SITE_DESCRIPTION,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — SSH in your browser`,
+    description: SITE_DESCRIPTION,
+  },
+  // Said explicitly rather than left to a crawler's defaults, and paired with
+  // the per-route noindex on everything behind the sign-in page.
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+  },
 }
 
 export const viewport: Viewport = {

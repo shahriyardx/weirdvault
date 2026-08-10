@@ -32,19 +32,43 @@
  * where there is no proxy and the two agree.
  */
 export function publicOrigin(request: Request): string {
+  return configuredOrigin() ?? new URL(request.url).origin
+}
+
+/**
+ * The same answer, for callers that have no request to fall back to.
+ *
+ * `generateMetadata` and the robots and sitemap routes are the ones that need
+ * it: they run without a Request, and what they emit — canonical URLs, Open
+ * Graph URLs, sitemap entries — is not a link within a page but an absolute URL
+ * handed to a crawler and remembered.
+ *
+ * Getting it wrong here is expensive in a way the other callers are not. This
+ * app was, for a while, reachable on two hostnames: the bare company domain
+ * fell through to it because nothing else claimed that name on the origin. Two
+ * hostnames serving one site is duplicate content, and left to itself Google
+ * picks a canonical of its own — quite possibly the wrong one. A canonical tag
+ * naming the configured origin is what settles it, and it can only do that if
+ * every page emits the same origin regardless of which hostname the request
+ * arrived on. So this deliberately does NOT fall back to the request.
+ *
+ * Null when unset, so the caller decides. On a development machine there is no
+ * canonical origin to speak of and inventing localhost would be worse than
+ * emitting nothing.
+ */
+export function configuredOrigin(): string | null {
   const configured = process.env.BETTER_AUTH_URL
-  if (configured) {
-    try {
-      return new URL(configured).origin
-    } catch {
-      // A malformed BETTER_AUTH_URL is an operator error worth saying out loud:
-      // sign-in is already broken, and silently falling through would make this
-      // look like a different bug.
-      console.warn(
-        `BETTER_AUTH_URL is not a usable URL (${configured}); falling back to the request origin, ` +
-          "which is wrong behind a proxy",
-      )
-    }
+  if (!configured) return null
+  try {
+    return new URL(configured).origin
+  } catch {
+    // A malformed BETTER_AUTH_URL is an operator error worth saying out loud:
+    // sign-in is already broken, and silently falling through would make this
+    // look like a different bug.
+    console.warn(
+      `BETTER_AUTH_URL is not a usable URL (${configured}); falling back to the request origin, ` +
+        "which is wrong behind a proxy",
+    )
+    return null
   }
-  return new URL(request.url).origin
 }

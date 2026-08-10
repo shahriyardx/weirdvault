@@ -13,13 +13,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { pageMetadata } from "@/lib/seo"
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Security",
   description:
     "How weirdvault terminates SSH inside the browser tab, what the relay and control plane can and cannot see, " +
     "and the residual risks we have not solved.",
-}
+  path: "/security",
+})
 
 /**
  * The security page.

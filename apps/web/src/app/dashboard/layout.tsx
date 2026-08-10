@@ -8,7 +8,17 @@ import { VaultUnlock } from "@/components/vault-unlock"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { SessionProvider } from "@/lib/ssh/session-provider"
 import { VaultSync } from "@/lib/vault/auto-sync"
+import { NOINDEX } from "@/lib/seo"
 import { accountGate } from "@/lib/auth"
+
+/**
+ * Nothing under here is for a crawler. A signed-out visit redirects to
+ * /sign-in, so without this every dashboard URL would index as a copy of the
+ * sign-in page — a dozen duplicates standing in for pages the public cannot
+ * reach. robots.ts disallows the path as well; this is the half that still
+ * applies to a crawler that ignores robots.txt.
+ */
+export const metadata = NOINDEX
 
 /**
  * The dashboard is the application, not a section of the website.

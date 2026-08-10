@@ -40,6 +40,7 @@ import { MAX_ACCOUNT_RECORDING_BYTES, MAX_CAPTURE_BYTES } from "@/lib/recording/
 import { MAX_SHARE_TTL_MS } from "@/lib/recording/share"
 import { formatBytes } from "@/lib/usage"
 import { cn } from "@/lib/utils"
+import { pageMetadata } from "@/lib/seo"
 
 /**
  * Every enforced number here is imported, not retyped.
@@ -76,13 +77,14 @@ const SHARE_TTL = `${Math.round(MAX_SHARE_TTL_MS / 86_400_000)} days`
 const FREE_RECORDING = SESSION_RECORDING.free
 const PRO_RECORDING = SESSION_RECORDING.pro
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Pricing",
   description:
     `Free is the whole client, with encrypted sync, unlimited hosts and unlimited devices. ` +
     `Pro is ${PRO_PRICE_LABEL} ${PRO_PRICE_UNIT}, flat, one subscription per account: session ` +
     `recording, ${PRO_TRANSFER} of relay transfer and ${PRO_HISTORY} of activity history.`,
-}
+  path: "/pricing",
+})
 
 /* ------------------------------------------------------------------ tiers */
 

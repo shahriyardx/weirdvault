@@ -24,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers"
 import { formatBytes } from "@/lib/usage"
 import { cn } from "@/lib/utils"
+import { pageMetadata } from "@/lib/seo"
 
 /**
  * Imported so the troubleshooting entry cannot name a cap the code does not use.
@@ -36,12 +37,13 @@ import { cn } from "@/lib/utils"
 const FREE_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.free)
 const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro)
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Docs",
   description:
     "Getting started with weirdvault: authorise a key on stock sshd, understand portable and " +
     "device-bound keys, move files over SFTP, and read the errors when a connection fails.",
-}
+  path: "/docs",
+})
 
 const SECTIONS = [
   { id: "quickstart", label: "Quickstart" },
