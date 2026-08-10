@@ -9,7 +9,8 @@ import { connectAndInstallKey, openSession } from "./connect"
 import type { HostKeyInfo, SftpHandle, SshSession } from "./types"
 import { loadSSH } from "./wasm"
 import { getVaultKey } from "@/lib/vault/session"
-import { syncVault } from "@/lib/vault/sync"
+import { pushLocalChange } from "@/lib/vault/auto-sync"
+import type { syncVault } from "@/lib/vault/sync"
 
 /**
  * Many concurrent SSH sessions, held above the router.
@@ -363,14 +364,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
         await refreshHosts()
 
-        const vaultKey = getVaultKey()
-        if (vaultKey) {
-          void syncVault(vaultKey)
-            .then((r) =>
+        // Connecting records the host, so it is a local write like any other.
+        // Through the driver so it joins whatever the background schedule is
+        // doing rather than racing it; a null result means the vault is locked,
+        // which is not worth a note.
+        if (getVaultKey()) {
+          void pushLocalChange()
+            .then((r) => {
+              if (!r) return
               setNote(
                 `Vault ${SYNC_WORDING[r.status]} — ${plural(r.hosts, "host")}, ${plural(r.keys, "key")}`,
-              ),
-            )
+              )
+            })
             .catch((e) => setNote(`Sync failed: ${e.message}`))
         }
         return id

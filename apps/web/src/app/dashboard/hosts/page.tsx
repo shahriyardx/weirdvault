@@ -83,6 +83,7 @@ import { useConnectHost } from "@/lib/ssh/use-connect-host"
 import type { ParsedConfigHost } from "@/lib/ssh/types"
 import { loadSSH, parseSSHConfig, type SshLoadProgress } from "@/lib/ssh/wasm"
 import { getVaultKey } from "@/lib/vault/session"
+import { pushLocalChange, useVaultRevision } from "@/lib/vault/auto-sync"
 import { syncVault } from "@/lib/vault/sync"
 import { noAutofillText } from "@/lib/no-autofill"
 
@@ -171,6 +172,12 @@ export default function HostsPage() {
     setKeys(k)
   }, [])
 
+  // Re-read whenever a sync has landed something. Without this, unlocking the
+  // vault pulls another device's hosts into IndexedDB and leaves this list
+  // showing what it read a moment earlier — the data present and the screen
+  // wrong, which is harder to diagnose than nothing having arrived at all.
+  const revision = useVaultRevision()
+
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -189,7 +196,7 @@ export default function HostsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [revision])
 
   const pinFor = React.useCallback(
     (host: Host) => pins.find((p) => p.id === `${host.hostname}:${host.port}`),
@@ -265,6 +272,12 @@ export default function HostsPage() {
       await refresh()
       setForm(null)
       toast.success(form.id ? "Host updated." : "Host added.")
+      // Straight out to the other devices. A host saved here and not pushed is
+      // one that exists on this machine only until something else happens to
+      // sync, which is how "I added it on my desktop" became "it is not on my
+      // laptop". Not awaited: the write already landed locally and the toast
+      // above is about that.
+      void pushLocalChange()
     } catch {
       toast.error("Could not write to the local host store.")
     } finally {
@@ -315,6 +328,10 @@ export default function HostsPage() {
       await deleteHost(id)
       await refresh()
       toast.success(`Removed ${label}.`)
+      // The tombstone is the delete. Until it is pushed the host is still on
+      // every other device, and the next sync from one of them would put it
+      // back here.
+      void pushLocalChange()
     } catch {
       toast.error("Could not remove the host.")
     }

@@ -66,7 +66,7 @@ import {
 import { loadSSH, type SshLoadProgress } from "@/lib/ssh/wasm"
 import type { SshKeyType } from "@/lib/ssh/types"
 import { getVaultKey, useVaultUnlocked } from "@/lib/vault/session"
-import { syncVault } from "@/lib/vault/sync"
+import { pushLocalChange, useVaultRevision } from "@/lib/vault/auto-sync"
 import { cn } from "@/lib/utils"
 import { noAutofillSecret } from "@/lib/no-autofill"
 
@@ -112,6 +112,10 @@ export default function KeysPage() {
 
   const [pendingDelete, setPendingDelete] = React.useState<StoredKey | null>(null)
 
+  // Re-read whenever a sync has landed something, so a portable key generated on
+  // another device appears here rather than after a reload.
+  const revision = useVaultRevision()
+
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -132,7 +136,7 @@ export default function KeysPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [revision])
 
   // Re-run whenever the list or the unlock state changes: unwrapping is the only
   // way to answer the question, and it needs both.
@@ -159,7 +163,17 @@ export default function KeysPage() {
     const vaultKey = getVaultKey()
     if (!vaultKey) return
     try {
-      const result = await syncVault(vaultKey)
+      // Through the driver rather than syncVault directly, so this cannot run
+      // alongside the sync the focus or the timer just started — two in flight
+      // means one gets a 409 and spends extra round trips converging.
+      const result = await pushLocalChange()
+      // Null means the vault locked between the check above and here. The local
+      // write already succeeded, so this is a note about reach rather than a
+      // failure.
+      if (!result) {
+        toast.message("Saved on this device. The vault locked before it could sync.")
+        return
+      }
       if (result.status === "offline") {
         toast.message("Saved on this device. The server could not be reached.")
       } else if (result.keysWithheld > 0) {

@@ -67,7 +67,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { deleteSnippet, listSnippets, saveSnippet, type Snippet } from "@/lib/snippets"
 import { useSshSession, type SessionEntry } from "@/lib/ssh/session-provider"
 import { getVaultKey } from "@/lib/vault/session"
-import { syncVault } from "@/lib/vault/sync"
+import { pushLocalChange, useVaultRevision } from "@/lib/vault/auto-sync"
 
 /* -------------------------------------------------------------------- form */
 
@@ -152,6 +152,10 @@ export default function SnippetsPage() {
   const [pendingDelete, setPendingDelete] = React.useState<Snippet | null>(null)
   const [sendTarget, setSendTarget] = React.useState<Snippet | null>(null)
 
+  // Re-read whenever a sync has landed something, so a snippet written on
+  // another device shows up here rather than after a reload.
+  const revision = useVaultRevision()
+
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -167,7 +171,7 @@ export default function SnippetsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [revision])
 
   /**
    * Pushes the encrypted vault and reports what actually happened.
@@ -188,11 +192,18 @@ export default function SnippetsPage() {
       return
     }
     try {
-      // syncVault reports being offline by returning, not by throwing — the
-      // catch below never sees it — so the result has to be read. Saying
-      // "Synced" after a failed pull would be the cheerful lie this comment
-      // block promises not to tell.
-      const result = await syncVault(vaultKey)
+      // Reports being offline by returning, not by throwing — the catch below
+      // never sees it — so the result has to be read. Saying "Synced" after a
+      // failed pull would be the cheerful lie this comment block promises not
+      // to tell. Through the driver so it cannot race the background sync.
+      const result = await pushLocalChange()
+      // Null means the vault locked between the check above and here, which is
+      // a real outcome and not a silent one: the write landed locally and the
+      // other devices have not got it.
+      if (!result) {
+        toast.success(`${done} The vault locked before it could sync, so it stays on this device.`)
+        return
+      }
       if (result.status === "offline") {
         toast.message(
           `${done} The server could not be reached, so it is on this device only for now.`,

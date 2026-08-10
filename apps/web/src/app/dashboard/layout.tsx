@@ -7,6 +7,7 @@ import { DashboardTopBar } from "@/components/shell/dashboard-top-bar"
 import { VaultUnlock } from "@/components/vault-unlock"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { SessionProvider } from "@/lib/ssh/session-provider"
+import { VaultSync } from "@/lib/vault/auto-sync"
 import { accountGate } from "@/lib/auth"
 
 /**
@@ -64,6 +65,11 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
           <DashboardTopBar />
           <DashboardContent>{children}</DashboardContent>
           <VaultUnlock />
+          {/* Renders nothing. It is what makes the vault pull as well as push:
+              on unlock, on focus, and on a slow timer. Here rather than in each
+              page so a page added later inherits it, and so navigating between
+              Hosts and Keys does not restart the timer. */}
+          <VaultSync />
         </SidebarInset>
       </SidebarProvider>
     </SessionProvider>
