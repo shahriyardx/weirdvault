@@ -10,7 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { AUDIT_RETENTION_LABEL } from "@/lib/audit/retention"
-import { RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers"
+import { PRO_PRICE_USD, RELAY_ALLOWANCE_BYTES } from "@/lib/billing/tiers"
+import { configuredOrigin } from "@/lib/origin"
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo"
 import { formatBytes } from "@/lib/usage"
 
 /**
@@ -41,9 +43,75 @@ const FREE_HISTORY = AUDIT_RETENTION_LABEL.free
  * rather than discovered later, and every number is imported from the module
  * that enforces it.
  */
+/**
+ * Structured data, so a search result can be more than a blue link.
+ *
+ * `SoftwareApplication` is what this is — a web application with a free tier
+ * and a paid one — and stating the offers here is what lets a result carry a
+ * price rather than making somebody click to find one.
+ *
+ * Every value is read from the module that enforces it, on the same rule the
+ * visible copy follows. Structured data that disagrees with the page is worse
+ * than none: Google checks, and a mismatch between the markup and the rendered
+ * price is a manual action rather than a rich result.
+ *
+ * Emitted only when an origin is configured. The identifiers are absolute URLs
+ * and a relative one is invalid.
+ */
+function StructuredData() {
+  const origin = configuredOrigin()
+  if (!origin) return null
+
+  const data = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": `${origin}/#app`,
+        name: SITE_NAME,
+        url: origin,
+        description: SITE_DESCRIPTION,
+        applicationCategory: "DeveloperApplication",
+        operatingSystem: "Any, in a web browser",
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Free",
+            price: "0",
+            priceCurrency: "USD",
+            description: `The whole client, with encrypted sync, unlimited hosts and unlimited devices. ${FREE_TRANSFER} of relay transfer a month.`,
+          },
+          {
+            "@type": "Offer",
+            name: "Pro",
+            price: String(PRO_PRICE_USD),
+            priceCurrency: "USD",
+            description:
+              "Session recording, a larger transfer allowance and a year of activity history.",
+          },
+        ],
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${origin}/#website`,
+        name: SITE_NAME,
+        url: origin,
+        description: SITE_DESCRIPTION,
+      },
+    ],
+  }
+
+  return (
+    // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD has to be a script body, and this one is built from constants in this repo rather than from anything a user supplies
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+  )
+}
+
 export default function Home() {
   return (
     <PageShell bleed>
+      <StructuredData />
+
       {/* ------------------------------------------------------------ hero */}
       <section className="relative overflow-hidden border-b border-border">
         <HeroBackdrop />
@@ -54,7 +122,7 @@ export default function Home() {
             <div className="animate-fade">
               <Badge variant="outline" className="mb-6 gap-1.5 font-normal">
                 <ShieldCheckIcon weight="fill" className="text-primary" />
-                Keys never leave your browser
+                Keys encrypted in your browser
               </Badge>
 
               <h1 className="font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-6xl">

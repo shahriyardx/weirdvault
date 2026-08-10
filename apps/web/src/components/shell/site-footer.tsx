@@ -36,8 +36,9 @@ export function SiteFooter() {
         <div>
           <Brand />
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
-            SSH from any browser. Keys are generated non-extractable and never leave your device —
-            our relay forwards ciphertext it cannot read.
+            SSH from any browser. Your keys are wrapped in your own tab, under a key derived from
+            your password, so we hold ciphertext we cannot open — and the relay forwards traffic it
+            cannot read.
           </p>
         </div>
 

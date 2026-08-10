@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr"
 
 import { Brand } from "@/components/shell/brand"
+import { NOINDEX } from "@/lib/seo"
 
 /**
  * Auth runs outside the site shell.
@@ -11,6 +12,23 @@ import { Brand } from "@/components/shell/brand"
  * diagram and a walkthrough of the derivation, which is the wrong thing to
  * read while creating an account — /security carries all of that.
  */
+/**
+ * None of the four routes in this group belongs in a search index.
+ *
+ * /sign-in and /sign-up are thin duplicates of the landing page wrapped around
+ * a form, and an indexed one competes with the page that actually explains the
+ * product. /recover and /set-vault-password are worse than useless indexed: a
+ * password form reachable from a search result, with no context for how anyone
+ * arrived at it, is a phishing target wearing our own branding.
+ *
+ * Declared on the layout rather than per page because two of the four are
+ * Client Components, which cannot export metadata at all. The two that do
+ * export their own — for a title and a description — restate noindex there, and
+ * page metadata wins over a layout's, so it has to be said in both places or
+ * not at all.
+ */
+export const metadata = NOINDEX
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh w-full lg:grid-cols-2">
@@ -32,7 +50,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
           <ul className="mt-8 space-y-3 border-t border-border pt-6 text-sm text-muted-foreground">
             <li>Full terminal, SFTP and remote editing on one connection.</li>
-            <li>Keys are generated in your browser and never leave it.</li>
+            <li>Keys are generated in your browser and encrypted before they sync.</li>
             <li>Your laptop, a borrowed machine, or a phone — same account.</li>
           </ul>
 

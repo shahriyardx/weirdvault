@@ -7,14 +7,19 @@ Open a page. Make a key. You're in.
 
 ---
 
-## Your keys never leave your browser
+## Your keys are encrypted before they reach us
 
 Every other web SSH tool connects to your server *for* you. Their gateway holds
 your private key and can read everything you type.
 
 weirdvault doesn't work that way. The connection is built inside your own
-browser tab, and your key is created in a form the page itself cannot read. What
-passes through our servers is sealed traffic we have no way to open.
+browser tab, and your key is created in a form the page itself cannot read. It
+is sealed with your password before any copy of it syncs, so what we store is
+ciphertext we have no way to open — and what passes through our servers is
+traffic we cannot read either.
+
+Prefer a key that never leaves at all? Choose device-bound, and it stays on the
+machine that made it.
 
 Your servers, keys and saved commands are locked the same way, with your
 password. We keep the result and cannot read it — which is also the deal: forget
