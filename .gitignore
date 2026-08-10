@@ -18,6 +18,13 @@ out/
 # env
 .env*.local
 
+# A copy of .env taken before editing it, which is the first thing anybody does
+# on a server before changing a secret. Ignored so that having one does not stop
+# scripts/deploy.sh, whose refusal to pull over a dirty tree would otherwise fire
+# on the most careful thing an operator can do.
+.env.bak*
+.env.*.bak
+
 # bun
 .bun/
 
