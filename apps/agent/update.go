@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -135,21 +136,17 @@ behind most of the times somebody would have run the upgrade.
 */
 func runUpgrade(args []string) error {
 	fs := flag.NewFlagSet("upgrade", flag.ExitOnError)
-	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	configPath := fs.String("config", "", "read the release URL from exactly this identity")
+	dir := fs.String("config-dir", DefaultConfigDir, "where identities live")
 	check := fs.Bool("check", false, "say what is published, and install nothing")
 	force := fs.Bool("force", false, "reinstall even when the published build reports the same version")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := releaseSource(*configPath, *dir)
 	if err != nil {
 		return err
-	}
-	if cfg.ReleaseURL == "" {
-		return fmt.Errorf("this agent has no release URL, so there is nowhere to upgrade from.\n\n" +
-			"It was enrolled before self-update existed. Re-enrolling from the dashboard fixes\n" +
-			"that permanently — and until then, replacing the binary by hand is the only route")
 	}
 
 	base, err := releaseBase(cfg.ReleaseURL)
@@ -213,6 +210,71 @@ func runUpgrade(args []string) error {
 	}
 	return nil
 }
+
+/*
+releaseSource finds an identity that says where updates come from.
+
+Any of them will do, and that is not laziness: the release URL describes the
+deployment that enrolled the machine, and every identity on one machine is
+enrolled against the same deployment — they share a binary, so two deployments
+publishing different builds to one machine is not a thing this supports.
+
+It used to read /etc/weirdvault/agent.json and nothing else, which was correct
+while a machine had exactly one identity and became "does not exist — run enroll
+first" the moment it had two. That message is worse than an error: it tells
+somebody standing on an enrolled machine that it is not enrolled.
+*/
+func releaseSource(configPath, dir string) (*Config, error) {
+	if configPath != "" {
+		cfg, err := loadConfig(configPath)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.ReleaseURL == "" {
+			return nil, errNoReleaseURL
+		}
+		return cfg, nil
+	}
+
+	rows, denied := gatherIdentities(dir, "")
+	if len(rows) == 0 {
+		if denied {
+			return nil, fmt.Errorf("cannot read %s. That directory is readable only by the\n"+
+				"service, so this needs root:\n  sudo weirdvault upgrade", dir)
+		}
+		return nil, fmt.Errorf("no identity in %s — run `weirdvault enroll` first", dir)
+	}
+
+	unreadable := 0
+	for _, row := range rows {
+		cfg, err := loadConfig(row.path)
+		if err != nil {
+			// Almost always 0600 and owned by the service account. Counted so
+			// the failure below can say "run this with sudo" rather than
+			// "nothing here can update", which sends somebody to re-enrol a
+			// machine that was fine.
+			if os.IsPermission(err) {
+				unreadable++
+			}
+			continue
+		}
+		if cfg.ReleaseURL != "" {
+			return cfg, nil
+		}
+	}
+
+	if unreadable > 0 || denied {
+		return nil, fmt.Errorf("cannot read the identities in %s. They are readable only by\n"+
+			"the service, so this needs root:\n  sudo weirdvault upgrade", dir)
+	}
+	return nil, errNoReleaseURL
+}
+
+var errNoReleaseURL = errors.New(
+	"no identity on this machine has a release URL, so there is nowhere to upgrade from.\n\n" +
+		"That is what an enrolment from before self-update existed looks like. Re-enrolling\n" +
+		"from the dashboard fixes it permanently — until then, replacing the binary by hand\n" +
+		"is the only route")
 
 // releaseBase validates where updates may come from.
 func releaseBase(raw string) (string, error) {
