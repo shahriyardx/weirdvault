@@ -98,6 +98,25 @@ depend on how it was set up. Different version means update; the versions are
 `git describe` strings and inventing an ordering for them would be inventing a
 wrong one.
 
+**Where the binary lives, and why it is not `/usr/local/bin`.** Replacing itself
+means writing a temp file beside the binary and renaming it, so the *directory*
+has to be writable by the account the service runs as — an unprivileged one. On
+Linux the binary therefore lives in `/var/lib/weirdvault-agent/bin`, owned by
+that account, with `/usr/local/bin/weirdvault-agent` a symlink so the command
+people type is unchanged; `replaceSelf` resolves the link before replacing the
+target. `StateDirectory=weirdvault-agent` in the unit is what exempts that
+directory from the read-only remount `ProtectSystem=strict` imposes.
+
+Both halves are load-bearing, and an earlier version of this had only one. The
+unit pointed `ReadWritePaths` at `/usr/local/bin` and read as correct — but that
+directive lifts the sandbox, not the file permissions, and `/usr/local/bin` is
+`root:root 0755`. Every update on every install with a service user downloaded
+its binary, verified the checksum, and failed on the write. The failure is a log
+line rather than a crash, so the machines stayed up, stayed working, and stayed
+on the version they were installed with. Fix an install from before this with
+`install.sh --repair`, which keeps the machine's identity and replaces only the
+binary and the unit.
+
 **What this trusts.** It downloads a binary and runs it as root. The manifest
 and the binary come from the same origin, so the SHA-256 proves the download was
 not corrupted — it does not prove the origin is honest. TLS to the deployment's
@@ -110,9 +129,7 @@ Bounded to one attempt per start: the re-exec'd process finds an environment
 marker and skips the check, so a manifest whose version never matches cannot
 produce a restart loop.
 
-`--no-update` disables it. Under systemd it also needs `ReadWritePaths` on the
-install directory, since `ProtectSystem=strict` makes `/usr` read-only — the
-unit written by `install.sh` includes it, and says how to drop it.
+`--no-update` disables it, and the agent then never touches its own binary.
 
 Agents enrolled before this existed have no release URL and never check;
 `weirdvault-agent status` says so rather than implying they are up to date.

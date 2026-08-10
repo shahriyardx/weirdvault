@@ -692,6 +692,7 @@ function UpgradeDialog({
   // Self-reported at enrolment. Nothing trusts it for anything that matters;
   // here it only picks which command is the right one to print.
   const mac = agent.os === "darwin"
+  const origin = typeof window === "undefined" ? "" : window.location.origin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -747,13 +748,20 @@ function UpgradeDialog({
               Nothing changed after a restart?
             </summary>
             <p className="mt-2">
-              Run <span className="font-mono">weirdvault-agent status</span> on the machine. If it
-              says <span className="font-mono">Updates: off</span>, that agent was enrolled before
-              self-update existed and has no release URL to check — revoke it here and install it
-              again, and it will keep itself current from then on. If it reports a write error
-              instead, the systemd unit needs{" "}
-              <span className="font-mono">ReadWritePaths=/usr/local/bin</span>, which{" "}
-              <span className="font-mono">ProtectSystem=strict</span> otherwise forbids.
+              Look at the log — <span className="font-mono">weirdvault-agent logs</span>, or{" "}
+              <span className="font-mono">journalctl -u weirdvault-agent</span>. A line saying{" "}
+              <span className="font-mono">permission denied</span> means the machine was installed
+              before the agent&rsquo;s binary was moved somewhere it can replace itself. One command
+              fixes it, and it keeps this machine&rsquo;s identity — no new token, no re-enrolling:
+            </p>
+            <div className="mt-2">
+              <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --repair`} />
+            </div>
+            <p className="mt-2">
+              If instead <span className="font-mono">weirdvault-agent status</span> says{" "}
+              <span className="font-mono">Updates: off</span>, that agent was enrolled before
+              self-update existed and has no release URL to check. That one does need revoking and
+              installing again, and it keeps itself current from then on.
             </p>
           </details>
         </div>

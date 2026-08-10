@@ -44,6 +44,11 @@ export async function GET(request: Request) {
 # To remove all of that again:
 #
 #   curl -fsSL ${origin}/install.sh | sh -s -- --uninstall
+#
+# To reinstall the binary and the service for a machine that is already enrolled,
+# without touching its identity or minting a new token:
+#
+#   curl -fsSL ${origin}/install.sh | sh -s -- --repair
 
 set -eu
 
@@ -54,6 +59,24 @@ CONFIG_DIR="/etc/weirdvault-agent"
 SERVICE_USER="weirdvault-agent"
 LAUNCHD_LABEL="com.weirdvault.agent"
 LAUNCHD_PLIST="/Library/LaunchDaemons/com.weirdvault.agent.plist"
+
+# Where the binary the service runs actually lives, on Linux.
+#
+# Not /usr/local/bin, and this is the fix for a bug that made self-update
+# impossible on every install that got a dedicated service user. The agent
+# replaces its own binary — that is the whole update mechanism — and it runs as
+# an unprivileged account, so the file has to sit in a directory that account
+# owns. /usr/local/bin is root:root 0755, and no systemd directive changes that:
+# ReadWritePaths lifts the sandbox's read-only remount, not the ownership, so
+# the write failed with "permission denied" while every unit directive looked
+# correct.
+#
+# /usr/local/bin/weirdvault-agent becomes a symlink to here, so the command
+# people type is unchanged, and \`upgrade\` resolves the link before replacing
+# the target.
+STATE_DIR="/var/lib/weirdvault-agent"
+BIN_DIR="\${STATE_DIR}/bin"
+
 SSH_PORT="22"
 TOKEN=""
 MODE="install"
@@ -63,6 +86,11 @@ for arg in "$@"; do
     --token=*) TOKEN="\${arg#*=}" ;;
     --ssh-port=*) SSH_PORT="\${arg#*=}" ;;
     --uninstall) MODE="uninstall" ;;
+    # Reinstall the binary and the service for the enrolment already on this
+    # machine. No token, because the machine is already enrolled and minting one
+    # would replace an identity that is working — which is what somebody
+    # migrating an install broken by the bug above would otherwise have to do.
+    --repair) MODE="repair" ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -112,9 +140,17 @@ if [ "$MODE" = "uninstall" ]; then
     fi
   fi
 
-  if [ -f "\${INSTALL_DIR}/weirdvault-agent" ]; then
+  # -e is false for a dangling symlink, so both tests: the link is what is left
+  # behind when the state directory was removed by hand first.
+  if [ -e "\${INSTALL_DIR}/weirdvault-agent" ] || [ -L "\${INSTALL_DIR}/weirdvault-agent" ]; then
     rm -f "\${INSTALL_DIR}/weirdvault-agent"
     removed="\${removed}  \${INSTALL_DIR}/weirdvault-agent\\n"
+  fi
+
+  # Where the binary the service runs lives, and the only thing in it.
+  if [ -d "$STATE_DIR" ]; then
+    rm -rf "$STATE_DIR"
+    removed="\${removed}  \${STATE_DIR}/\\n"
   fi
 
   # The config holds this machine's Ed25519 private key. It is the one thing
@@ -151,7 +187,13 @@ if [ "$MODE" = "uninstall" ]; then
   exit 0
 fi
 
-if [ -z "$TOKEN" ]; then
+if [ "$MODE" = "repair" ]; then
+  if [ ! -f "\${CONFIG_DIR}/agent.json" ]; then
+    echo "error: nothing to repair — \${CONFIG_DIR}/agent.json does not exist." >&2
+    echo "       This machine is not enrolled. Add it from $APP_URL/dashboard/machines" >&2
+    exit 1
+  fi
+elif [ -z "$TOKEN" ]; then
   echo "error: --token is required. Get one from $APP_URL/dashboard/machines" >&2
   exit 2
 fi
@@ -231,9 +273,27 @@ if [ "$actual" != "$expected" ]; then
 fi
 
 # ---------------------------------------------------------------- install
+#
+# On Linux the binary goes in a directory the service account owns, because the
+# agent replaces its own binary to update and cannot write to a root-owned one.
+# /usr/local/bin/weirdvault-agent is then a symlink, so the command people type
+# is unchanged and "weirdvault-agent upgrade" resolves it before replacing the
+# target. On macOS the daemon runs as root, so the binary stays where it was.
 
-mkdir -p "$INSTALL_DIR"
-install -m 0755 "$tmp/agent" "\${INSTALL_DIR}/weirdvault-agent"
+if [ "$os" = "darwin" ]; then
+  BIN_TARGET="\${INSTALL_DIR}/weirdvault-agent"
+  mkdir -p "$INSTALL_DIR"
+  install -m 0755 "$tmp/agent" "$BIN_TARGET"
+else
+  BIN_TARGET="\${BIN_DIR}/weirdvault-agent"
+  mkdir -p "$BIN_DIR" "$INSTALL_DIR"
+  install -m 0755 "$tmp/agent" "$BIN_TARGET"
+  # -f because an install from before this layout left a real file here, and a
+  # symlink that cannot be created would leave the old binary shadowing the new
+  # one on PATH — the confusing half-state where "weirdvault-agent version"
+  # disagrees with what the service is running.
+  ln -sf "$BIN_TARGET" "\${INSTALL_DIR}/weirdvault-agent"
+fi
 
 # A dedicated account with no shell and no home. The agent needs no privileges
 # beyond reading its own config and opening outbound sockets, and running it as
@@ -260,16 +320,28 @@ fi
 
 # ---------------------------------------------------------------- enroll
 
-echo
-"\${INSTALL_DIR}/weirdvault-agent" enroll \\
-  --token="$TOKEN" \\
-  --url="$APP_URL" \\
-  --config="\${CONFIG_DIR}/agent.json" \\
-  --ssh-port="$SSH_PORT"
+if [ "$MODE" = "repair" ]; then
+  echo "Repairing the install for the enrolment already on this machine."
+  echo "Its identity and key in \${CONFIG_DIR} are untouched."
+else
+  echo
+  "$BIN_TARGET" enroll \\
+    --token="$TOKEN" \\
+    --url="$APP_URL" \\
+    --config="\${CONFIG_DIR}/agent.json" \\
+    --ssh-port="$SSH_PORT"
+fi
 
 chown -R "$SERVICE_USER" "$CONFIG_DIR"
 chmod 0700 "$CONFIG_DIR"
 chmod 0600 "\${CONFIG_DIR}/agent.json"
+
+# The service account has to own the binary it replaces, which is the entire
+# point of putting it here. Without this the update downloads, verifies its
+# checksum, and fails on the write — reported in a log nobody is reading.
+if [ "$os" != "darwin" ]; then
+  chown -R "$SERVICE_USER" "$STATE_DIR"
+fi
 
 # ---------------------------------------------------------------- service
 
@@ -278,7 +350,7 @@ chmod 0600 "\${CONFIG_DIR}/agent.json"
 # here would be a second copy to keep in step. It starts it too.
 if [ "$os" = "darwin" ]; then
   echo
-  "\${INSTALL_DIR}/weirdvault-agent" install-service --config="\${CONFIG_DIR}/agent.json"
+  "$BIN_TARGET" install-service --config="\${CONFIG_DIR}/agent.json"
   echo
   echo "  weirdvault-agent status              is it running, and will it start at boot"
   echo "  weirdvault-agent stop                stop it, and keep it stopped"
@@ -307,7 +379,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=\${SERVICE_USER}
-ExecStart=\${INSTALL_DIR}/weirdvault-agent run --config=\${CONFIG_DIR}/agent.json
+ExecStart=\${BIN_TARGET} run --config=\${CONFIG_DIR}/agent.json
 Restart=always
 RestartSec=5
 
@@ -331,16 +403,28 @@ RestrictNamespaces=yes
 LockPersonality=yes
 ReadOnlyPaths=\${CONFIG_DIR}
 
-# Self-update needs to replace the binary in place, and ProtectSystem=strict
-# makes /usr read-only. This is the narrowest hole that allows it: the
-# directory the agent already lives in, and nothing else. Writing the whole
-# directory rather than the one file is not laziness — the replacement is a
-# temp file plus a rename, which is what makes a half-downloaded binary
-# impossible, and rename needs somewhere in the same filesystem to write.
+# Self-update replaces this binary, so the directory holding it has to be
+# writable by the account below — which is why the binary is here and not in
+# /usr/local/bin. Two separate things are needed and only one of them is a
+# systemd directive:
 #
-# If you would rather patch agents yourself, add --no-update to ExecStart above
-# and drop this line; the agent then never touches its own binary.
-ReadWritePaths=\${INSTALL_DIR}
+#   StateDirectory   creates /var/lib/weirdvault-agent owned by User=, and
+#                    exempts it from the read-only remount ProtectSystem=strict
+#                    applies to everything else.
+#   ownership        is what actually permits the write. An earlier version of
+#                    this unit pointed ReadWritePaths at /usr/local/bin and
+#                    looked correct, but that directory is root:root 0755 and
+#                    the service user cannot create a file in it — so every
+#                    update downloaded, verified its checksum, and failed on
+#                    the rename.
+#
+# The replacement is a temp file plus a rename, which is what makes a
+# half-downloaded binary impossible, and rename needs the same filesystem — so
+# it is the directory that must be writable, not the file.
+#
+# If you would rather patch agents yourself, add --no-update to ExecStart above;
+# the agent then never touches its own binary.
+StateDirectory=weirdvault-agent
 
 # MemoryDenyWriteExecute is deliberately absent. The Go runtime does not need
 # W+X pages, but re-exec after an update trips it on some kernels, and a
@@ -356,7 +440,11 @@ systemctl daemon-reload
 systemctl enable --now weirdvault-agent
 
 echo
-echo "Done. The agent is running and should appear at \${APP_URL} within a few seconds."
+if [ "$MODE" = "repair" ]; then
+  echo "Repaired. Same machine, same identity — only the binary and the unit changed."
+else
+  echo "Done. The agent is running and should appear at \${APP_URL} within a few seconds."
+fi
 echo
 echo "  weirdvault-agent status              is it running, and its fingerprint"
 echo "  weirdvault-agent stop                stop it, and keep it stopped at boot"

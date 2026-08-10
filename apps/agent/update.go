@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -296,7 +297,54 @@ func replaceSelf(ctx context.Context, base, file, wantSHA string) error {
 		return err
 	}
 
+	// The replacement inherits the ownership of what it replaces.
+	//
+	// Both accounts write this file. The service runs unprivileged and updates
+	// itself at startup; a person runs `weirdvault-agent upgrade` with sudo. Left
+	// alone, the second leaves a root-owned binary in a directory the service
+	// account owns — and the next automatic update fails on a file it can no
+	// longer replace, one release later, with nobody connecting the two events.
+	if err := preserveOwner(self, tmpName); err != nil {
+		return err
+	}
+
 	return os.Rename(tmpName, self)
+}
+
+// preserveOwner gives the replacement the same owner as the file it replaces.
+//
+// A no-op when they already match, which is the common case — the service
+// updating itself — because chown to the identity it already has is a syscall
+// that can only fail. Failures are otherwise ignored for the same reason
+// `upgrade` works at all when run by the owner: a non-root process cannot chown
+// and does not need to.
+func preserveOwner(existing, replacement string) error {
+	info, err := os.Stat(existing)
+	if err != nil {
+		return nil // being replaced for the first time; nothing to inherit
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil
+	}
+
+	current, err := os.Stat(replacement)
+	if err != nil {
+		return err
+	}
+	if now, ok := current.Sys().(*syscall.Stat_t); ok && now.Uid == stat.Uid && now.Gid == stat.Gid {
+		return nil
+	}
+
+	if err := os.Chown(replacement, int(stat.Uid), int(stat.Gid)); err != nil {
+		// Only fatal for root, which is the case that would otherwise produce the
+		// silently-broken install described above. An unprivileged process that
+		// cannot chown is one whose write already landed as the right user.
+		if os.Geteuid() == 0 {
+			return fmt.Errorf("could not keep %s owned by uid %d: %w", existing, stat.Uid, err)
+		}
+	}
+	return nil
 }
 
 func get(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
