@@ -435,6 +435,55 @@ route called by an external scheduler; see `docs/TODO.md`.
 The choice is deliberately left open — a scheduler is a property of the host, and
 picking one here would only mean two of them fighting on somebody's machine.
 
+## Rate limits
+
+`src/lib/rate-limit.ts` is the only limiter, and Better Auth is driven through
+it via `customStorage` so `/api/auth/*` and this app's own routes cannot drift
+into two algorithms. Counters are rows in `rate_limit`, keyed
+`<bucket>:<subject>`.
+
+In Postgres rather than in a `Map`, which is what `/api/recovery` used to have.
+A process-local limiter has two failures that never show up in testing: a second
+container gets a second budget, so scaling out multiplies every limit by the
+replica count, and a restart forgets everything, so the limiter is a redeploy
+away from being off.
+
+The window is fixed, anchored at the first request in it. Better Auth's own
+database backend slides that timestamp forward on every *allowed* request, which
+means a caller drip-feeding below the limit still accumulates count until they
+are blocked — defensible, and not what a reader of the config would predict, so
+it is replaced rather than configured.
+
+The subject, in descending order of trust: a user id when there is a session; a
+truncated network when `TRUSTED_PROXY_HOPS` says which `X-Forwarded-For` entry
+your own proxy wrote; otherwise **one bucket shared by everybody**. That last
+case is trippable by a stranger and is still the right way round — keying on a
+header the caller writes hands every caller a private budget, which is the bug
+that made the old recovery limiter decorative. Better Auth needs the same fact
+as a list of proxy addresses (`TRUSTED_PROXY_IPS`) rather than a hop count, and
+neither form derives from the other, so both variables exist.
+
+Everything **fails open**. If the table is unreachable the request proceeds and
+the failure is logged: none of these limits are what makes anything secure — a
+share token is 256 bits and a recovery code 120 — so trading a bounded abuse
+problem for a total outage would be the wrong way round.
+
+```bash
+node scripts/check-rate-limit.mjs      # needs the app running and DATABASE_URL
+```
+
+`src/lib/rate-limit.test.ts` covers which subject gets counted and what a
+refusal looks like. It cannot cover `consume`, whose entire correctness is one
+SQL statement — the window arithmetic and its atomicity — and a mock would only
+assert that a string matches itself. The script above is the check for that: it
+drives the real statement against real Postgres, including ten concurrent
+requests against a limit of three, which is exactly the burst a read-then-write
+limiter lets through. It then drives the running app to confirm sign-in turns
+from `401` into `429` and share fetches turn from `404` into `429`.
+
+Stale counters are swept by `scripts/prune-audit.mjs`, which already runs on the
+right cadence — a second cron line is a second thing to forget.
+
 ## Sweeping orphaned recording objects
 
 Only relevant when `R2_*` is configured and recordings live in a bucket rather

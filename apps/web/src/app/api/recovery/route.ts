@@ -3,9 +3,10 @@ import { eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
-import { clientAddress, proxyConfigured } from "@/lib/audit/address";
+import { clientAddress } from "@/lib/audit/address";
 import { ipPrefix } from "@/lib/audit/events";
 import { db, schema } from "@/lib/db";
+import { enforce } from "@/lib/rate-limit";
 
 /**
  * Recovery envelopes.
@@ -44,13 +45,13 @@ import { db, schema } from "@/lib/db";
  * can time that already holds a working code, so the leak is not one worth
  * closing at the cost of writing a fake row.
  *
- * Rate limiting is per process and in memory (see `tooManyAttempts`). That is
- * enough to make brute force pointless against a 120-bit code and is honestly
- * not a substitute for a limiter at the edge, which is where a multi-instance
- * deployment has to put one. It is also only as good as the address it keys on:
- * without TRUSTED_PROXY_HOPS set there is no address this process can believe,
+ * Rate limiting is in Postgres now (lib/rate-limit.ts), which it did not used
+ * to be: it was a Map in this process, so a second container had a second budget
+ * and a redeploy emptied it. It is still only as good as the address it keys on
+ * — without TRUSTED_PROXY_HOPS set there is no address this process can believe
  * and every caller shares one bucket. Said plainly here so nobody reads this and
- * assumes the protection is stronger than it is.
+ * assumes the protection is stronger than it is. What makes brute force
+ * pointless is the 120-bit code; this bounds the noise around it.
  */
 
 /* -------------------------------------------------------------- envelope shape */
@@ -150,17 +151,10 @@ function decoyEnvelope(email: string, codeId: string): StoredEnvelope {
 
 /* ------------------------------------------------------------ rate limiting */
 
-const WINDOW_MS = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 20;
-const attempts = new Map<string, number[]>();
-
-/** The bucket everything shares when no address can be trusted. See redeem(). */
-const UNRESOLVED_BUCKET = "unresolved";
-
 /**
- * Keyed on the truncated network, so a single caller cannot spend the budget of
- * a whole /24 and a whole /24 cannot be used to multiply one caller's attempts
- * by 256.
+ * Twenty attempts per ten minutes, keyed on the truncated network — so a single
+ * caller cannot spend the budget of a whole /24, and a whole /24 cannot be used
+ * to multiply one caller's attempts by 256.
  *
  * That last sentence is only true when the address is real. It used to be taken
  * from the left-most X-Forwarded-For value, which the client writes, so the key
@@ -172,26 +166,9 @@ const UNRESOLVED_BUCKET = "unresolved";
  * A shared bucket is trippable by anyone, which means a stranger can spend the
  * budget and make legitimate recovery return 429 for ten minutes. That is
  * unpleasant and it is still the right way round: the alternative is a limiter
- * that stops nobody. What actually makes brute force pointless is the 120-bit
- * code, and what makes this endpoint safe to expose in a multi-instance
- * deployment is a limiter at the edge — this one is per process and in memory,
- * and is not a substitute for it.
+ * that stops nobody.
  */
-function tooManyAttempts(key: string): boolean {
-  const now = Date.now();
-  const recent = (attempts.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
-  recent.push(now);
-  attempts.set(key, recent);
-
-  // Unbounded growth would be a denial-of-service of its own; the map is small
-  // and this keeps it that way without a timer.
-  if (attempts.size > 10_000) {
-    for (const [k, times] of attempts) {
-      if (times.every((t) => now - t >= WINDOW_MS)) attempts.delete(k);
-    }
-  }
-  return recent.length > MAX_ATTEMPTS;
-}
+const REDEEM_LIMIT = { max: 20, windowSeconds: 600 };
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -254,7 +231,7 @@ export async function POST(request: Request) {
   // The action decides whether a session is required, so it is read before any
   // authentication happens. Redemption exists precisely for callers who have
   // none.
-  if (body.action === "redeem") return redeem(body);
+  if (body.action === "redeem") return redeem(request, body);
   if (body.action === "enrol") return enrol(body);
   return Response.json(
     { error: 'action must be "enrol" or "redeem"' },
@@ -337,15 +314,15 @@ async function enrol(body: Record<string, unknown>) {
  * At-most-once is the property worth having; the cost is that a code fetched and
  * then lost to a closed tab is spent, which is why ten are issued.
  */
-async function redeem(body: Record<string, unknown>) {
-  const ip = await clientIp();
-  // Only a resolved address gets its own bucket. Without a trusted proxy in
-  // front there is no address this process can believe, and inventing one from
-  // a client-supplied header would hand every caller a private budget.
-  const bucket = (proxyConfigured ? ipPrefix(ip) : null) ?? UNRESOLVED_BUCKET;
-  if (tooManyAttempts(bucket)) {
-    return Response.json({ error: "too many attempts" }, { status: 429 });
-  }
+async function redeem(request: Request, body: Record<string, unknown>) {
+  // The limiter applies the rule this route used to apply here by hand: a
+  // resolved network gets its own bucket, and without a trusted proxy in front
+  // everybody shares one — because inventing an address from a client-supplied
+  // header would hand every caller a private budget.
+  const limited = await enforce("recovery-redeem", request, REDEEM_LIMIT, {
+    message: "Too many recovery attempts. Wait ten minutes and try again.",
+  });
+  if (limited) return limited;
 
   const { email, codeId } = body;
   if (typeof email !== "string" || typeof codeId !== "string") {
@@ -391,7 +368,11 @@ async function redeem(body: Record<string, unknown>) {
     userId: row.userId,
     eventType: "recovery.redeemed",
     source: "server",
-    ipPrefix: ipPrefix(ip),
+    // Resolved here rather than reused from the limiter: the limiter's subject
+    // falls back to a shared bucket string when there is no trusted address,
+    // and writing "unresolved" into an audit row would be inventing a location.
+    // A null column is the honest answer. See lib/audit/address.ts.
+    ipPrefix: ipPrefix(await clientIp()),
     metadata: { remaining: remaining.length },
   });
 

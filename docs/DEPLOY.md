@@ -65,9 +65,15 @@ sessions, and it will look like a webxterm bug.
 
 Once a proxy is in front, set `TRUSTED_PROXY_HOPS` to the number of proxies
 between the internet and the web container — `1` for the Caddy or nginx block
-above, `2` if a CDN sits in front of that. Until it is set, the app records no
-client address on any audit row and the recovery-code rate limiter shares one
-bucket for everybody.
+above, `2` if a CDN sits in front of that — and `TRUSTED_PROXY_IPS` to the
+addresses those proxies connect from (`172.16.0.0/12` for a container network,
+`127.0.0.1` for a proxy on the host). Until both are set, the app records no
+client address on any audit row and every unauthenticated rate limit shares one
+bucket for everybody, which a single caller can trip for everyone.
+
+Two variables for one fact because the two consumers want it in different
+shapes: the app's own limits and the audit log count hops from the right-hand
+end, Better Auth matches proxy addresses. Neither is derivable from the other.
 
 That is deliberate. `X-Forwarded-For` is written by whoever sends the request,
 and every proxy in normal use *appends* to it, so the left-most entry is a value
@@ -104,7 +110,8 @@ Set on Vercel:
 | `NEXT_PUBLIC_RELAY_URL` | `wss://your-relay/ws` |
 | `AGENT_RELEASE_BASE_URL` | Where agent binaries are published. Defaults to `<your origin>/agent-bin`, which is what `bun run agent` writes — set it if you serve them from a release host instead |
 | `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where session recordings are stored. All four or none; see below |
-| `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address; unset means no address is recorded |
+| `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address; unset means no address is recorded **and every unauthenticated rate limit shares one bucket** |
+| `TRUSTED_PROXY_IPS` | The addresses those proxies connect from, for Better Auth's limits on `/api/auth/*`. See the note above about why this is a second variable |
 
 `NEXT_PUBLIC_*` is inlined at build time, so changing the relay URL means a
 rebuild, not a restart.
@@ -210,6 +217,10 @@ Ordered by how badly it goes wrong if you skip it.
 - [ ] **TLS on both**, with a websocket-aware proxy and a long read timeout.
 - [ ] **Postgres is not published to the host.** The compose file uses `expose`,
       not `ports`, for exactly this reason.
+- [ ] **`TRUSTED_PROXY_HOPS` and `TRUSTED_PROXY_IPS` are both set** once a proxy
+      is in front. Without them every unauthenticated rate limit — sign-up,
+      sign-in, share links, agent enrollment, recovery codes — shares a single
+      bucket that one caller can spend for everybody.
 - [ ] **The recordings bucket has no public URL**, if you configured one. No
       `r2.dev` subdomain, no custom domain. See above.
 - [ ] Back up the `pgdata` volume. It holds encrypted vault blobs — useless to

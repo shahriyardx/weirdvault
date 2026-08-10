@@ -225,6 +225,30 @@ try {
   // saying "deleted" here means the rows cannot be read back, not that the disk
   // shrank. A VACUUM FULL would take an exclusive lock and is the operator's
   // call, not this script's.
+
+  /**
+   * Stale rate-limit counters, swept along the way.
+   *
+   * `rate_limit` has one row per bucket, so it grows with distinct users and
+   * networks and never shrinks on its own — a counter whose window closed a
+   * month ago is read by nothing and deleted by nobody. It rides along here
+   * rather than getting a script of its own because it is one statement, it is
+   * needed on the same cadence, and a second cron line is a second thing an
+   * operator can forget.
+   *
+   * A day is far longer than the longest window any caller configures (an hour),
+   * so this can only ever remove rows whose window has closed. Deleting a live
+   * one would fail open — the next request re-creates it with a fresh count —
+   * which is the same direction lib/rate-limit.ts fails in everywhere else, but
+   * there is no reason to lean on that.
+   */
+  const { rowCount: staleCounters } = await client.query(
+    `DELETE FROM "rate_limit" WHERE "window_start" < $1`,
+    [Date.now() - 24 * 60 * 60 * 1000],
+  );
+  if (staleCounters > 0) {
+    console.log(`prune-audit: cleared ${staleCounters} stale rate-limit counters`);
+  }
 } finally {
   await client.end();
 }

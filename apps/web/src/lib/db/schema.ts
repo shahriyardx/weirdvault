@@ -624,6 +624,44 @@ export const subscription = pgTable(
 );
 
 /**
+ * Rate limit counters.
+ *
+ * One row per bucket, where a bucket is a route plus whoever is being counted —
+ * a user id when there is a session, a truncated network when a trusted proxy
+ * says what the address is, and one shared bucket for everybody when neither is
+ * available. lib/rate-limit.ts builds the keys and explains that last case,
+ * which is the uncomfortable one.
+ *
+ * In Postgres rather than in memory, and that is the whole reason this table
+ * exists. A `Map` in the process is what /api/recovery had, and it has two
+ * failures that are invisible until they matter: a second container gets a
+ * second budget, so scaling out multiplies every limit by the replica count,
+ * and a restart forgets everything, so a limiter is a redeploy away from being
+ * disabled. Neither shows up in testing. The cost is one round trip on a path
+ * that was already going to talk to Postgres.
+ *
+ * `window_start` is when the current window opened, not when the last request
+ * arrived — a fixed window, so a caller under the limit is never pushed over it
+ * by their own steady traffic. Better Auth's built-in storage slides that
+ * timestamp forward on every allowed request instead, which turns a drip below
+ * the limit into an eventual block; lib/rate-limit.ts hands Better Auth this
+ * table through `customStorage` precisely so there is one algorithm to explain
+ * rather than two that differ in a way nobody would predict from the config.
+ *
+ * Nothing here is authoritative about anything. A row lost, a row reset, the
+ * whole table truncated — all of it fails open, and the security properties live
+ * in the 120-bit recovery code, the 256-bit share token and the session check.
+ * This bounds cost and noise.
+ */
+export const rateLimit = pgTable("rate_limit", {
+  /** `<bucket>:<subject>`. Opaque, and never shown to a caller. */
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  /** Epoch milliseconds. `bigint` because a JS timestamp overflows `integer`. */
+  windowStart: bigint("window_start", { mode: "number" }).notNull(),
+});
+
+/**
  * Webhook events already processed.
  *
  * Stripe retries on any non-2xx and can deliver the same event more than once

@@ -9,6 +9,7 @@ import {
   looksLikeEnrollmentToken,
 } from "@/lib/agents/enrollment";
 import { fingerprintFor } from "@/lib/agents/verify";
+import { enforce } from "@/lib/rate-limit";
 
 /**
  * Where a machine becomes an agent.
@@ -58,7 +59,30 @@ function isBase64Key(value: unknown): value is string {
   );
 }
 
+/**
+ * Ten enrollment attempts an hour, per network.
+ *
+ * Not because the token is guessable — it is 32 random bytes, and a limiter is
+ * not what stands between a stranger and a valid one. It is because this is an
+ * unauthenticated write that inserts a row, so an unbounded loop against it is a
+ * way to make the database do work and fill a log with refusals. A real
+ * enrollment happens once per machine and retries a handful of times at most.
+ *
+ * Per network, since a daemon mid-enrollment has no session by definition. On a
+ * deployment with no trusted proxy that is the shared bucket, which is why ten
+ * rather than two: enrolling three machines from one office should not lock out
+ * the fourth.
+ */
+const ENROLL_LIMIT = { max: 10, windowSeconds: 3600 };
+
 export async function POST(request: Request) {
+  const limited = await enforce("agent-enroll", request, ENROLL_LIMIT, {
+    message:
+      "Too many enrollment attempts from this network in the last hour. The token you have is " +
+      "unaffected — wait, then run the installer again.",
+  });
+  if (limited) return limited;
+
   const releaseUrl = agentReleaseUrl(new URL(request.url).origin);
   const relayUrl = agentRelayUrl();
   if (!relayUrl) {

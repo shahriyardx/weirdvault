@@ -135,11 +135,16 @@ in the fragment, which we never receive. Expired, revoked, over its view limit
 and never existed all answer an identical 404, so the endpoint cannot be used to
 learn which tokens are real.
 
-**Not rate-limited.** The view counter bounds a link being passed around, not
-somebody enumerating tokens — that is 256 bits of path segment doing the work
-alone. This joins the IP-level limits listed as outstanding in §7. Nothing prunes
-expired shares either: an expired link stops being served at once, but its
-ciphertext stays on disk until the owner revokes it or deletes the recording.
+**Rate-limited per network, at thirty fetches a minute.** What makes a token
+unguessable is its 256 bits, not the limit; what the limit bounds is somebody
+working through guesses and the cost of serving a multi-megabyte transcript to
+whoever asks. A 429 and a 404 are distinguishable, and deliberately say nothing
+about each other: the 429 is a statement about the caller's rate, not about
+whether the token was real. Without a trusted proxy configured there is no
+address to key on and every caller shares one bucket — see §7.
+
+Nothing prunes expired shares: an expired link stops being served at once, but
+its ciphertext stays until the owner revokes it or deletes the recording.
 
 **Never presigned.** When recordings are configured to live in a bucket, this
 route still fetches the object with server credentials and serves the bytes
@@ -322,8 +327,29 @@ and the figure differs by tier. It bounds cost rather than abuse: it is per
 account and per month, so it does nothing about a burst, and it is off entirely
 unless `RELAY_USAGE_SECRET` is set.
 
-Still to add: per-second bandwidth limits, IP-level rate limits, and running
-with no cloud IAM role attached.
+**Request rate limits exist now**, on the control plane rather than the relay.
+Every `/api/auth` route is limited, with tighter rules on sign-in, sign-up,
+account deletion and second-factor verification; so are share fetches, recording
+saves, share creation, relay-token minting, agent enrollment and recovery
+redemption. Counters are rows in Postgres (`lib/rate-limit.ts`), not a map in a
+process, so replicas share one budget and a restart does not reset them.
+
+Two things they are not. They are not what makes anything unguessable — a share
+token is 256 bits, a recovery code 120, and truncating the table would not change
+that; what they bound is cost and noise, chiefly unbounded account creation,
+since every account is entitled to a gigabyte of recording storage. And they are
+only as good as the subject they key on: a session gives a user id, and an
+unauthenticated caller gives a network **only** when `TRUSTED_PROXY_HOPS` and
+`TRUSTED_PROXY_IPS` say which forwarded entry the deployment's own proxy wrote.
+Unset, every unauthenticated caller shares one bucket per endpoint, which one
+caller can spend for everybody. That is a deliberate choice of nuisance over a
+limiter with a client-chosen key, which would not be a limiter at all.
+
+They fail open. A limiter that refused requests when Postgres was slow would
+trade a bounded abuse problem for a total outage.
+
+Still to add: per-second bandwidth limits, limits in the relay itself rather
+than only at the token mint, and running with no cloud IAM role attached.
 
 ---
 

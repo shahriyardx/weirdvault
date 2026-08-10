@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
+import { enforce } from "@/lib/rate-limit";
 import { BodyError, readBody, statusForBodyError } from "@/lib/recording/blobs";
 
 /**
@@ -36,13 +37,36 @@ import { BodyError, readBody, statusForBodyError } from "@/lib/recording/blobs";
  * being used up. The person holding a working link learns everything from the
  * fact that it worked; nobody else learns anything at all.
  *
- * What is NOT solved here: nothing rate-limits this route, so the view counter
- * is a control against a link being passed around rather than against somebody
- * hammering the endpoint. docs/THREAT-MODEL.md already lists IP-level limits as
- * outstanding, and this route joins that list rather than pretending otherwise.
+ * Third, it is rate-limited, and the limit is doing a different job from the
+ * view counter. The counter bounds a link being passed around; the limit bounds
+ * somebody working through tokens, and bounds the cost of serving a multi-
+ * megabyte transcript from a bucket to whoever asks. Neither is what makes the
+ * token unguessable — 256 bits does that — which is why tripping the limit and
+ * presenting a real token produce different statuses without that leaking
+ * anything: a 429 says the *caller* is going too fast and says nothing at all
+ * about whether the token was real.
+ *
+ * The limit is per network, and without a trusted proxy in front there is no
+ * network to key on and everybody shares one bucket. That is stated in
+ * lib/rate-limit.ts and it is the reason the ceiling below is generous rather
+ * than tight: on the default configuration, a low limit here would be one
+ * stranger away from switching off everybody's share links.
  */
 
-export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
+/** Thirty views a minute. A person opening a link does it once. */
+const VIEW_LIMIT = { max: 30, windowSeconds: 60 };
+
+export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
+  // Before the statement below, which increments a counter and can serve
+  // megabytes. There is no session here to key on, by design, so this is the
+  // caller's network or the shared bucket.
+  const limited = await enforce("share", request, VIEW_LIMIT, {
+    message:
+      "Too many requests for shared recordings from this network. This is a rate limit rather " +
+      "than anything about the link you have — wait a moment and try it again.",
+  });
+  if (limited) return limited;
+
   // Next.js 16: route params are async.
   const { token } = await params;
 

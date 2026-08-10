@@ -17,6 +17,7 @@ import {
   MAX_BLOB_BYTES,
   RECORDING_REQUIRES_PRO,
 } from "@/lib/recording/limits";
+import { enforce } from "@/lib/rate-limit";
 import { recordingKey } from "@/lib/storage/objects";
 
 /**
@@ -177,9 +178,30 @@ export async function GET(request: Request) {
   });
 }
 
+/**
+ * Twenty saves an hour, per account.
+ *
+ * Not a product limit — a person cannot record twenty sessions in an hour, and
+ * the ones they do record are already bounded per blob and per account. It is
+ * there because this is the most expensive authenticated write in the app: each
+ * call takes up to twelve megabytes off the wire and puts it in a bucket. The
+ * account ceiling stops the total; nothing else stopped the rate.
+ */
+const SAVE_LIMIT = { max: 20, windowSeconds: 3600 };
+
 export async function POST(request: Request) {
   const user = await requireUser();
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+
+  // Keyed on the account rather than the network, because there is a session
+  // here and a user id is the one subject nobody can rotate.
+  const limited = await enforce("recording", request, SAVE_LIMIT, {
+    userId: user.id,
+    message:
+      "That is more recordings than this account can save in an hour. Nothing was stored and " +
+      "the transcript is still in the tab that made it — wait, then save again.",
+  });
+  if (limited) return limited;
 
   // Before the body is read, so a Free account is refused without a multi-
   // megabyte upload being taken off the wire first.

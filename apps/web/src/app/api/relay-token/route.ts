@@ -7,6 +7,7 @@ import { db, schema } from "@/lib/db";
 import { dbErrorSummary } from "@/lib/db/errors";
 import { relayAllowanceFor } from "@/lib/billing/subscription";
 import { periodFor, periodResetsAt } from "@/lib/billing/tiers";
+import { enforce } from "@/lib/rate-limit";
 import { RELAY_QUOTA_EXCEEDED } from "@/lib/usage";
 
 /**
@@ -129,8 +130,33 @@ async function allowanceCheck(userId: string): Promise<
   }
 }
 
+/**
+ * Sixty tokens a minute.
+ *
+ * A token is minted per connection, and a person reconnecting after a dropped
+ * WebSocket, opening several tabs, or using split panes will legitimately mint a
+ * handful in quick succession — so this is set well above ordinary use. What it
+ * bounds is a loop: each mint is an HMAC and an allowance query, and the token
+ * it returns is the credential the relay accepts, so an unbounded mint endpoint
+ * is an unbounded supply of relay connections.
+ *
+ * Keyed on the account when there is one. An anonymous caller's subject is a
+ * cookie they can rotate, so for them this falls back to the network — which is
+ * the honest position and is why the relay's own connection cap and port
+ * allowlist, not this, are what actually bound anonymous use.
+ */
+const MINT_LIMIT = { max: 60, windowSeconds: 60 };
+
 export async function POST(request: Request) {
   const { sub, ttl, anonymous } = await subjectFor();
+
+  const limited = await enforce("relay-token", request, MINT_LIMIT, {
+    userId: anonymous ? null : sub,
+    message:
+      "Too many connection attempts in the last minute. Sessions already open are unaffected; " +
+      "wait a moment before opening another.",
+  });
+  if (limited) return limited;
 
   const secret = process.env.RELAY_SECRET;
   if (!secret) {

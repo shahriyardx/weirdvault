@@ -11,6 +11,7 @@ import { ipPrefix, type AuditEventType } from "@/lib/audit/events";
 import { clientAddress } from "@/lib/audit/address";
 import { BillingNotConfiguredError } from "@/lib/billing/stripe";
 import { cancelSubscriptionForDeletion } from "@/lib/billing/subscription";
+import { authRateLimitStorage } from "@/lib/rate-limit";
 import { purgeAccountObjects } from "@/lib/storage/purge";
 
 /**
@@ -599,8 +600,92 @@ export const auth = betterAuth({
     cookieCache: { enabled: true, maxAge: 60 * 5 },
   },
 
+  /**
+   * Rate limiting on every /api/auth route.
+   *
+   * On always, rather than Better Auth's default of production-only. A limiter
+   * that is absent in development is a limiter nobody ever sees working, and the
+   * first time it runs is against real traffic — which is also the first chance
+   * it has to be wrong. The numbers are loose enough that ordinary use never
+   * reaches them.
+   *
+   * Storage is ours (`lib/rate-limit.ts`) rather than either of the built-ins.
+   * `memory` is per process, so a second container would silently double every
+   * limit and a restart would forget them. `database` is durable but slides its
+   * window forward on each allowed request, so a caller staying *under* the
+   * limit still accumulates count until they are blocked, which is not what the
+   * fixed window used everywhere else in this app does. One algorithm, described
+   * in one place.
+   *
+   * The default below is per IP per path. What makes that mean anything is
+   * `ipAddress` further down; without it the key is a value the caller writes.
+   */
+  rateLimit: {
+    enabled: true,
+    /** The floor for anything not named in customRules: 100 requests a minute. */
+    window: 60,
+    max: 100,
+    customStorage: authRateLimitStorage,
+
+    /**
+     * The endpoints where a limit is the point rather than hygiene.
+     *
+     * Each of these either guesses at a secret, creates something that costs
+     * money, or is expensive to serve. The windows are minutes rather than
+     * seconds because the thing being stopped is a script working through a
+     * list, not a double-click.
+     */
+    customRules: {
+      // Password guessing. Ten a minute is generous for a person and useless
+      // for a dictionary. Two-factor puts a second gate behind this, and
+      // `two_factor.locked_until` already bounds code guessing separately.
+      "/sign-in/email": { window: 60, max: 10 },
+      // Account creation is the one that costs real money: every account is
+      // entitled to a gigabyte of recording storage in a bucket somebody pays
+      // for. Five an hour from one network is far past any honest use.
+      "/sign-up/email": { window: 3600, max: 5 },
+      // Destructive, and gated on the derived auth token — so a wrong guess
+      // here is the same guess as sign-in and deserves the same budget.
+      "/delete-user": { window: 3600, max: 10 },
+      // A six-digit code is a million possibilities and would fall in an
+      // afternoon at any generous rate. The plugin's own lockout is the real
+      // control; this stops the attempt reaching it a thousand times a second.
+      "/two-factor/verify-totp": { window: 300, max: 10 },
+      "/two-factor/verify-backup-code": { window: 300, max: 10 },
+      // Changing the password re-derives and re-wraps every portable key, so it
+      // is both sensitive and expensive.
+      "/change-password": { window: 3600, max: 10 },
+      "/update-user": { window: 3600, max: 30 },
+    },
+  },
+
   advanced: {
     cookiePrefix: "webxterm",
+
+    /**
+     * Which X-Forwarded-For entry is real.
+     *
+     * The rate limit above keys on the client address, so if that address is
+     * one the caller chose, every request gets a fresh budget and the limit does
+     * not exist. This is the same problem lib/audit/address.ts solves for the
+     * audit log, and it is worth knowing that the two solve it differently
+     * because they are given the fact in different shapes: our own code takes a
+     * hop count (`TRUSTED_PROXY_HOPS`), Better Auth takes a list of proxy
+     * addresses. Neither can be derived from the other, so both exist and
+     * .env.example says to set them together.
+     *
+     * Unset is safe rather than convenient. Better Auth trusts a
+     * single-valued X-Forwarded-For and refuses a chain it cannot attribute,
+     * falling back to one bucket shared by everybody — trippable by a stranger,
+     * which is a real nuisance, and still the right way round against a limiter
+     * that stops nobody.
+     */
+    ipAddress: {
+      trustedProxies: (process.env.TRUSTED_PROXY_IPS ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    },
   },
 
   hooks: {

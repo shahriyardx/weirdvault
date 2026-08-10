@@ -19,6 +19,7 @@ import {
   RECORDING_REQUIRES_PRO,
 } from "@/lib/recording/limits";
 import { MAX_SHARE_TTL_MS, MAX_SHARE_VIEWS, newShareToken } from "@/lib/recording/share";
+import { enforce } from "@/lib/rate-limit";
 import { shareKey } from "@/lib/storage/objects";
 
 /**
@@ -164,9 +165,25 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return Response.json({ shares: rows });
 }
 
+/**
+ * Twenty links an hour, per account. A share is a second full copy of a
+ * transcript, so this is the same cost as saving a recording and gets the same
+ * ceiling. GET and DELETE are not limited here: listing a link and cutting one
+ * off must keep working when somebody is trying to stop a link they regret.
+ */
+const SHARE_LIMIT = { max: 20, windowSeconds: 3600 };
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+
+  const limited = await enforce("share-create", request, SHARE_LIMIT, {
+    userId: user.id,
+    message:
+      "That is more share links than this account can create in an hour. No link was made and " +
+      "the recording is untouched.",
+  });
+  if (limited) return limited;
 
   // Before the body, so a refusal does not require a re-encrypted copy of the
   // whole transcript to be uploaded first. `tierFor` fails toward access.
