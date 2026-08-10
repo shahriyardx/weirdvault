@@ -235,6 +235,28 @@ impl Agents {
         self.control.len()
     }
 
+    /// Which of these agent ids are connected and belong to this account.
+    ///
+    /// Answers only about ids the caller already named, and only about the
+    /// account the token authorised, so it enumerates nothing: an id belonging
+    /// to somebody else is indistinguishable from one that is offline. That is
+    /// deliberate — the dashboard already knows which machines are its own, and
+    /// anything more here would be an oracle for guessed ids.
+    ///
+    /// A hint with a lifetime measured in seconds, like `account_for`: an agent
+    /// can drop immediately after this returns. The honest answer to "can I
+    /// reach it right now" is still to try.
+    pub fn online_for(&self, account: &str, ids: &[String]) -> Vec<String> {
+        ids.iter()
+            .filter(|id| {
+                self.control
+                    .get(id.as_str())
+                    .is_some_and(|reg| reg.account == account)
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Which account enrolled the connected agent, or None when it is offline.
     ///
     /// Doubles as the online check, which is why it is the one the browser path

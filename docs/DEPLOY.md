@@ -207,6 +207,7 @@ rather than showing a control that fails when pressed.
 | `R2_*` (four, plus optional `R2_REGION`) | Recordings are stored as a `bytea` column in Postgres. **All four or none** — three of four is a typo and is treated as one. See [Recording storage](#recording-storage) |
 | `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_IPS` | No client address is recorded on any audit row, and every unauthenticated rate limit shares one bucket that any caller can spend for everybody. Set both once a proxy is in front |
 | `AGENT_RELEASE_BASE_URL` | Agent binaries are served from `<your origin>/agent-bin`, which is what `bun run agent` writes |
+| `RELAY_INTERNAL_URL` | Derived from `NEXT_PUBLIC_RELAY_URL` — the app asks the relay which machines are connected over the public address, out through your proxy and back. Set it to `http://relay:8080` so that hop stays on the private network. The dashboard says "unknown" rather than "offline" when the relay cannot be reached, so getting this wrong is visible but not destructive |
 | `AGENT_VERSION` | Defaults to `dev`, and then no agent in the field ever self-updates: a machine updates when the manifest's value **differs** from its own, and `dev` never differs from `dev`. Set it per release. See [Agent versions](#agent-versions) |
 
 ### Agent versions

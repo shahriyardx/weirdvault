@@ -26,11 +26,10 @@ import {
   CheckCircleIcon,
   CopyIcon,
   DesktopTowerIcon,
+  DotsThreeIcon,
   PlugsConnectedIcon,
   PlusIcon,
-  ProhibitIcon,
   TerminalWindowIcon,
-  TrashIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr"
 import { toast } from "sonner"
@@ -47,7 +46,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -59,6 +57,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -75,37 +79,26 @@ interface Agent {
   os: string | null
   arch: string | null
   agentVersion: string | null
+  /**
+   * Whether the relay has a live control connection to this machine.
+   *
+   * null means the relay could not be asked — not that the machine is down.
+   * Reporting a fleet as offline because one internal call timed out would send
+   * somebody to look at machines that are fine.
+   */
+  online: boolean | null
   lastSeenAt: string | null
   revokedAt: string | null
   createdAt: string
 }
 
-/**
- * How stale a heartbeat may be before the machine is called offline.
- *
- * `last_seen_at` is stamped when the agent authenticates, which happens on
- * connect and on every reconnect — not on a timer. So a machine that has been
- * up and idle for a week has a week-old timestamp and is perfectly reachable.
- * This threshold is therefore generous on purpose: it distinguishes "enrolled
- * and never came back" from "connected", and nothing finer than that. The
- * honest answer to "is it online right now" comes from trying to connect.
- */
-const SEEN_RECENTLY_MS = 7 * 24 * 60 * 60 * 1000
+/** Whether the relay answered the reachability question at all. */
+type PresenceStatus = "ok" | "unknown"
 
 const POLL_MS = 2000
 
 export default function MachinesPage() {
   const [agents, setAgents] = useState<Agent[] | null>(null)
-  /**
-   * When the list was fetched.
-   *
-   * "Seen lately" is judged against this rather than against the clock at
-   * render time. Reading the clock while rendering makes a row's output depend
-   * on when React happened to re-run it, which is both impure and, on a page
-   * that re-renders whenever a dialog opens, capable of changing a badge for no
-   * reason the user did anything to cause.
-   */
-  const [loadedAt, setLoadedAt] = useState(0)
   const [enrolling, setEnrolling] = useState(false)
 
   /**
@@ -135,6 +128,13 @@ export default function MachinesPage() {
    * shows it. Nothing here has to poll the machine.
    */
   const [published, setPublished] = useState<string | null>(null)
+  /**
+   * Whether the last load could ask the relay who is connected.
+   *
+   * Kept beside the rows rather than derived per row, because "the relay did
+   * not answer" is one fact about the page and not a property of each machine.
+   */
+  const [presence, setPresence] = useState<PresenceStatus>("unknown")
 
   const load = useCallback(async () => {
     const res = await fetch("/api/agents")
@@ -143,10 +143,14 @@ export default function MachinesPage() {
       setAgents([])
       return
     }
-    const body = (await res.json()) as { agents: Agent[]; publishedVersion?: string | null }
+    const body = (await res.json()) as {
+      agents: Agent[]
+      publishedVersion?: string | null
+      presence?: PresenceStatus
+    }
     setAgents(body.agents)
     setPublished(body.publishedVersion ?? null)
-    setLoadedAt(Date.now())
+    setPresence(body.presence === "ok" ? "ok" : "unknown")
   }, [])
 
   useEffect(() => {
@@ -192,8 +196,8 @@ export default function MachinesPage() {
             <AgentRow
               key={a.id}
               agent={a}
-              now={loadedAt}
               published={published}
+              presence={presence}
               host={hosts.find((h) => h.agentId === a.id) ?? null}
               busy={connecting !== null}
               onConnect={connectToHost}
@@ -209,8 +213,8 @@ export default function MachinesPage() {
                 <AgentRow
                   key={a.id}
                   agent={a}
-                  now={loadedAt}
                   published={published}
+                  presence={presence}
                   host={null}
                   busy={false}
                   onConnect={connectToHost}
@@ -256,19 +260,82 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   )
 }
 
+/**
+ * What a machine's row says about itself, in one value.
+ *
+ * Reachability and enrolment health are separate questions and this is where
+ * they are resolved into the single thing the rail shows. The order matters:
+ * revoked outranks everything, because a revoked machine's connection state is
+ * not a fact anyone should act on, and "unknown" outranks "offline" so that one
+ * unreachable relay never reports a working fleet as down.
+ */
+type MachineState = "revoked" | "online" | "offline" | "unknown" | "never"
+
+function machineState(agent: Agent, presence: PresenceStatus, seen: Date | null): MachineState {
+  if (agent.revokedAt) return "revoked"
+  // Before reachability: a machine that has never connected is not "offline",
+  // it is unfinished, and the two send a person to completely different places.
+  if (seen === null) return "never"
+  if (presence !== "ok" || agent.online === null) return "unknown"
+  return agent.online ? "online" : "offline"
+}
+
+function stateLabel(state: MachineState): string {
+  switch (state) {
+    case "revoked":
+      return "Revoked · cannot connect"
+    case "online":
+      return "Online · connected to the relay"
+    case "offline":
+      return "Offline · the agent is not connected"
+    case "never":
+      return "Never connected · the agent has not checked in"
+    // Said plainly rather than dressed up as offline. The machine may be
+    // perfectly fine; what failed is the question.
+    case "unknown":
+      return "Unknown · the relay could not be reached"
+  }
+}
+
+function railColour(state: MachineState): string {
+  switch (state) {
+    case "online":
+      return "bg-success"
+    case "offline":
+    case "revoked":
+      return "bg-muted-foreground/40"
+    case "never":
+    case "unknown":
+      return "bg-warning"
+  }
+}
+
+function stateColour(state: MachineState): string {
+  switch (state) {
+    case "online":
+      return "text-success"
+    case "never":
+    case "unknown":
+      return "text-warning"
+    default:
+      return "text-muted-foreground"
+  }
+}
+
 function AgentRow({
   agent,
-  now,
   published,
+  presence,
   host,
   busy,
   onConnect,
   onChanged,
 }: {
   agent: Agent
-  now: number
   /** The build this deployment publishes, or null when it publishes none. */
   published: string | null
+  /** Whether the relay could be asked at all. */
+  presence: PresenceStatus
   /** A saved host pointing at this machine, if one exists. */
   host: Host | null
   busy: boolean
@@ -280,14 +347,20 @@ function AgentRow({
   // Opened by a successful revoke, and re-openable from the revoked row after.
   const [removalOpen, setRemovalOpen] = useState(false)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  // Controlled rather than trigger-bearing, because both live in the overflow
+  // menu now: a Radix menu closes on select and would take an unmounted trigger
+  // — and its dialog — with it.
+  const [revokeOpen, setRevokeOpen] = useState(false)
+  const [forgetOpen, setForgetOpen] = useState(false)
   const revoked = Boolean(agent.revokedAt)
 
   const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null
-  const recent = seen !== null && now - seen.getTime() < SEEN_RECENTLY_MS
 
   // Not shown for a revoked machine: it cannot connect, so it cannot update,
   // and an update prompt beside "Revoked" is an instruction into a wall.
   const outdated = !revoked && agentNeedsUpdate(agent.agentVersion, published)
+
+  const state = machineState(agent, presence, seen)
 
   async function rename() {
     const res = await fetch(`/api/agents/${agent.id}`, {
@@ -328,128 +401,156 @@ function AgentRow({
   }
 
   return (
-    <div className="border-border flex flex-wrap items-center gap-3 rounded-lg border p-4">
-      <DesktopTowerIcon
-        className={revoked ? "text-muted-foreground size-5" : "text-primary size-5"}
-      />
+    <div className="border-border overflow-hidden rounded-lg border">
+      <div className="flex">
+        {/* The rail carries reachability, so the state is legible before a word
+            is read. Never the only carrier of it — the word is next to it, for
+            colour blindness and for the case where a screenshot loses the hue. */}
+        <div className={`w-1 shrink-0 ${railColour(state)}`} aria-hidden />
 
-      {/* basis-56 is the floor. Without it flex-wrap never fires on this row:
-          the buttons keep their intrinsic width, this column absorbs every
-          pixel of the shortfall, and a phone shows a four-character hostname
-          beside four full-width buttons. */}
-      <div className="min-w-0 flex-1 basis-56">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium">{agent.label}</span>
-          {revoked ? (
-            <Badge variant="outline" className="text-muted-foreground">
-              Revoked
-            </Badge>
-          ) : seen === null ? (
-            <Badge variant="outline" className="text-warning">
-              Never connected
-            </Badge>
-          ) : recent ? (
-            <Badge variant="outline" className="text-success">
-              Enrolled
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              Not seen lately
-            </Badge>
-          )}
-          {/* Alongside the status badge rather than instead of it: whether a
-              machine is reachable and whether it is current are two facts, and
-              collapsing them would hide the one that is not being asked about. */}
-          {outdated && (
-            <Badge variant="outline" className="text-warning">
-              Update available
-            </Badge>
-          )}
+        <div className="min-w-0 flex-1 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <DesktopTowerIcon
+              className={revoked ? "text-muted-foreground size-4" : "text-primary size-4"}
+            />
+            <span className="truncate text-sm font-medium">{agent.label}</span>
+            {/* Alongside reachability rather than instead of it: whether a
+                machine is reachable and whether it is current are two facts, and
+                collapsing them hides whichever one is not being asked about. */}
+            {outdated && (
+              <Badge variant="outline" className="text-warning ml-auto">
+                Update available
+              </Badge>
+            )}
+          </div>
+
+          <p className={`mt-1 text-xs ${stateColour(state)}`}>{stateLabel(state)}</p>
+
+          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+            {agent.hostname && (
+              <>
+                <dt className="text-muted-foreground tracking-wider uppercase">Host</dt>
+                <dd className="truncate">{agent.hostname}</dd>
+              </>
+            )}
+            {(agent.os || agent.agentVersion) && (
+              <>
+                <dt className="text-muted-foreground tracking-wider uppercase">System</dt>
+                <dd className="truncate">
+                  {[
+                    agent.os && agent.arch ? `${agent.os}/${agent.arch}` : agent.os,
+                    // Reported on every reconnect, so this is what the machine
+                    // is running now rather than what it was installed with.
+                    agent.agentVersion,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </dd>
+              </>
+            )}
+            <dt className="text-muted-foreground tracking-wider uppercase">Key</dt>
+            <dd className="truncate font-mono">{agent.fingerprint}</dd>
+            <dt className="text-muted-foreground tracking-wider uppercase">Seen</dt>
+            <dd className="truncate">{seen ? seen.toLocaleString() : "never"}</dd>
+          </dl>
+
+          <div className="border-border mt-3 flex flex-wrap items-center gap-1 border-t pt-3">
+            {!revoked &&
+              /* One click once we know who to log in as, a form the first time.
+                 SSH needs a username and a key; the agent holds neither, so
+                 there is genuinely nothing to connect with until you have said
+                 once. */
+              (host ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void onConnect(host)}
+                >
+                  <PlugsConnectedIcon />
+                  Connect as {host.username}
+                </Button>
+              ) : (
+                <Button asChild variant="secondary" size="sm">
+                  <Link href={`/dashboard/connect?agent=${encodeURIComponent(agent.id)}`}>
+                    <PlugsConnectedIcon />
+                    Set up
+                  </Link>
+                </Button>
+              ))}
+
+            {outdated && (
+              <Button variant="ghost" size="sm" onClick={() => setUpgradeOpen(true)}>
+                <ArrowsClockwiseIcon />
+                Update
+              </Button>
+            )}
+
+            {/* Everything rare or destructive. Connect and Update are what
+                anyone does often; the rest behind one control is also what
+                keeps this from being six buttons on a phone. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="ml-auto" aria-label="More actions">
+                  <DotsThreeIcon className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setRenaming(true)}>Rename</DropdownMenuItem>
+                {revoked ? (
+                  <>
+                    <DropdownMenuItem onSelect={() => setRemovalOpen(true)}>
+                      How to remove it
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onSelect={() => setForgetOpen(true)}>
+                      Forget
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem variant="destructive" onSelect={() => setRevokeOpen(true)}>
+                    Revoke
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-        <p className="text-muted-foreground mt-0.5 truncate font-mono text-xs">
-          {agent.fingerprint}
-        </p>
-        <p className="text-muted-foreground mt-0.5 text-xs">
-          {[
-            agent.hostname,
-            agent.os && agent.arch ? `${agent.os}/${agent.arch}` : null,
-            // Reported on every reconnect, so this is what the machine is
-            // running now rather than what it was installed with.
-            agent.agentVersion,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          {seen ? ` · last connected ${seen.toLocaleString()}` : ""}
-        </p>
       </div>
 
-      {!revoked && (
-        <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">
-          {/* One click once we know who to log in as, a form the first time.
-              SSH needs a username and a key; the agent holds neither, so there
-              is genuinely nothing to connect with until you have said once. */}
-          {host ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy}
-              onClick={() => void onConnect(host)}
-            >
-              <PlugsConnectedIcon />
-              Connect as {host.username}
-            </Button>
-          ) : (
-            <Button asChild variant="secondary" size="sm">
-              <Link href={`/dashboard/connect?agent=${encodeURIComponent(agent.id)}`}>
-                <PlugsConnectedIcon />
-                Set up
-              </Link>
-            </Button>
-          )}
-          {outdated && (
-            <Button variant="ghost" size="sm" onClick={() => setUpgradeOpen(true)}>
-              <ArrowsClockwiseIcon />
-              Update
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => setRenaming(true)}>
-            Rename
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <ProhibitIcon />
-                Revoke
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Revoke {agent.label}?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The agent on that machine stops being able to connect, and no new session can be
-                  opened through it. Sessions already open keep running. To use the machine again
-                  you would install the agent afresh with a new token.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Keep it</AlertDialogCancel>
-                <AlertDialogAction onClick={() => void revoke()}>Revoke</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      )}
+      <AlertDialog open={revokeOpen} onOpenChange={setRevokeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke {agent.label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The agent on that machine stops being able to connect, and no new session can be
+              opened through it. Sessions already open keep running. To use the machine again you
+              would install the agent afresh with a new token.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void revoke()}>Revoke</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {revoked && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full sm:w-auto"
-          onClick={() => setRemovalOpen(true)}
-        >
-          How to remove it
-        </Button>
-      )}
+      <AlertDialog open={forgetOpen} onOpenChange={setForgetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {agent.label} from the list?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Revoking retired this machine&rsquo;s key permanently. Removing the record frees that
+              key, so a machine still holding its agent.json could enrol it again — with a fresh
+              token, which only you can create. If you revoked it because it was lost or stolen,
+              leave it here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep the record</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void forget()}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <RemovalDialog agent={agent} open={removalOpen} onOpenChange={setRemovalOpen} />
 
@@ -460,32 +561,6 @@ function AgentRow({
         onOpenChange={setUpgradeOpen}
         onChanged={onChanged}
       />
-
-      {revoked && (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-              <TrashIcon />
-              Forget
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remove {agent.label} from the list?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Revoking retired this machine&rsquo;s key permanently. Removing the record frees
-                that key, so a machine still holding its agent.json could enrol it again — with a
-                fresh token, which only you can create. If you revoked it because it was lost or
-                stolen, leave it here.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep the record</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void forget()}>Remove</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent>

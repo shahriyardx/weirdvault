@@ -35,9 +35,24 @@ pub struct Claims {
     /// reaching any agent whose id the holder could guess, and vice versa.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// Set when the token authorises asking this relay a question rather than
+    /// dialling anything.
+    ///
+    /// A third kind, kept apart from the two above by the same rule: a token
+    /// carries one purpose, and each verify path refuses the others'. Presence
+    /// answers "which of these agent ids are connected", which is a much
+    /// smaller capability than opening a socket — but a token that could do
+    /// both would mean the short-lived thing a browser holds to connect could
+    /// also enumerate an account's machines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     /// Unix seconds.
     pub exp: u64,
 }
+
+/// The only scope there is. Named rather than inlined so the two ends of the
+/// comparison cannot drift apart in a rename.
+pub const SCOPE_PRESENCE: &str = "presence";
 
 #[derive(Debug, Error)]
 pub enum TokenError {
@@ -60,6 +75,10 @@ pub enum TokenError {
     AgentToken,
     #[error("this token authorises an address, not an agent")]
     AddressToken,
+    #[error("this token authorises a query, not a destination")]
+    ScopedToken,
+    #[error("this token authorises a destination, not a query")]
+    DestinationToken,
 }
 
 /// Mints a token. The relay only ever verifies — the control plane issues them
@@ -112,6 +131,9 @@ pub fn verify(
     if claims.agent.is_some() {
         return Err(TokenError::AgentToken);
     }
+    if claims.scope.is_some() {
+        return Err(TokenError::ScopedToken);
+    }
     if claims.host != host || claims.port != port {
         return Err(TokenError::WrongDestination {
             want_host: claims.host,
@@ -133,10 +155,30 @@ pub fn verify_agent(
 ) -> Result<Claims, TokenError> {
     let claims = decode(secret, token, now_unix)?;
 
+    if claims.scope.is_some() {
+        return Err(TokenError::ScopedToken);
+    }
     match claims.agent.as_deref() {
         None => Err(TokenError::AddressToken),
         Some(want) if want != agent_id => Err(TokenError::WrongAgent),
         Some(_) => Ok(claims),
+    }
+}
+
+/// Verifies a token that authorises asking about an account's agents.
+///
+/// Returns the account, which is the only thing the answer may be scoped to: a
+/// presence query says which of *your* agents are connected, so an id you do
+/// not own reads exactly like one that is offline. Without that, the endpoint
+/// would confirm the existence of any agent id somebody could guess.
+pub fn verify_presence(secret: &[u8], token: &str, now_unix: u64) -> Result<Claims, TokenError> {
+    let claims = decode(secret, token, now_unix)?;
+
+    match claims.scope.as_deref() {
+        Some(SCOPE_PRESENCE) => Ok(claims),
+        // A destination token must not become a query token. Both are minted by
+        // the control plane, but the browser holds one of them.
+        _ => Err(TokenError::DestinationToken),
     }
 }
 
@@ -158,6 +200,18 @@ mod tests {
             host: "example.com".into(),
             port: 22,
             agent: None,
+            scope: None,
+            exp: 2_000_000_000,
+        }
+    }
+
+    fn presence_claims() -> Claims {
+        Claims {
+            sub: "user-1".into(),
+            host: String::new(),
+            port: 0,
+            agent: None,
+            scope: Some(SCOPE_PRESENCE.into()),
             exp: 2_000_000_000,
         }
     }
@@ -168,6 +222,7 @@ mod tests {
             host: String::new(),
             port: 0,
             agent: Some("agent-7".into()),
+            scope: None,
             exp: 2_000_000_000,
         }
     }
@@ -266,5 +321,82 @@ mod tests {
             verify(SECRET, &format!("{payload}.{sig}"), "example.com", 3306, 1_000),
             Err(TokenError::BadSignature)
         ));
+    }
+
+    #[test]
+    fn a_presence_token_round_trips_and_carries_the_account() {
+        let t = sign(SECRET, &presence_claims());
+        let c = verify_presence(SECRET, &t, 1_000).unwrap();
+        assert_eq!(c.sub, "user-1");
+    }
+
+    #[test]
+    fn none_of_the_three_kinds_authorise_each_other() {
+        // The rule the whole module rests on: a token carries one purpose. The
+        // browser holds a destination token, and if that also answered presence
+        // queries then anyone who could open one session could enumerate an
+        // account's machines.
+        let destination = sign(SECRET, &claims());
+        let agent = sign(SECRET, &agent_claims());
+        let presence = sign(SECRET, &presence_claims());
+
+        assert!(matches!(
+            verify_presence(SECRET, &destination, 1_000),
+            Err(TokenError::DestinationToken)
+        ));
+        assert!(matches!(
+            verify_presence(SECRET, &agent, 1_000),
+            Err(TokenError::DestinationToken)
+        ));
+        assert!(matches!(
+            verify(SECRET, &presence, "example.com", 22, 1_000),
+            Err(TokenError::ScopedToken)
+        ));
+        assert!(matches!(
+            verify_agent(SECRET, &presence, "agent-7", 1_000),
+            Err(TokenError::ScopedToken)
+        ));
+    }
+
+    #[test]
+    fn a_presence_token_expires_like_any_other() {
+        let t = sign(SECRET, &presence_claims());
+        assert!(matches!(
+            verify_presence(SECRET, &t, 2_000_000_001),
+            Err(TokenError::Expired)
+        ));
+    }
+
+    #[test]
+    fn an_unknown_scope_is_not_presence() {
+        // Refused rather than read as a destination token, so a scope added on
+        // the control plane later cannot be silently accepted here as something
+        // it is not.
+        let mut c = presence_claims();
+        c.scope = Some("something-else".into());
+        let t = sign(SECRET, &c);
+        assert!(matches!(
+            verify_presence(SECRET, &t, 1_000),
+            Err(TokenError::DestinationToken)
+        ));
+    }
+
+    /// A token minted by the control plane's TypeScript, verified here.
+    ///
+    /// Nothing compiles both ends of this format. A round trip written in one
+    /// language passes just as happily with both halves wrong in the same way,
+    /// so this fixture was produced by `mintPresenceToken` in
+    /// apps/web/src/lib/agents/presence.ts with the secret below, and is checked
+    /// byte for byte by the implementation that has to read it in production.
+    ///
+    /// Regenerate it by running that function if the format is ever versioned.
+    /// Do not hand-edit the signature, or the test proves nothing.
+    #[test]
+    fn verifies_a_token_the_control_plane_minted() {
+        const FIXTURE: &str = "eyJzdWIiOiJ1c2VyLWZpeHR1cmUiLCJzY29wZSI6InByZXNlbmNlIiwiZXhwIjoxNzAwMDAwMTMwfQ.5YSIe08nn_uSq3AUskfN1FBPxEmcxIqtKvca8UonozQ";
+
+        let claims = verify_presence(b"fixture-secret", FIXTURE, 1_700_000_000).unwrap();
+        assert_eq!(claims.sub, "user-fixture");
+        assert_eq!(claims.scope.as_deref(), Some(SCOPE_PRESENCE));
     }
 }

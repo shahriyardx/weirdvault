@@ -10,6 +10,7 @@ import {
   MAX_PENDING_ENROLLMENTS,
   mintEnrollmentToken,
 } from "@/lib/agents/enrollment"
+import { agentPresence } from "@/lib/agents/presence"
 import { publishedAgentVersion } from "@/lib/agents/published-version"
 
 /**
@@ -54,9 +55,31 @@ export async function GET() {
   // environment, and null when this deployment publishes no binaries at all —
   // in which case the dashboard says nothing about versions rather than
   // guessing. See lib/agents/version.ts.
-  const publishedVersion = await publishedAgentVersion()
+  //
+  // Together with presence: both are answers about machines rather than rows,
+  // both are cheap, and asking for them separately would make the list render
+  // twice with a different story each time.
+  const [publishedVersion, presence] = await Promise.all([
+    publishedAgentVersion(),
+    // Revoked agents are excluded: they cannot be connected, so asking wastes a
+    // slot in a bounded request and would show a machine as reachable in the
+    // seconds between a revoke and the relay dropping it.
+    agentPresence(
+      user.id,
+      rows.filter((row) => !row.revokedAt).map((row) => row.id),
+    ),
+  ])
 
-  return Response.json({ agents: rows, publishedVersion })
+  return Response.json({
+    agents: rows.map((row) => ({
+      ...row,
+      // null rather than false when the relay could not be asked. "We do not
+      // know" and "it is not there" send a person to different places.
+      online: presence.status === "ok" && !row.revokedAt ? presence.online.has(row.id) : null,
+    })),
+    publishedVersion,
+    presence: presence.status,
+  })
 }
 
 export async function POST() {

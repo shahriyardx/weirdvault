@@ -29,11 +29,11 @@ use axum::{
     },
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
-    Router,
+    routing::{get, post},
+    Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -155,6 +155,10 @@ async fn main() {
         // parameter is how those two get accidentally swapped.
         .route("/agent/control", get(agent_control))
         .route("/agent/stream", get(agent_stream))
+        // Which of an account's agents are connected. A question, not a
+        // destination — see the scope field in token.rs for why it is not the
+        // same kind of token as the two routes above take.
+        .route("/agents/presence", post(presence))
         .route("/healthz", get(health))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state.clone());
@@ -218,6 +222,76 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         "active_connections": state.quotas.active_total(),
         "agents_connected": state.agents.connected(),
     }))
+}
+
+/// Which of these agent ids are connected right now.
+///
+/// The dashboard's "last connected" is stamped when an agent authenticates, so
+/// on a machine that has been up and idle for a week it is a week old and says
+/// nothing about reachability. This does: the registry is the live set of
+/// control connections, and it is the same thing /ws consults before it agrees
+/// to open a session.
+///
+/// Answers only about the account in the token, and only about ids the caller
+/// named. An agent belonging to somebody else is reported exactly like one that
+/// is offline, so this cannot be used to discover whether an id exists.
+///
+/// It is a hint with a lifetime of seconds. An agent can drop between this
+/// answer and the connection attempt that follows, which is why the connect
+/// path still reports its own failure rather than trusting this.
+async fn presence(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(req): Json<PresenceRequest>,
+) -> Response {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or_default();
+
+    let claims = match token::verify_presence(&state.secret, token, now) {
+        Ok(claims) => claims,
+        Err(e) => {
+            debug!(error = %e, "presence refused");
+            // The reason is not returned. A caller holding a wrong token learns
+            // that it was wrong, which is all it can act on; which *kind* of
+            // wrong is a distinction only useful to somebody probing.
+            return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+        }
+    };
+
+    // Bounded so one request cannot walk a large id space, and because a
+    // dashboard asks about the machines on one page.
+    if req.agent_ids.len() > MAX_PRESENCE_IDS {
+        return (
+            StatusCode::BAD_REQUEST,
+            format!("at most {MAX_PRESENCE_IDS} agent ids"),
+        )
+            .into_response();
+    }
+
+    let online = state.agents.online_for(&claims.sub, &req.agent_ids);
+    Json(PresenceResponse { online }).into_response()
+}
+
+/// How many ids one presence query may name.
+const MAX_PRESENCE_IDS: usize = 200;
+
+#[derive(Debug, Deserialize)]
+struct PresenceRequest {
+    #[serde(rename = "agentIds", default)]
+    agent_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct PresenceResponse {
+    online: Vec<String>,
 }
 
 async fn ws_handler(
