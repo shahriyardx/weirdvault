@@ -41,8 +41,10 @@ export interface Host {
    * `hostname` and `port` still mean something when this is set, and both are
    * still used. `port` is the port on the agent's own loopback to forward to —
    * a machine need not run sshd on 22 — and `hostname` is a label the user
-   * chose, kept because host-key pins are stored against it and because a host
-   * whose display name changed when it moved behind NAT would lose its pin.
+   * chose, shown wherever the host is named.
+   *
+   * The host key is pinned against the agent rather than against that label,
+   * precisely because the label can be renamed: see pinKeyFor in lib/hostkeys.
    *
    * The agent id is a server-side identifier and lives here, in the encrypted
    * vault, like everything else about a host. The server knows the agent exists;
@@ -76,9 +78,21 @@ export interface Host {
 
 const STORE = "hosts"
 
+/**
+ * Newest first, by when the host was added.
+ *
+ * Deliberately not by last use. That ordering rearranged the list every time you
+ * connected to anything: the row you were aiming at moved to the top, and the
+ * one you had just used pushed everything else down a line. A list you have to
+ * re-read before every click is worse than one that is merely in the wrong
+ * order, because muscle memory never gets a chance to form.
+ *
+ * `lastUsedAt` is still recorded — the row shows it — it just does not decide
+ * where anything sits.
+ */
 export async function listHosts(): Promise<Host[]> {
   const all = await idbGetAll<Host>(STORE)
-  return all.sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt))
+  return all.sort((a, b) => b.createdAt - a.createdAt)
 }
 
 /**
