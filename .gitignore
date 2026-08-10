@@ -30,3 +30,8 @@ spike/
 # Built on demand by scripts/build-agent.mjs, like ssh.wasm. Not committed:
 # ~8 MB per target, and one command rebuilds them.
 apps/web/public/agent-bin/
+
+# Built agent binaries. `bun run agent` writes the release set to
+# apps/web/public/agent-bin; `go build` in apps/agent leaves one behind here.
+apps/agent/agent
+apps/web/public/agent-bin/
