@@ -485,11 +485,25 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now weirdvault
+systemctl enable weirdvault
+
+# Restart, not "enable --now".
+#
+# "--now" starts a stopped service and does nothing at all to a running one — so
+# a repair replaced the binary on disk and left the old process serving, which
+# then reported its old version to the dashboard. The machine looked like the
+# repair had not worked, while "weirdvault version" on the same box said
+# otherwise, because those two read different things.
+#
+# This ends whatever sessions the agent is carrying, which is the honest cost of
+# asking for a repair: it is a local, deliberate act by somebody at a terminal,
+# unlike the remote restart that refuses while a session is open.
+systemctl restart weirdvault
 
 echo
 if [ "$MODE" = "repair" ]; then
-  echo "Repaired. Same machine, same identity — only the binary and the unit changed."
+  echo "Repaired and restarted. Same machine, same identity — only the binary and"
+  echo "the unit changed. Any session it was carrying ended with the restart."
 else
   echo "Done. The agent is running and should appear at \${APP_URL} within a few seconds."
 fi
