@@ -78,7 +78,7 @@ AGENT_COMMAND_SECRET   base64 seed, 32 bytes, on the web app only
 ```
 
 The public half is returned at enrolment and stored in the identity file as
-`serverPublicKeys` — an array, so a rotation does not need every machine
+`commandKeys` — an array, so a rotation does not need every machine
 re-enrolled. It travels over the same TLS connection the installer already
 trusts to hand out an agent id and a relay URL.
 
@@ -111,7 +111,7 @@ observable".
 
 ### Agents enrolled before this exists
 
-They have no `serverPublicKeys`, so they refuse every command — including revoke.
+They have no `commandKeys`, so they refuse every command — including revoke.
 The dashboard says so on the card rather than showing controls that will fail,
 with the same re-enrol instruction that `Updates: off` already gets. This is the
 same shape of gap as agents enrolled before self-update, and it resolves the same
@@ -119,7 +119,7 @@ way.
 
 ### Rotation
 
-`serverPublicKeys` is a list, and a `rotate-key` command signed by a *current*
+`commandKeys` is a list, and a `rotate-key` command signed by a *current*
 key appends a new one. Not built in the first pass; the field is a list from the
 start so that adding it later is not a config migration.
 
@@ -337,7 +337,7 @@ footer from becoming six buttons on a phone. `Stop` opens a dialog that says
 plainly: **this needs local or SSH access to undo.**
 
 Controls that cannot work are absent, not disabled: no remote control on an
-agent with no `serverPublicKeys`, nothing but `Connect` while a machine is
+agent with no `commandKeys`, nothing but `Connect` while a machine is
 offline.
 
 ---
@@ -380,8 +380,6 @@ All six have landed. Kept as written so the order — and the reason phases 1 an
 
 Two things came out differently from the plan, both for the better:
 
-- **The field is `commandKeys`, not `serverPublicKeys`.** Same list, same
-  rotation story, a name that says what it is for.
 - **macOS does not back off hourly on a rejection; it stays resident and idle.**
   Backing off still leaves launchd restarting the process forever, just more
   slowly. Staying alive with nothing to run is the only way to stop without a
@@ -396,14 +394,22 @@ Phases 1 and 2 are independent of the rest and worth landing first — they are
 also what makes phases 5 and 6 legible, since a control you cannot see the effect
 of is a control nobody trusts.
 
-## What cannot be verified here
+## What has and has not been on a real machine
 
-- Anything launchd. No Mac in this environment; the macOS paths are written from
-  the documented behaviour and want a real machine before they are believed.
-- Multi-relay presence, which needs a load balancer to be wrong in the way
-  described.
-- Everything else has a real machine available: this checkout's own host runs an
-  enrolled agent, and a second identity on it is the multi-account case.
+The macOS paths were written from documented behaviour with no Mac available,
+and have since been installed and run on one — so the plist, the daemon and the
+ordinary install are no longer taken on faith. What has not been provoked there
+is the behaviour that only happens when something goes wrong: a revoked identity
+staying resident rather than letting launchd restart it every ten seconds, and
+`launchctl kickstart` as the restart path.
+
+Still unverified anywhere:
+
+- **Multi-relay presence**, which needs a load balancer to be wrong in the way
+  described above.
+- **The session refusal against a real session.** It is unit-tested with a
+  synthetic counter; no actual SSH stream has been open at the moment a restart
+  was attempted, because the development host runs no sshd.
 
 ## Open questions
 

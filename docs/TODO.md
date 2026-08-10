@@ -148,3 +148,74 @@ guard tests are gone; there is one of each again.
 That is the argument against reaching for a standalone script next time
 something needs scheduling. The runtime image ships no `src/` and no TypeScript,
 so a script cannot import anything — and whatever it needs, it ends up carrying.
+
+---
+
+## Rotate the command signing key
+
+**Now:** `AGENT_COMMAND_SECRET` signs every instruction the dashboard sends a
+machine, and each identity holds its public half in `commandKeys` — a list,
+already, so that this is not a config migration when it arrives. There is no way
+to change it. Rotating today means re-enrolling every machine, which is exactly
+the cost the list was shaped to avoid.
+
+**What to do instead:** a `rotate-key` command, signed by a *current* key, that
+appends a new one to `commandKeys`. Signed by the old key is what makes it safe:
+the agent already knows how to check that, and the relay still cannot invent one.
+Then the old key is retired on the control plane once the fleet has picked the
+new one up, which `list` can report because every identity's keys are on disk.
+
+**Trigger:** the first time a key has to change — a leak, an operator leaving, or
+a deployment splitting in two. Also the first time somebody asks how to do it,
+because "you cannot" is a worse answer than a small amount of work.
+
+---
+
+## Show which sessions a machine is carrying
+
+**Now:** the agent counts the sessions each identity is carrying, refuses a
+remote restart or upgrade while any are open, and names the identity in the
+refusal. `weirdvault list` prints the count. The dashboard does not: it offers
+Restart, the machine refuses, and the number arrives as a sentence in a toast.
+
+**What to do instead:** the count is already in the runtime state file and could
+ride back on the presence answer the same way `online` does. A card that showed
+"2 sessions" would make the refusal predictable rather than surprising, and it is
+the same fact the terminal page could use to say what is open.
+
+**Trigger:** the first report of somebody pressing Restart twice because the
+first refusal read as a failure.
+
+---
+
+## Record when a machine came and went
+
+**Now:** reachability is a live question answered by the relay's registry —
+online, offline, or unknown right now. Nothing is written down, so "it dropped
+at 3am and came back" is unanswerable, and so is "how often does this machine
+fall off".
+
+**What to do instead:** the same channel `connection.opened` and
+`connection.closed` are waiting on (see above): the relay already batches usage
+counts to the control plane on a timer, and agent presence transitions are the
+same shape of event on the same credential.
+
+**Trigger:** the first time somebody asks why a machine was unreachable, which is
+a question this product invites by showing the state at all.
+
+---
+
+## Rate limit the relay's own endpoints
+
+**Now:** `/api/agents/[id]/command` is capped at twenty a minute per account, and
+`/agents/presence` and `/agents/command` on the relay are not capped at all. They
+both require a scoped token minted by the control plane, so this is not an open
+door — but a token is good for thirty seconds, and nothing stops it being spent
+as fast as a caller can manage.
+
+**What to do instead:** `apps/relay/src/quota.rs` already holds per-account
+counters for connections and bytes, which is where a per-account request rate
+belongs.
+
+**Trigger:** any evidence of it mattering, or the first deployment that puts the
+relay somewhere an untrusted caller can reach the presence endpoint directly.
