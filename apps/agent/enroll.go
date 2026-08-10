@@ -324,6 +324,20 @@ func printIdentity(path string) error {
 	} else {
 		fmt.Printf("Updates:     %s\n", cfg.ReleaseURL)
 	}
+
+	// The count, not the keys. It is the number an operator rotating a signing
+	// key needs — two means this machine has taken the new one and the old can
+	// be retired once every machine says the same — and printing the keys
+	// themselves would be noise in the one place people paste into a chat.
+	switch len(cfg.CommandKeys) {
+	case 0:
+		fmt.Printf("Commands:    refused (no signing key; re-enrol to enable)\n")
+	case 1:
+		fmt.Printf("Commands:    accepted, 1 signing key trusted\n")
+	default:
+		fmt.Printf("Commands:    accepted, %d signing keys trusted (a rotation is in progress)\n",
+			len(cfg.CommandKeys))
+	}
 	return nil
 }
 
