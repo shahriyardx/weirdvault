@@ -207,6 +207,38 @@ rather than showing a control that fails when pressed.
 | `R2_*` (four, plus optional `R2_REGION`) | Recordings are stored as a `bytea` column in Postgres. **All four or none** — three of four is a typo and is treated as one. See [Recording storage](#recording-storage) |
 | `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_IPS` | No client address is recorded on any audit row, and every unauthenticated rate limit shares one bucket that any caller can spend for everybody. Set both once a proxy is in front |
 | `AGENT_RELEASE_BASE_URL` | Agent binaries are served from `<your origin>/agent-bin`, which is what `bun run agent` writes |
+| `AGENT_VERSION` | Defaults to `dev`, and then no agent in the field ever self-updates: a machine updates when the manifest's value **differs** from its own, and `dev` never differs from `dev`. Set it per release. See [Agent versions](#agent-versions) |
+
+### Agent versions
+
+`AGENT_VERSION` is stamped into the agent binaries (`main.version`) and into the
+`manifest.json` beside them, from one build arg in one Docker stage — so the
+binary and the manifest cannot disagree about what they are.
+
+An agent checks it once, at startup: it fetches the manifest and replaces itself
+if the version there **differs** from its own. Differs, not exceeds. These are
+build identifiers rather than an ordering, and inventing a comparison for them
+would be inventing a wrong one — which also means a rollback pulls agents back,
+deliberately.
+
+Two consequences worth planning around:
+
+- **Bump it when you ship a new agent, and not otherwise.** Wiring it to the
+  commit hash means every web-only redeploy hands every machine a new binary to
+  download and re-exec into, for no change at all.
+- **It only takes effect on an agent restart.** `selfUpdate` runs before the
+  control connection opens, so nothing is replaced mid-session — and a machine
+  that stays up for months is running whatever it was installed with until
+  something restarts it. `systemctl restart weirdvault-agent`, or a reboot.
+
+Tag the release too, so the string points at a commit:
+
+```bash
+git tag -a v1.0.0 -m "v1.0.0" && git push --tags
+```
+
+Nothing enforces that the tag and `AGENT_VERSION` match. If they drift, the
+version an agent reports is a label that leads nowhere.
 
 **Why three separate relay secrets.** `RELAY_SECRET` is an HMAC signing key that
 is never transmitted, and whose compromise turns the relay into an open proxy.
