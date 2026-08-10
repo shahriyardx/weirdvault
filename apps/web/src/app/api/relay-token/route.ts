@@ -162,7 +162,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "relay not configured" }, { status: 503 })
   }
 
-  let body: { host?: unknown; port?: unknown; agent?: unknown }
+  let body: { host?: unknown; port?: unknown; agent?: unknown; ref?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -254,16 +254,35 @@ export async function POST(request: Request) {
     }
   }
 
+  /**
+   * The browser's blinded reference for this destination.
+   *
+   * HMAC of the host under a key derived from the vault password, computed in
+   * the tab — so this server receives a stable opaque handle and no way to turn
+   * it into a hostname. It is copied into the token, echoed back by the relay on
+   * the connection events it reports, and stored on the audit row, which is how
+   * a timeline can be grouped by host without any server ever holding one.
+   *
+   * Not validated beyond its shape, because there is nothing to validate
+   * against: only the device that made it can say what it means.
+   */
+  const ref =
+    typeof body.ref === "string" && body.ref.length > 0 && body.ref.length <= 64
+      ? body.ref
+      : undefined
+
   const claims = wantsAgent
     ? {
         sub,
         agent: agent as string,
+        ...(ref ? { ref } : {}),
         exp: Math.floor(Date.now() / 1000) + ttl,
       }
     : {
         sub,
         host,
         port,
+        ...(ref ? { ref } : {}),
         exp: Math.floor(Date.now() / 1000) + ttl,
       }
 

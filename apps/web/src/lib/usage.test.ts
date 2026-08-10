@@ -23,6 +23,7 @@ import { describe, expect, test } from "bun:test"
 
 import {
   isAnonymousSubject,
+  isRelayConnectionEvent,
   isRelayUsageEntry,
   MAX_BYTES_PER_ENTRY,
   MAX_ENTRIES_PER_BATCH,
@@ -128,5 +129,66 @@ describe("the meter's derivations", () => {
     expect(formatBytes(1_000_000_000)).toBe("1 GB")
     expect(formatBytes(5_000_000_000)).toBe("5 GB")
     expect(formatBytes(512)).toBe("512 B")
+  })
+})
+
+/**
+ * Connection events, which no compiler checks either.
+ *
+ * `encode_events` in apps/relay/src/reporter.rs serialises the Rust struct; this
+ * validator is what decides whether the row is written. A rename on either side
+ * would post batches that are accepted and record nothing — an audit log that
+ * silently stops is worse than one that was never built, because the page still
+ * looks complete.
+ */
+describe("isRelayConnectionEvent", () => {
+  const opened = { kind: "connection.opened", subject: "user-1", targetRef: "abc", port: 22 }
+  const closed = {
+    kind: "connection.closed",
+    subject: "user-1",
+    targetRef: "abc",
+    port: 22,
+    bytesUp: 1024,
+    bytesDown: 4096,
+    durationMs: 60_000,
+  }
+
+  test("accepts exactly what the relay emits", () => {
+    expect(isRelayConnectionEvent(opened)).toBe(true)
+    expect(isRelayConnectionEvent(closed)).toBe(true)
+  })
+
+  test("a session with no blinded target is still a row", () => {
+    // A token minted before refs existed, or by a device that has not unlocked
+    // the vault. "Something connected on port 22" beats losing the event.
+    const { targetRef, ...withoutRef } = opened
+    expect(isRelayConnectionEvent(withoutRef)).toBe(true)
+  })
+
+  test("a close without its totals is refused", () => {
+    // Those three fields are the whole reason the closed event exists; a row
+    // missing them would render as a connection that moved nothing.
+    const { bytesUp, ...missing } = closed
+    expect(isRelayConnectionEvent(missing)).toBe(false)
+  })
+
+  test("refuses anything that is not one of the two kinds", () => {
+    // The kind is written straight into event_type, which is a closed enum
+    // elsewhere in the audit log. This is where that stays true.
+    expect(isRelayConnectionEvent({ ...opened, kind: "auth.signin" })).toBe(false)
+    expect(isRelayConnectionEvent({ ...opened, kind: "connection.something" })).toBe(false)
+  })
+
+  test("refuses impossible ports and negative counts", () => {
+    expect(isRelayConnectionEvent({ ...opened, port: 0 })).toBe(false)
+    expect(isRelayConnectionEvent({ ...opened, port: 70000 })).toBe(false)
+    expect(isRelayConnectionEvent({ ...closed, bytesUp: -1 })).toBe(false)
+    expect(isRelayConnectionEvent({ ...closed, durationMs: 1.5 })).toBe(false)
+  })
+
+  test("refuses a target reference long enough to be something else", () => {
+    // It is stored and compared, never decoded — so the only defence against
+    // somebody using the column as free text is its length.
+    expect(isRelayConnectionEvent({ ...opened, targetRef: "x".repeat(65) })).toBe(false)
   })
 })

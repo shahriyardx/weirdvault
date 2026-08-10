@@ -34,6 +34,78 @@ export type RelayUsageEntry = {
   bytesDown: number
 }
 
+/* ------------------------------------------- relay → control plane: events */
+
+/**
+ * One thing that happened to one connection, as the relay reports it.
+ *
+ * These become `connection.opened` and `connection.closed` rows in the audit
+ * log — the two event types that have sat in the catalogue with validators and
+ * nothing emitting them since it was written, while the README promised "every
+ * connection, key and device, in one place".
+ *
+ * The relay cannot write them itself: it holds no database credentials by
+ * design. So it buffers and posts them the way it already posts byte counts,
+ * on the same timer, endpoint and secret. `encode_events` in
+ * apps/relay/src/reporter.rs is the other end.
+ *
+ * `targetRef` is the browser's blinded host reference, carried through the
+ * relay token and echoed back. Neither the relay nor this side can turn it into
+ * a hostname; it exists so a timeline can be grouped by host without either of
+ * them storing one. Absent when the token was minted without one, which is a
+ * row with no target rather than no row.
+ */
+export type RelayConnectionEvent = {
+  kind: "connection.opened" | "connection.closed"
+  /** A user id, or `anon:<uuid>` — those are dropped, having no account. */
+  subject: string
+  targetRef?: string
+  port: number
+  /** Present on `connection.closed` only. */
+  bytesUp?: number
+  bytesDown?: number
+  durationMs?: number
+}
+
+/**
+ * The ceiling the audit metadata validators already enforce, repeated here so
+ * a bad number is refused at the edge rather than at the insert.
+ */
+const MAX_AUDIT_INT = 1e12
+
+const isCount = (v: unknown): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= 0 && v < MAX_AUDIT_INT
+
+/**
+ * Validates one event off the wire.
+ *
+ * Strict for the same reason the usage validator is: this is an outside process
+ * writing into a table somebody reads to decide whether they were compromised.
+ * A row that cannot be trusted is worse than a row that is missing.
+ */
+export function isRelayConnectionEvent(value: unknown): value is RelayConnectionEvent {
+  if (typeof value !== "object" || value === null) return false
+  const e = value as Record<string, unknown>
+
+  if (e.kind !== "connection.opened" && e.kind !== "connection.closed") return false
+  if (typeof e.subject !== "string" || !e.subject || e.subject.length > 128) return false
+  if (!Number.isInteger(e.port) || (e.port as number) < 1 || (e.port as number) > 65535)
+    return false
+
+  // Opaque and short. Not decoded, not resolved — only stored and compared.
+  if (e.targetRef !== undefined) {
+    if (typeof e.targetRef !== "string" || !e.targetRef || e.targetRef.length > 64) return false
+  }
+
+  if (e.kind === "connection.closed") {
+    if (!isCount(e.bytesUp) || !isCount(e.bytesDown) || !isCount(e.durationMs)) return false
+  }
+  return true
+}
+
+/** The most events one POST may carry. Matches MAX_ENTRIES_PER_BATCH in the relay. */
+export const MAX_EVENTS_PER_BATCH = 500
+
 /**
  * The largest byte count one flush window may carry.
  *

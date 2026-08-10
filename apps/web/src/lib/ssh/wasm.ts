@@ -212,8 +212,8 @@ function explainMintFailure(status: number): string {
  * decision about that account; everything else is configuration, a session or a
  * network, and says which with the status in it.
  */
-export async function relayUrl(host: string, port: number): Promise<string> {
-  return buildRelayUrl({ host, port })
+export async function relayUrl(host: string, port: number, ref?: string): Promise<string> {
+  return buildRelayUrl({ host, port }, ref)
 }
 
 /**
@@ -228,12 +228,21 @@ export async function relayUrl(host: string, port: number): Promise<string> {
  * loopback and a machine does not have to run sshd on 22. The agent refuses
  * anything outside its own allowlist regardless of what is asked for here.
  */
-export async function agentRelayUrl(agent: string, port: number): Promise<string> {
-  return buildRelayUrl({ agent, port })
+export async function agentRelayUrl(agent: string, port: number, ref?: string): Promise<string> {
+  return buildRelayUrl({ agent, port }, ref)
 }
 
 async function buildRelayUrl(
   destination: { host: string; port: number } | { agent: string; port: number },
+  /**
+   * The blinded host reference, when the caller could compute one.
+   *
+   * It travels with the mint so the token can carry it to the relay, which
+   * echoes it onto the connection events it reports. That is the whole path by
+   * which "which host was this" reaches the audit log without any server
+   * learning a hostname — see lib/audit/blind.ts.
+   */
+  ref?: string,
 ): Promise<string> {
   const base =
     process.env.NEXT_PUBLIC_RELAY_URL ??
@@ -244,7 +253,7 @@ async function buildRelayUrl(
     res = await fetch("/api/relay-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(destination),
+      body: JSON.stringify(ref ? { ...destination, ref } : destination),
     })
   } catch (e) {
     throw new RelayTokenError(

@@ -10,6 +10,7 @@
 //! over, and it is the reason self-hosting is a first-class option.
 
 mod agent;
+mod events;
 mod http;
 mod quota;
 mod reporter;
@@ -46,6 +47,9 @@ use quota::{Limits, Quotas};
 #[derive(Clone)]
 struct AppState {
     secret: Arc<Vec<u8>>,
+    /// Connection events on their way to the audit log. See events.rs for why
+    /// they are buffered here rather than written anywhere.
+    events: Arc<events::ConnectionEvents>,
     quotas: Arc<Quotas>,
     allowed_ports: Arc<Vec<u16>>,
     allow_private: bool,
@@ -123,6 +127,7 @@ async fn main() {
 
     let state = AppState {
         secret: Arc::new(secret.into_bytes()),
+        events: Arc::new(events::ConnectionEvents::new()),
         quotas: Quotas::new(Limits::default()),
         allowed_ports: Arc::new(allowed_ports.clone()),
         allow_private,
@@ -132,7 +137,10 @@ async fn main() {
 
     // Started before the listener so a broken RELAY_USAGE_URL stops the process
     // rather than producing a relay that serves traffic and reports nothing.
-    let (usage_reporter, reporting_disabled) = match reporter::Reporter::from_env(state.quotas.clone())
+    let (usage_reporter, reporting_disabled) = match reporter::Reporter::from_env(
+        state.quotas.clone(),
+        Arc::clone(&state.events),
+    )
     {
         Ok(pair) => pair,
         Err(e) => {
@@ -443,8 +451,29 @@ async fn connect_to_address(
     let target = SocketAddr::new(ip, port);
     let host = host.to_string();
 
+    let ref_for_audit = claims.reference.clone();
+    let events = Arc::clone(&state.events);
+
     ws.on_upgrade(move |socket| async move {
-        if let Err(e) = bridge(socket, target, state.dial_timeout, &guard).await {
+        let started = Instant::now();
+        events.opened(guard.account(), ref_for_audit.as_deref(), port);
+
+        let moved = bridge(socket, target, state.dial_timeout, &guard).await;
+
+        // Recorded however it ended. A connection that failed mid-session is
+        // exactly the one somebody reading a timeline is looking for, and a
+        // close that only happens on the happy path would leave those invisible.
+        let (up, down) = moved.as_ref().copied().unwrap_or((0, 0));
+        events.closed(
+            guard.account(),
+            ref_for_audit.as_deref(),
+            port,
+            up,
+            down,
+            started.elapsed().as_millis() as u64,
+        );
+
+        if let Err(e) = moved {
             warn!(account = %guard.account(), %host, %target, error = %e, "connection ended with error");
         }
     })
@@ -511,6 +540,8 @@ async fn connect_via_agent(
     // Accept the socket, then close it with a reason the client can actually
     // read. Same discipline as a failed dial; see dial_failure_reason.
     let account = claims.sub.clone();
+    let ref_for_audit = claims.reference.clone();
+    let events = Arc::clone(&state.events);
 
     ws.on_upgrade(move |browser| async move {
         let started = Instant::now();
@@ -551,7 +582,16 @@ async fn connect_via_agent(
         };
 
         info!(account = %guard.account(), agent = %agent_id, port, "agent connection open");
+        events.opened(guard.account(), ref_for_audit.as_deref(), port);
         let (up, down) = splice(browser, stream, &guard).await;
+        events.closed(
+            guard.account(),
+            ref_for_audit.as_deref(),
+            port,
+            up,
+            down,
+            started.elapsed().as_millis() as u64,
+        );
         info!(
             account = %guard.account(),
             agent = %agent_id,
@@ -657,7 +697,7 @@ async fn bridge(
     target: SocketAddr,
     dial_timeout: Duration,
     guard: &quota::ConnectionGuard,
-) -> std::io::Result<()> {
+) -> std::io::Result<(u64, u64)> {
     let dialled = match tokio::time::timeout(dial_timeout, TcpStream::connect(target)).await {
         Ok(result) => result,
         Err(_) => Err(std::io::Error::new(
@@ -766,7 +806,7 @@ async fn bridge(
         duration_ms = started.elapsed().as_millis() as u64,
         "connection closed"
     );
-    Ok(())
+    Ok((up_bytes, down_bytes))
 }
 
 /// Closes a browser socket with a reason it can actually read.

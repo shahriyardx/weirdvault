@@ -13,8 +13,10 @@ import { relayAllowanceFor, tierFor } from "@/lib/billing/subscription"
 import { periodFor, periodResetsAt, TIER_LABELS } from "@/lib/billing/tiers"
 import {
   isAnonymousSubject,
+  isRelayConnectionEvent,
   isRelayUsageEntry,
   MAX_ENTRIES_PER_BATCH,
+  MAX_EVENTS_PER_BATCH,
   type RelayUsage,
 } from "@/lib/usage"
 
@@ -64,6 +66,73 @@ function authorised(request: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
+/**
+ * Writes what the relay saw into the audit log.
+ *
+ * The one place in this codebase where an audit row is created from something
+ * outside it, which is why every field is validated rather than trusted and why
+ * `source` is fixed here rather than taken from the request. A caller holding
+ * this secret can write connection rows for any account; it cannot write any
+ * other kind of row, or claim any other source.
+ *
+ * Rows are written for accounts that still exist and dropped otherwise, on the
+ * same rule as the usage branch: a deleted account can still have connections
+ * draining through a relay that has not noticed, and one failed foreign key
+ * must not discard the batch.
+ */
+async function recordConnectionEvents(events: unknown[]) {
+  if (events.length > MAX_EVENTS_PER_BATCH) {
+    return Response.json(
+      { error: `at most ${MAX_EVENTS_PER_BATCH} events per batch` },
+      { status: 413 },
+    )
+  }
+
+  const valid = events.filter(isRelayConnectionEvent)
+  const malformed = events.length - valid.length
+
+  // Anonymous visitors have no account for a timeline to belong to.
+  const named = valid.filter((e) => !isAnonymousSubject(e.subject))
+
+  const subjects = [...new Set(named.map((e) => e.subject))]
+  const known =
+    subjects.length === 0
+      ? []
+      : await db
+          .select({ id: schema.user.id })
+          .from(schema.user)
+          .where(inArray(schema.user.id, subjects))
+  const exists = new Set(known.map((u) => u.id))
+
+  const rows = named
+    .filter((e) => exists.has(e.subject))
+    .map((e) => ({
+      id: crypto.randomUUID(),
+      userId: e.subject,
+      eventType: e.kind,
+      source: "relay" as const,
+      targetRef: e.targetRef ?? null,
+      // No IP. The relay sees the browser's address and the control plane
+      // already records one on the events it writes itself; adding a second,
+      // differently-derived answer to the same question would make the column
+      // mean two things.
+      ipPrefix: null,
+      metadata:
+        e.kind === "connection.opened"
+          ? { port: e.port }
+          : { bytesUp: e.bytesUp, bytesDown: e.bytesDown, durationMs: e.durationMs },
+    }))
+
+  if (rows.length > 0) {
+    await db.insert(schema.auditEvent).values(rows)
+  }
+
+  if (malformed > 0) {
+    console.warn(`relay events: ${malformed} of ${events.length} were malformed and dropped`)
+  }
+  return Response.json({ ok: true, recorded: rows.length, dropped: events.length - rows.length })
+}
+
 /* --------------------------------------------------------------------- POST */
 
 export async function POST(request: Request) {
@@ -74,11 +143,27 @@ export async function POST(request: Request) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  let body: { entries?: unknown }
+  let body: { entries?: unknown; events?: unknown }
   try {
     body = await request.json()
   } catch {
     return Response.json({ error: "invalid JSON" }, { status: 400 })
+  }
+
+  /*
+   * Connection events arrive on this endpoint too, in their own requests.
+   *
+   * The relay has no database — that is the constraint the token design exists
+   * to satisfy — so `connection.opened` and `connection.closed` could never be
+   * written where they happen. They come here the way byte counts already do:
+   * same timer, same credential, same drop-rather-than-retry discipline.
+   *
+   * Handled before the usage branch and returned from, because a request
+   * carries one or the other and pretending otherwise would mean two code
+   * paths that both half-run.
+   */
+  if (Array.isArray(body.events)) {
+    return recordConnectionEvents(body.events)
   }
 
   const { entries } = body

@@ -8,6 +8,7 @@
  */
 
 import { reportAudit } from "@/lib/audit/client"
+import { blindHost } from "@/lib/audit/blind"
 import { getPin, HostKeyMismatchError, pin, pinKeyFor, touchPin } from "@/lib/hostkeys"
 import { authorizedKeysLine, makeSigner, type SshKey } from "@/lib/keys"
 import { rememberHost } from "@/lib/hosts"
@@ -56,8 +57,22 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   const known = await getPin(pinKey, port)
   let seen: HostKeyInfo | null = null
 
+  /*
+   * The blinded reference for this destination, computed here and sent with the
+   * token mint so the relay can echo it onto the connection events it reports.
+   *
+   * The same function every other audit event uses, over the same target, so a
+   * connection row groups with the hostkey rows for the host it belongs to. A
+   * device that has not unlocked the vault has no audit key and sends nothing,
+   * which costs the row its target and not its existence.
+   */
+  const auditKey = getAuditKey()
+  const targetRef = auditKey ? await blindHost(auditKey, hostname, port) : undefined
+
   const session = await rawConnect({
-    relay: opts.agentId ? await agentRelayUrl(opts.agentId, port) : await relayUrl(hostname, port),
+    relay: opts.agentId
+      ? await agentRelayUrl(opts.agentId, port, targetRef)
+      : await relayUrl(hostname, port, targetRef),
     host: hostname,
     port,
     user: username,

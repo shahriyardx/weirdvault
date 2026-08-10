@@ -24,6 +24,7 @@ use std::{sync::Arc, time::Duration};
 
 use tracing::{debug, info, warn};
 
+use crate::events::{ConnectionEvent, ConnectionEvents};
 use crate::http::{check_secret, post_json, ConfigError, Endpoint};
 use crate::quota::{AccountBytes, Quotas};
 
@@ -43,6 +44,11 @@ const MAX_ENTRIES_PER_BATCH: usize = 500;
 /// is a log line at boot rather than a surprise an hour later.
 pub struct Reporter {
     quotas: Arc<Quotas>,
+    /// Connection events ride the same flush, the same endpoint and the same
+    /// credential as the byte counts. A second timer and a second URL to
+    /// configure would buy nothing: both are "things the relay observed and the
+    /// control plane records", and both are dropped rather than retried.
+    events: Arc<ConnectionEvents>,
     /// `None` means no endpoint is configured. The drain still runs — it is what
     /// keeps the account map from growing without bound — and the batch is
     /// dropped.
@@ -54,7 +60,10 @@ impl Reporter {
     /// Reads the environment. Returns the reporter and, when reporting is off,
     /// the reason, so the caller can say so at the only moment anyone is
     /// reading the log.
-    pub fn from_env(quotas: Arc<Quotas>) -> Result<(Self, Option<&'static str>), ConfigError> {
+    pub fn from_env(
+        quotas: Arc<Quotas>,
+        events: Arc<ConnectionEvents>,
+    ) -> Result<(Self, Option<&'static str>), ConfigError> {
         let interval = std::env::var("RELAY_USAGE_INTERVAL_SECS")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -79,6 +88,7 @@ impl Reporter {
         Ok((
             Self {
                 quotas,
+                events,
                 target,
                 interval,
             },
@@ -117,17 +127,61 @@ impl Reporter {
 
     async fn flush(&self) {
         let batch = self.quotas.drain_usage();
-        if batch.is_empty() {
+        let events = self.events.drain();
+
+        if let dropped @ 1.. = self.events.take_dropped() {
+            // Said out loud, because a timeline with holes in it that nobody
+            // knows about is worse than one that admits them.
+            warn!(dropped, "connection events were dropped: the queue was full");
+        }
+
+        if batch.is_empty() && events.is_empty() {
             return;
         }
 
         let Some((endpoint, secret)) = &self.target else {
             debug!(
                 accounts = batch.len(),
+                events = events.len(),
                 "usage reporting is not configured; batch dropped"
             );
             return;
         };
+
+        // Events go in their own request rather than being attached to a usage
+        // chunk. The two have different natural sizes — a quiet hour has no
+        // bytes to report and several connections, or the reverse — and pairing
+        // them would make one wait for the other.
+        for chunk in events.chunks(MAX_ENTRIES_PER_BATCH) {
+            let body = encode_events(chunk);
+            match post_json(endpoint, secret, &body).await.map(|(s, _)| s) {
+                Ok(status) if (200..300).contains(&status) => {
+                    debug!(events = chunk.len(), status, "connection events reported");
+                }
+                Ok(status) => {
+                    warn!(
+                        events = chunk.len(),
+                        status, "control plane refused connection events; discarded"
+                    );
+                }
+                Err(e) => {
+                    // Dropped rather than retried, and for a sharper reason than
+                    // the bytes below: a POST that timed out may have been
+                    // applied, and replaying it would put an event in somebody's
+                    // timeline twice. A gap is honest; a duplicate is a fact
+                    // that never happened.
+                    warn!(
+                        events = chunk.len(),
+                        error = %e,
+                        "could not report connection events; discarded rather than retried"
+                    );
+                }
+            }
+        }
+
+        if batch.is_empty() {
+            return;
+        }
 
         for chunk in batch.chunks(MAX_ENTRIES_PER_BATCH) {
             let body = encode_batch(chunk);
@@ -172,6 +226,15 @@ fn encode_batch(entries: &[AccountBytes]) -> String {
         })
         .collect();
     serde_json::json!({ "entries": entries }).to_string()
+}
+
+/// The events as JSON, in the shape lib/usage.ts validates.
+///
+/// Serialised from the struct rather than hand-built like the batch above,
+/// because the field names are already spelled once in events.rs and spelling
+/// them twice is how the two drift.
+fn encode_events(events: &[ConnectionEvent]) -> String {
+    serde_json::json!({ "events": events }).to_string()
 }
 
 /// Says out loud what is and is not running. A cap nobody is counting towards
@@ -288,6 +351,7 @@ mod tests {
         guard.counter().add_down(340);
 
         let reporter = Reporter {
+            events: Arc::new(ConnectionEvents::new()),
             quotas: quotas.clone(),
             target: Some((
                 Endpoint {
@@ -328,6 +392,7 @@ mod tests {
         guard.counter().add_up(99);
 
         let reporter = Reporter {
+            events: Arc::new(ConnectionEvents::new()),
             quotas: quotas.clone(),
             target: Some((
                 Endpoint {
@@ -365,6 +430,7 @@ mod tests {
         }
 
         let reporter = Reporter {
+            events: Arc::new(ConnectionEvents::new()),
             quotas: quotas.clone(),
             target: None,
             interval: Duration::from_secs(60),

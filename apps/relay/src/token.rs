@@ -46,6 +46,18 @@ pub struct Claims {
     /// also enumerate an account's machines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    /// The browser's blinded reference for this destination, when it sent one.
+    ///
+    /// HMAC of the host under a key derived from the vault password, so it is
+    /// meaningless to this process and to the control plane alike — but stable,
+    /// which is what lets the audit log group a timeline by host without either
+    /// of them ever storing one. The relay copies it onto the connection events
+    /// it reports and does nothing else with it.
+    ///
+    /// Optional: a token minted before this existed, or by anything that does
+    /// not blind, produces connection rows with no target rather than none.
+    #[serde(default, rename = "ref", skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
     /// Unix seconds.
     pub exp: u64,
 }
@@ -201,6 +213,7 @@ mod tests {
             port: 22,
             agent: None,
             scope: None,
+            reference: None,
             exp: 2_000_000_000,
         }
     }
@@ -212,6 +225,7 @@ mod tests {
             port: 0,
             agent: None,
             scope: Some(SCOPE_PRESENCE.into()),
+            reference: None,
             exp: 2_000_000_000,
         }
     }
@@ -223,6 +237,7 @@ mod tests {
             port: 0,
             agent: Some("agent-7".into()),
             scope: None,
+            reference: None,
             exp: 2_000_000_000,
         }
     }
