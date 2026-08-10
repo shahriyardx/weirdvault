@@ -272,8 +272,13 @@ func runStatus(args []string) error {
 		return nil
 	}
 
-	rows := gatherIdentities(*dir, "")
+	rows, denied := gatherIdentities(*dir, "")
 	if len(rows) == 0 {
+		if denied {
+			return fmt.Errorf("cannot read %s, so there is no way to tell what this machine is.\n\n"+
+				"That directory holds one private key per account and is readable only by the\n"+
+				"service:\n  sudo weirdvault status", *dir)
+		}
 		return fmt.Errorf("no identity found in %s — run `weirdvault enroll` first", *dir)
 	}
 

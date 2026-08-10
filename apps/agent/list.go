@@ -43,7 +43,20 @@ Order matters. Disk is the authority on what exists — an identity the daemon h
 not started yet is still enrolled — and the state file is the authority on what
 is happening to it.
 */
-func gatherIdentities(dir string, extra string) []listing {
+/*
+gatherIdentities reads the directory, then annotates it with what is running.
+
+Returns whether the directory could not be read, which callers have to tell
+apart from finding nothing in it. /etc/weirdvault is 0700 and owned by the
+service account, so an ordinary user gets EACCES here — and reporting that as
+"no agent is enrolled on this machine" is a confident wrong answer given to
+somebody standing on a machine that plainly has one.
+
+The runtime state file is world-readable on purpose, so an unprivileged caller
+still learns what is running even when the identities themselves are unreadable.
+That is most of what `list` is for.
+*/
+func gatherIdentities(dir string, extra string) ([]listing, bool) {
 	found := map[string]*listing{}
 
 	add := func(path string) {
@@ -62,14 +75,21 @@ func gatherIdentities(dir string, extra string) []listing {
 		}
 	}
 
+	denied := false
 	entries, err := os.ReadDir(dir)
-	if err == nil {
+	switch {
+	case err == nil:
 		for _, entry := range entries {
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 				continue
 			}
 			add(filepath.Join(dir, entry.Name()))
 		}
+	case os.IsPermission(err):
+		denied = true
+	// A directory that is not there at all means no install, which is a true
+	// "none" and needs no caveat.
+	default:
 	}
 	add(extra)
 	// Where somebody testing without root would have put one.
@@ -100,7 +120,7 @@ func gatherIdentities(dir string, extra string) []listing {
 		out = append(out, *row)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
-	return out
+	return out, denied
 }
 
 func runList(args []string) error {
@@ -111,11 +131,18 @@ func runList(args []string) error {
 		return err
 	}
 
-	rows := gatherIdentities(*dir, *extra)
+	rows, denied := gatherIdentities(*dir, *extra)
 	state := readRuntimeState()
 	st := currentState()
 
 	if len(rows) == 0 {
+		// Two different facts, and saying the wrong one sends somebody to
+		// enrol a machine that is already enrolled.
+		if denied {
+			return fmt.Errorf("cannot read %s, so there is no way to tell what is enrolled here.\n\n"+
+				"That directory holds one private key per account and is readable only by the\n"+
+				"service:\n  sudo weirdvault list", *dir)
+		}
 		fmt.Println("No agent is enrolled on this machine.")
 		fmt.Println("Enrol one from Dashboard → Machines → Add a machine.")
 		return nil
@@ -127,6 +154,13 @@ func runList(args []string) error {
 		fmt.Fprintf(out, "%s\t%s\t%s\n", row.name, row.agentID, describeListing(row))
 	}
 	out.Flush()
+
+	// Rows came from the runtime state file, which anybody can read, while the
+	// identities themselves could not be listed. Saying so is the difference
+	// between an incomplete answer and a wrong one.
+	if denied {
+		fmt.Printf("\n⚠ %s could not be read, so this may not be all of them: sudo weirdvault list\n", *dir)
+	}
 
 	fmt.Println()
 	if state == nil {
@@ -222,7 +256,7 @@ refused rather than resolved to the first match: acting on the wrong person's
 identity is not a mistake worth being convenient about.
 */
 func resolveIdentity(dir, want string) (listing, error) {
-	rows := gatherIdentities(dir, "")
+	rows, denied := gatherIdentities(dir, "")
 
 	var matches []listing
 	for _, row := range rows {
@@ -238,6 +272,9 @@ func resolveIdentity(dir, want string) (listing, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
+		if denied {
+			return listing{}, fmt.Errorf("cannot read %s, so %q cannot be looked up. Try: sudo weirdvault …", dir, want)
+		}
 		return listing{}, fmt.Errorf("no identity here matches %q. `weirdvault list` shows them", want)
 	default:
 		names := make([]string, 0, len(matches))
@@ -357,7 +394,8 @@ func waitForIdentity(name string, wantRunning bool) bool {
 // otherIdentities names what a bare `stop` would take down.
 func otherIdentities(dir string) []string {
 	var names []string
-	for _, row := range gatherIdentities(dir, "") {
+	rows, _ := gatherIdentities(dir, "")
+	for _, row := range rows {
 		if row.stopped {
 			continue // already stopped; stopping it again is not a loss
 		}

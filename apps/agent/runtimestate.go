@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -40,7 +41,16 @@ which is not an error — the CLI falls back to the process table, exactly as it
 did before this file existed.
 */
 const (
-	defaultStateDir = "/run/weirdvault"
+	// Linux keeps runtime state in /run, and `RuntimeDirectory=weirdvault` in the
+	// unit creates it owned by the service account.
+	linuxStateDir = "/run/weirdvault"
+
+	// macOS has no /run at all. Writing there fails silently, the file never
+	// appears, and every CLI command then reports that nothing is running on a
+	// machine whose daemon is perfectly healthy — which is worse than having no
+	// state file, because it is a confident wrong answer. /var/run is the same
+	// idea and does exist there.
+	darwinStateDir = "/var/run/weirdvault"
 
 	// Overrides it, for an agent running as somebody who cannot write to /run.
 	// Read by the daemon and the CLI alike, so a hand-run pair sees one view —
@@ -58,7 +68,10 @@ func stateDirPath() string {
 	if dir := os.Getenv(stateDirVar); dir != "" {
 		return dir
 	}
-	return defaultStateDir
+	if runtime.GOOS == "darwin" {
+		return darwinStateDir
+	}
+	return linuxStateDir
 }
 
 func stateFilePath() string { return filepath.Join(stateDirPath(), "state.json") }

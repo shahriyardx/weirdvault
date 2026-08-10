@@ -868,7 +868,7 @@ func runInstallService(args []string) error {
 		if _, err := loadConfig(*configPath); err != nil {
 			return err
 		}
-	} else if len(gatherIdentities(*configDir, "")) == 0 {
+	} else if rows, _ := gatherIdentities(*configDir, ""); len(rows) == 0 {
 		return fmt.Errorf("no identity in %s — run `weirdvault enroll` first", *configDir)
 	}
 
@@ -1032,7 +1032,7 @@ func runUninstall(args []string) error {
 
 	// Listed before anything is touched, because this is the last moment the
 	// list exists and it is what somebody needs to revoke them afterwards.
-	rows := gatherIdentities(*dir, "")
+	rows, _ := gatherIdentities(*dir, "")
 
 	if !*yes {
 		fmt.Println("This removes weirdvault from this machine:")
