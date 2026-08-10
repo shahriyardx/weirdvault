@@ -42,6 +42,7 @@ export async function GET() {
       os: schema.agent.os,
       arch: schema.agent.arch,
       agentVersion: schema.agent.agentVersion,
+      machineRef: schema.agent.machineRef,
       lastSeenAt: schema.agent.lastSeenAt,
       revokedAt: schema.agent.revokedAt,
       createdAt: schema.agent.createdAt,

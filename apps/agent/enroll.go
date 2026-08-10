@@ -26,6 +26,10 @@ type enrollRequest struct {
 	OS        string `json:"os"`
 	Arch      string `json:"arch"`
 	Version   string `json:"version"`
+	// An opaque, stable reference to this physical machine, so the dashboard can
+	// group the identities that share one. Empty when the platform keeps no
+	// identifier this can read. See machine.go.
+	MachineRef string `json:"machineRef,omitempty"`
 }
 
 type enrollResponse struct {
@@ -88,12 +92,13 @@ func runEnroll(args []string) error {
 	}
 
 	body, err := json.Marshal(enrollRequest{
-		Token:     *token,
-		PublicKey: base64.StdEncoding.EncodeToString(pub),
-		Hostname:  hostname,
-		OS:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
-		Version:   version,
+		Token:      *token,
+		PublicKey:  base64.StdEncoding.EncodeToString(pub),
+		Hostname:   hostname,
+		OS:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+		Version:    version,
+		MachineRef: machineRef(),
 	})
 	if err != nil {
 		return err

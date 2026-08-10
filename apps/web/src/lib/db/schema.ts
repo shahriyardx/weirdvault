@@ -836,6 +836,29 @@ export const agent = pgTable(
     arch: text("arch"),
     agentVersion: text("agent_version"),
     /**
+     * Which physical machine this agent is on, as an opaque, stable reference.
+     *
+     * Several accounts sharing one machine is a supported arrangement, and one
+     * account can enrol the same machine twice. Both produce rows that are
+     * genuinely separate agents on one box — and without this, the dashboard
+     * has no way to say so, leaving two cards that look like two machines.
+     *
+     * Hashed from the platform's own machine id (`/etc/machine-id`, or the
+     * hardware UUID on macOS) with a fixed domain string, so it is stable across
+     * every identity on that machine and means nothing outside this deployment.
+     * Hostname is not good enough for this: `raspberrypi` and `localhost` are
+     * two of the most common names in existence, and grouping on them would
+     * eventually tell somebody that two of their machines are one.
+     *
+     * Self-reported, like `hostname` and `os` — a machine could lie about it.
+     * What that buys is a wrong grouping in a list, which is why it is used for
+     * display and nothing else.
+     *
+     * Null on agents enrolled before this existed, which the dashboard falls
+     * back to grouping by hostname for.
+     */
+    machineRef: text("machine_ref"),
+    /**
      * Set when the user revokes it. Checked on every relay verification, so a
      * revoke takes effect on the agent's next reconnect at the latest — and
      * immediately for any new session, since /api/relay-token reads this too.
@@ -850,6 +873,8 @@ export const agent = pgTable(
   },
   (t) => [
     index("agent_user_idx").on(t.userId),
+    // The machines page groups by this, scoped to one account.
+    index("agent_machine_idx").on(t.userId, t.machineRef),
     uniqueIndex("agent_public_key_idx").on(t.publicKey),
   ],
 )

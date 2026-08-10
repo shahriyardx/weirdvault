@@ -129,6 +129,9 @@ export async function POST(request: Request) {
   const os = cleanString(body.os, 32)
   const arch = cleanString(body.arch, 32)
   const agentVersion = cleanString(body.version, 32)
+  // Opaque and self-reported, like the three above. Used to group the identities
+  // that share a machine and for nothing else — see the column comment.
+  const machineRef = cleanString(body.machineRef, 64)
   const publicKey = body.publicKey
 
   const now = new Date()
@@ -190,6 +193,7 @@ export async function POST(request: Request) {
         os,
         arch,
         agentVersion,
+        machineRef,
       })
 
       await tx

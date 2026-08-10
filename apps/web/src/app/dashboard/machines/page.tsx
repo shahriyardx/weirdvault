@@ -25,6 +25,7 @@ import {
   ArrowsClockwiseIcon,
   CheckCircleIcon,
   CopyIcon,
+  CaretRightIcon,
   DesktopTowerIcon,
   DotsThreeIcon,
   PlugsConnectedIcon,
@@ -79,6 +80,11 @@ interface Agent {
   os: string | null
   arch: string | null
   agentVersion: string | null
+  /**
+   * Opaque, stable reference to the physical machine, or null on an agent
+   * enrolled before that was reported. Only ever used to group rows.
+   */
+  machineRef: string | null
   /**
    * Whether the relay has a live control connection to this machine.
    *
@@ -209,17 +215,21 @@ export default function MachinesPage() {
         <EmptyState onAdd={() => setEnrolling(true)} />
       ) : (
         <div className="mt-6 space-y-3">
-          {live.map((a) => (
-            <AgentRow
-              key={a.id}
-              agent={a}
-              published={published}
-              presence={presence}
-              host={hosts.find((h) => h.agentId === a.id) ?? null}
-              busy={connecting !== null}
-              onConnect={connectToHost}
-              onChanged={load}
-            />
+          {groupByMachine(live).map((group) => (
+            <MachineGroup key={group[0].id} agents={group}>
+              {group.map((a) => (
+                <AgentRow
+                  key={a.id}
+                  agent={a}
+                  published={published}
+                  presence={presence}
+                  host={hosts.find((h) => h.agentId === a.id) ?? null}
+                  busy={connecting !== null}
+                  onConnect={connectToHost}
+                  onChanged={load}
+                />
+              ))}
+            </MachineGroup>
           ))}
           {revoked.length > 0 && (
             <>
@@ -288,6 +298,78 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
  */
 type MachineState = "revoked" | "online" | "offline" | "unknown" | "never"
 
+/**
+ * Which agents are on the same physical machine.
+ *
+ * Two identities on one box is an ordinary arrangement now — several accounts
+ * sharing a machine, or one account that enrolled it twice — and two cards with
+ * nothing linking them read as two machines.
+ *
+ * `machineRef` is the real answer: a hash of the platform's own machine id, so
+ * it does not collide. Hostname is the fallback for agents enrolled before that
+ * was reported, and it is only a fallback because names like `raspberrypi` and
+ * `localhost` are shared by machines that have nothing to do with each other.
+ * Grouping by it on its own would eventually be wrong in a way that matters, so
+ * it is qualified by os and arch and the header says what it grouped on.
+ */
+function machineKey(agent: Agent): string {
+  if (agent.machineRef) return `ref:${agent.machineRef}`
+  if (agent.hostname) return `host:${agent.hostname}/${agent.os ?? "?"}/${agent.arch ?? "?"}`
+  // Nothing to group on: its own group of one, which renders as a plain card.
+  return `agent:${agent.id}`
+}
+
+/**
+ * Groups in the order the rows arrived, so the list does not reorder itself.
+ *
+ * Two passes, because of the state every existing deployment is in the day this
+ * ships: an agent enrolled before machine ids were reported has none, and the
+ * next one enrolled on that same machine does. Grouping on the key alone would
+ * split them, which is precisely the confusion this exists to remove.
+ *
+ * So ref-less agents are attached to a ref group that reports the same hostname,
+ * os and arch — and only when exactly one group matches. Two candidates means
+ * there is no way to tell which, and a guess there would put somebody's machine
+ * under the wrong heading.
+ */
+function groupByMachine(agents: Agent[]): Agent[][] {
+  const groups = new Map<string, Agent[]>()
+  const orphans: Agent[] = []
+
+  for (const agent of agents) {
+    if (!agent.machineRef) {
+      orphans.push(agent)
+      continue
+    }
+    const key = machineKey(agent)
+    const existing = groups.get(key)
+    if (existing) existing.push(agent)
+    else groups.set(key, [agent])
+  }
+
+  const describes = (agent: Agent) =>
+    `${agent.hostname ?? ""}/${agent.os ?? "?"}/${agent.arch ?? "?"}`
+
+  for (const orphan of orphans) {
+    const candidates = orphan.hostname
+      ? [...groups.entries()].filter(([, members]) => describes(members[0]) === describes(orphan))
+      : []
+
+    if (candidates.length === 1) {
+      candidates[0][1].push(orphan)
+      continue
+    }
+    // Its own group, joined by any other ref-less agent describing itself the
+    // same way — the pre-machine-id behaviour, unchanged.
+    const key = machineKey(orphan)
+    const existing = groups.get(key)
+    if (existing) existing.push(orphan)
+    else groups.set(key, [orphan])
+  }
+
+  return [...groups.values()]
+}
+
 function machineState(agent: Agent, presence: PresenceStatus, seen: Date | null): MachineState {
   if (agent.revokedAt) return "revoked"
   // Before reachability: a machine that has never connected is not "offline",
@@ -337,6 +419,64 @@ function stateColour(state: MachineState): string {
     default:
       return "text-muted-foreground"
   }
+}
+
+/**
+ * Says that these cards are one machine, and only when they are more than one.
+ *
+ * A single agent gets no wrapper at all: a heading over every card would add a
+ * line of chrome to the common case to serve the uncommon one, and "this
+ * machine contains this one machine" reads as a mistake.
+ *
+ * The header says what it grouped on, because the two signals are not equally
+ * trustworthy — a machine id does not collide, a hostname does — and somebody
+ * looking at a grouping they did not expect should be able to tell which they
+ * are looking at.
+ */
+function MachineGroup({ agents, children }: { agents: Agent[]; children: React.ReactNode }) {
+  /*
+   * Open by default, and remembered per machine.
+   *
+   * Collapsing is for a machine you have finished with, so the state belongs to
+   * that machine rather than to the page — closing one on a list of six should
+   * not reopen when a poll re-renders, and should not close the others. Kept in
+   * component state rather than storage: it is cheap to redo and nobody expects
+   * a list to remember how they left it a week ago.
+   */
+  const [open, setOpen] = useState(true)
+
+  if (agents.length < 2) return <>{children}</>
+
+  // True when hostname carried any of this grouping, not only all of it: one
+  // unverified member is enough to make the whole grouping a guess.
+  const byHostname = agents.some((a) => !a.machineRef)
+  const name = agents[0].hostname ?? "One machine"
+  const online = agents.filter((a) => a.online === true).length
+
+  return (
+    <div className="border-border/60 bg-muted/20 space-y-2 rounded-xl border border-dashed p-2">
+      <button
+        type="button"
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        className="hover:bg-muted/40 flex w-full flex-wrap items-baseline gap-x-2 rounded-lg px-2 py-1 text-left transition-colors"
+      >
+        <CaretRightIcon
+          className={`size-3 shrink-0 self-center transition-transform ${open ? "rotate-90" : ""}`}
+        />
+        <span className="text-sm font-medium">{name}</span>
+        <span className="text-muted-foreground text-xs">
+          {agents.length} agents on this machine
+          {/* Only when closed: with the cards visible it is a count of what is
+              already on screen, and while they are hidden it is the reason
+              somebody might open it again. */}
+          {!open && online > 0 ? ` · ${online} online` : ""}
+          {byHostname ? " · matched by hostname, which machines can share" : ""}
+        </span>
+      </button>
+      {open && children}
+    </div>
+  )
 }
 
 function AgentRow({
