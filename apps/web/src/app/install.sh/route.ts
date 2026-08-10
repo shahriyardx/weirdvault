@@ -423,7 +423,18 @@ ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6
 RestrictNamespaces=yes
 LockPersonality=yes
-ReadOnlyPaths=\${CONFIG_DIR}
+# The identity directory has to be writable, and it did not used to be.
+#
+# "stop" from the dashboard writes a marker beside an identity, and "revoke"
+# deletes one — that is how "stopped" survives a reboot and how a revoked key
+# stops existing on the machine. Both were designed against a directory this
+# unit had pinned read-only, so both failed at the write with an error naming a
+# read-only file system while every other part of the path worked.
+#
+# What this grants is narrower than it looks: the process already reads every
+# private key in here, because it needs them to run. Anything able to make it
+# write a file could already read all of them.
+ReadWritePaths=\${CONFIG_DIR}
 
 # Self-update replaces this binary, so the directory holding it has to be
 # writable by the account below — which is why the binary is here and not in
