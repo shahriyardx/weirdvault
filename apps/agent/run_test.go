@@ -27,18 +27,23 @@ import (
 // connection is fine, nothing answers. coder/websocket only replies to pings
 // while a read is in flight, so no pong ever comes back.
 
-func testConfig(t *testing.T, url string) (*Config, ed25519.PrivateKey) {
+func testConfig(t *testing.T, url string) *identity {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = pub
-	return &Config{
-		AgentID:      "agent-under-test",
-		RelayURL:     url,
-		AllowedPorts: []int{22},
-	}, priv
+	return &identity{
+		name: "under-test",
+		path: "/nonexistent/under-test.json",
+		cfg: &Config{
+			AgentID:      "agent-under-test",
+			RelayURL:     url,
+			AllowedPorts: []int{22},
+		},
+		priv: priv,
+	}
 }
 
 /** Completes hello → challenge → proof → ready, then goes quiet. */
@@ -100,13 +105,13 @@ func TestServeGivesUpOnARelayThatStopsAnswering(t *testing.T) {
 	withFastPings(t)
 
 	srv := silentRelay(t, false)
-	cfg, priv := testConfig(t, "ws"+strings.TrimPrefix(srv.URL, "http")+"/agent")
+	id := testConfig(t, "ws"+strings.TrimPrefix(srv.URL, "http")+"/agent")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, cfg, priv) }()
+	go func() { done <- serve(ctx, id) }()
 
 	select {
 	case err := <-done:
@@ -124,13 +129,13 @@ func TestServeStaysUpWhileTheRelayAnswers(t *testing.T) {
 	withFastPings(t)
 
 	srv := silentRelay(t, true)
-	cfg, priv := testConfig(t, "ws"+strings.TrimPrefix(srv.URL, "http")+"/agent")
+	id := testConfig(t, "ws"+strings.TrimPrefix(srv.URL, "http")+"/agent")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, cfg, priv) }()
+	go func() { done <- serve(ctx, id) }()
 
 	// Ten ping intervals with nothing else happening on the connection.
 	select {

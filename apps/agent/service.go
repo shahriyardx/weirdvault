@@ -34,7 +34,6 @@ have seen anyway, and a wrapper that reports something different from
 */
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -45,7 +44,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"text/tabwriter"
 	"time"
 )
 
@@ -451,8 +449,15 @@ func signalProcesses(procs []agentProcess) (stopped []int, failed []error) {
 func runStart(args []string) error {
 	fs := flag.NewFlagSet("start", flag.ExitOnError)
 	bootOnly := fs.Bool("boot-only", false, "make it start at boot without starting it now")
+	dir := fs.String("config-dir", DefaultConfigDir, "where identities live")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	// `start <id>` is about one identity inside the daemon; `start` is about the
+	// daemon. Two different things, and the argument is what says which.
+	if name := fs.Arg(0); name != "" {
+		return startIdentity(*dir, name)
 	}
 
 	st := currentState()
@@ -501,8 +506,27 @@ func runStart(args []string) error {
 func runStop(args []string) error {
 	fs := flag.NewFlagSet("stop", flag.ExitOnError)
 	keepEnabled := fs.Bool("keep-enabled", false, "stop it now, but let it start again at the next boot")
+	all := fs.Bool("all", false, "stop every identity on this machine, not just one")
+	dir := fs.String("config-dir", DefaultConfigDir, "where identities live")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if name := fs.Arg(0); name != "" {
+		return stopIdentity(*dir, name)
+	}
+
+	// No identity named, and more than one is running: refuse rather than take
+	// everybody's machine offline because somebody meant only their own. The
+	// single-identity case — every install before this — is unaffected.
+	if others := otherIdentities(*dir); len(others) > 1 && !*all {
+		return fmt.Errorf(
+			"this machine serves %d accounts, and `stop` would stop all of them.\n\n"+
+				"Name one:\n  weirdvault-agent stop <id>\n\n"+
+				"They are: %s\n\n"+
+				"Or, if you really do mean every identity on this machine:\n"+
+				"  weirdvault-agent stop --all",
+			len(others), strings.Join(others, ", "))
 	}
 
 	st := currentState()
@@ -695,136 +719,6 @@ func pidList(procs []agentProcess) string {
 		pids = append(pids, strconv.Itoa(proc.PID))
 	}
 	return strings.Join(pids, " ")
-}
-
-// ---------------------------------------------------------------- list
-
-// runList shows every agent identity on this machine and what it is doing.
-//
-// "Every" rather than "the one at the default path" because machines collect
-// them: a test enrolment under a home directory, a config left behind by an
-// install that was redone, a second agent someone started by hand pointing at a
-// copy of the same file — which is the state that produces two agents claiming
-// one machine and a dashboard that flickers between online and offline.
-func runList(args []string) error {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-	extraConfig := fs.String("config", "", "also look at this config path")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	st := currentState()
-	procs := agentProcesses()
-
-	// Configs from three places: where the installer puts it, where a user
-	// testing without root would, and whatever a running process says it is
-	// using — the last of which is the only way to see an agent nobody
-	// remembers starting.
-	seen := map[string]bool{}
-	var paths []string
-	add := func(path string) {
-		if path == "" || seen[path] {
-			return
-		}
-		seen[path] = true
-		paths = append(paths, path)
-	}
-	add(DefaultConfigPath)
-	if home, err := os.UserHomeDir(); err == nil {
-		add(filepath.Join(home, ".config", "weirdvault-agent", "agent.json"))
-	}
-	add(*extraConfig)
-	for _, proc := range procs {
-		add(proc.Config)
-	}
-
-	byConfig := map[string][]agentProcess{}
-	for _, proc := range procs {
-		byConfig[proc.Config] = append(byConfig[proc.Config], proc)
-	}
-
-	out := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(out, "CONFIG\tAGENT\tSTATE")
-
-	rows := 0
-	for _, path := range paths {
-		if !fileExists(path) && len(byConfig[path]) == 0 {
-			continue
-		}
-		rows++
-		fmt.Fprintf(out, "%s\t%s\t%s\n", path, agentIDAt(path), describe(path, st, byConfig[path]))
-	}
-	out.Flush()
-
-	if rows == 0 {
-		fmt.Println("\nNo agent is enrolled on this machine.")
-		fmt.Println("Enrol one from Dashboard → Machines → Add a machine.")
-		return nil
-	}
-
-	fmt.Println()
-	switch st.Kind {
-	case supervisorNone:
-		fmt.Println("Nothing here supervises the agent, so nothing restarts it or starts it at boot.")
-	default:
-		if !st.Installed {
-			fmt.Printf("There is no %s service registered on this machine.\n", st.Kind)
-		}
-	}
-	return nil
-}
-
-// agentIDAt reads just the id out of a config, tolerating everything else.
-//
-// Deliberately not loadConfig: this is a listing, and a config that is
-// half-written or from a future version should show up as a row with a caveat
-// rather than aborting the whole command. The common failure is not corruption
-// at all — it is a plain user running this without root against a file that is
-// 0600 and owned by the service account.
-func agentIDAt(path string) string {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsPermission(err) {
-			return "(need root to read)"
-		}
-		return "(no config)"
-	}
-	var cfg Config
-	if err := json.Unmarshal(raw, &cfg); err != nil || cfg.AgentID == "" {
-		return "(unreadable)"
-	}
-	return cfg.AgentID
-}
-
-// describe is one machine-readable-ish sentence about one config's agent.
-func describe(path string, st serviceState, procs []agentProcess) string {
-	var parts []string
-
-	if len(procs) == 0 {
-		parts = append(parts, "stopped")
-	} else {
-		for _, proc := range procs {
-			parts = append(parts, fmt.Sprintf("running · pid %d · up %s", proc.PID, humanUptime(proc.Started)))
-		}
-		if len(procs) > 1 {
-			// Two agents on one config both authenticate, both offer the machine,
-			// and the relay hands sessions to whichever registered last. Worth
-			// saying out loud rather than leaving as two similar-looking rows.
-			parts = append(parts, "⚠ more than one process for this config")
-		}
-	}
-
-	// Boot behaviour belongs only to the config the service actually runs.
-	// Claiming it for a config the unit has never heard of would be a plain lie
-	// on any machine with a second enrolment.
-	if st.Installed && path == serviceConfigPath(st) {
-		if st.Enabled {
-			parts = append(parts, "starts at boot")
-		} else {
-			parts = append(parts, "will not start at boot")
-		}
-	}
-	return strings.Join(parts, " · ")
 }
 
 // serviceConfigPath is the config the installed service was written to use.

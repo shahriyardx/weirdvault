@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -112,18 +111,13 @@ type controlMessage struct {
 
 func runAgent(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	// Empty by default, so the directory below is what a fresh install uses.
+	// Passing it explicitly is how every unit written before identities existed
+	// keeps working, unchanged, serving exactly the one file it names.
+	configPath := fs.String("config", "", "serve a single identity from this file")
+	configDir := fs.String("config-dir", DefaultConfigDir, "serve every identity in this directory")
 	noUpdate := fs.Bool("no-update", false, "do not replace this binary at startup")
 	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	cfg, err := loadConfig(*configPath)
-	if err != nil {
-		return err
-	}
-	priv, err := cfg.privateKey()
-	if err != nil {
 		return err
 	}
 
@@ -133,80 +127,72 @@ func runAgent(args []string) error {
 	defer stop()
 
 	log.SetFlags(0) // journald stamps its own timestamps
-	log.Printf("weirdvault-agent %s starting: agent=%s relay=%s", version, cfg.AgentID, cfg.RelayURL)
+
+	sup := newSupervisor(*configDir, *configPath)
+
+	// Refuse to start with nothing to serve, rather than idling forever looking
+	// healthy. A directory that is empty *now* is different from one that cannot
+	// be read at all, and only the second is worth failing on — but a
+	// single-file install pointed at a missing file has nothing to wait for.
+	if *configPath != "" {
+		if _, err := loadConfig(*configPath); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("weirdvault-agent %s starting", version)
 
 	// Before anything connects. An update that landed while this machine was
 	// asleep should take effect now rather than after the next reboot, and
 	// re-execing mid-session would drop connections that are carrying somebody's
 	// shell.
-	if !*noUpdate && selfUpdate(ctx, cfg) {
-		if err := reexec(); err != nil {
-			// The new binary is already on disk, so the next restart picks it up
-			// regardless. Carrying on with the old one beats refusing to run.
-			log.Printf("could not restart into the new build, staying on %s: %v", version, err)
-		}
-	}
-
-	backoff := backoffMin
-	for ctx.Err() == nil {
-		start := time.Now()
-		err := serve(ctx, cfg, priv)
-
-		if ctx.Err() != nil {
-			break
-		}
-		if err != nil {
-			if websocket.CloseStatus(err) == statusAgentRejected {
-				log.Printf("")
-				log.Printf("This machine is no longer accepted: %s", closeText(err))
-				log.Printf("")
-				log.Printf("It was most likely revoked from the dashboard. Reconnecting cannot")
-				log.Printf("undo that, so the agent is stopping rather than retrying forever.")
-				log.Printf("")
-				log.Printf("To use this machine again, enrol it afresh:")
-				log.Printf("  1. Dashboard -> Machines -> Add a machine")
-				log.Printf("  2. rm %s", *configPath)
-				log.Printf("  3. run the install command it gives you")
-				// systemd honours the exit code and leaves it down;
-				// launchd has no equivalent of RestartPreventExitStatus, so on a
-				// Mac this same message repeats every ten seconds until somebody
-				// stops the service. Naming the command beats leaving them to
-				// discover that the loop is not a bug they can fix by waiting.
-				if runtime.GOOS == "darwin" {
-					log.Printf("")
-					log.Printf("launchd will keep restarting it until then: weirdvault-agent stop")
-				}
-				return errRejected
+	//
+	// One check for the process, not one per identity: they share a binary, and
+	// they all read the same manifest from the same deployment.
+	if !*noUpdate {
+		if cfg := sup.updateSource(); cfg != nil && selfUpdate(ctx, cfg) {
+			if err := reexec(); err != nil {
+				// The new binary is already on disk, so the next restart picks it
+				// up regardless. Carrying on with the old one beats refusing to run.
+				log.Printf("could not restart into the new build, staying on %s: %v", version, err)
 			}
-			log.Printf("connection ended: %v", err)
-		}
-
-		// A connection that lasted a while was working, so the next failure
-		// should retry promptly rather than inheriting the backoff from
-		// whatever went wrong hours ago.
-		if time.Since(start) > 2*time.Minute {
-			backoff = backoffMin
-		}
-
-		wait := jitter(backoff)
-		log.Printf("reconnecting in %s", wait.Round(time.Millisecond))
-		select {
-		case <-ctx.Done():
-		case <-time.After(wait):
-		}
-
-		backoff *= 2
-		if backoff > backoffMax {
-			backoff = backoffMax
 		}
 	}
 
-	log.Printf("shutting down")
+	return sup.run(ctx)
+}
+
+/*
+updateSource picks the config that says where updates come from.
+
+Any of them will do: the release URL is a property of the deployment that
+enrolled the machine, and identities from two different deployments on one
+machine is not a thing this supports — they would each want to replace the same
+binary with their own build. The first one with a URL is therefore the answer,
+and the rest are consistent with it or the machine has a problem no update
+policy can fix.
+*/
+func (s *supervisor) updateSource() *Config {
+	want, err := s.desired()
+	if err != nil {
+		return nil
+	}
+	for _, path := range want {
+		cfg, err := loadConfig(path)
+		if err != nil {
+			continue
+		}
+		if cfg.ReleaseURL != "" {
+			return cfg
+		}
+	}
 	return nil
 }
 
 // serve holds one control connection until it dies.
-func serve(ctx context.Context, cfg *Config, priv ed25519.PrivateKey) error {
+func serve(ctx context.Context, id *identity) error {
+	cfg := id.cfg
+
 	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
 
@@ -219,10 +205,11 @@ func serve(ctx context.Context, cfg *Config, priv ed25519.PrivateKey) error {
 
 	handshakeCtx, cancelHandshake := context.WithTimeout(ctx, handshakeLimit)
 	defer cancelHandshake()
-	if err := authenticate(handshakeCtx, conn, cfg, priv); err != nil {
+	if err := authenticate(handshakeCtx, conn, cfg, id.priv); err != nil {
 		return err
 	}
-	log.Printf("online")
+	id.setState(stateOnline, "")
+	log.Printf("[%s] online", id.name)
 
 	// Started only once authenticated, so a refused handshake is reported as the
 	// refusal it is rather than racing a ping failure. Stopped when serve
@@ -243,12 +230,12 @@ func serve(ctx context.Context, cfg *Config, priv ed25519.PrivateKey) error {
 			// once, and a dial to a wedged local port must not stop the control
 			// connection from answering the next request.
 			go func(ticket string, port int) {
-				if err := openStream(ctx, cfg, ticket, port); err != nil {
-					log.Printf("stream for 127.0.0.1:%d failed: %v", port, err)
+				if err := openStream(ctx, id, ticket, port); err != nil {
+					log.Printf("[%s] stream for 127.0.0.1:%d failed: %v", id.name, port, err)
 				}
 			}(msg.Ticket, msg.Port)
 		default:
-			log.Printf("ignoring unknown control message %q", msg.Type)
+			log.Printf("[%s] ignoring unknown control message %q", id.name, msg.Type)
 		}
 	}
 }
@@ -335,10 +322,11 @@ func authenticate(ctx context.Context, conn *websocket.Conn, cfg *Config, priv e
 }
 
 // openStream answers one open request: dial sshd, dial back, splice.
-func openStream(ctx context.Context, cfg *Config, ticket string, port int) error {
+func openStream(ctx context.Context, id *identity, ticket string, port int) error {
 	if ticket == "" {
 		return fmt.Errorf("open request carried no ticket")
 	}
+	cfg := id.cfg
 
 	streamURL, err := url.Parse(cfg.streamURL())
 	if err != nil {
@@ -387,6 +375,12 @@ func openStream(ctx context.Context, cfg *Config, ticket string, port int) error
 	if tcp, ok := local.(*net.TCPConn); ok {
 		tcp.SetNoDelay(true) // interactive typing must not wait on Nagle
 	}
+
+	// Counted from here rather than from the open request: everything above can
+	// refuse, and a session that never reached sshd is not one a restart would
+	// interrupt.
+	id.sessionOpened()
+	defer id.sessionClosed()
 
 	splice(ctx, conn, local)
 	return nil

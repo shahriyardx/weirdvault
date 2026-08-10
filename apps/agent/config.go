@@ -13,6 +13,24 @@ import (
 // touching /etc.
 const DefaultConfigPath = "/etc/weirdvault-agent/agent.json"
 
+/*
+Where identities live.
+
+One file is one identity: one account's agent id and key, and one control
+connection. A machine shared by several people has several, named after their
+short agent ids, because everyone pastes the same install command and only the
+token in it differs — so the installer has to derive a name rather than ask for
+one.
+
+Deliberately not named after the person. Everyone with a shell on that machine
+can read this directory; how many agents exist is unavoidable, and whose they
+are is not the installer's fact to publish.
+
+`agent.json` in here is what single-identity installs have always used and keeps
+working untouched.
+*/
+const DefaultConfigDir = "/etc/weirdvault-agent"
+
 // Config is everything the agent knows about itself.
 //
 // The private key lives here in plaintext, which is the honest arrangement: the

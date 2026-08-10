@@ -161,12 +161,50 @@ func runEnroll(args []string) error {
 // rest of the CLI uses.
 func runStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
-	configPath := fs.String("config", DefaultConfigPath, "path to the agent identity")
+	configPath := fs.String("config", "", "show one identity, by config path")
+	dir := fs.String("config-dir", DefaultConfigDir, "where identities live")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	cfg, err := loadConfig(*configPath)
+	// One named identity: the old behaviour, and what a single-identity install
+	// gets when it passes --config the way its unit always has.
+	if *configPath != "" {
+		if err := printIdentity(*configPath); err != nil {
+			return err
+		}
+		printRunningState(*configPath)
+		return nil
+	}
+
+	rows := gatherIdentities(*dir, "")
+	if len(rows) == 0 {
+		return fmt.Errorf("no identity found in %s — run `weirdvault-agent enroll` first", *dir)
+	}
+
+	for i, row := range rows {
+		if i > 0 {
+			fmt.Println()
+		}
+		// A listing row rather than a load: one unreadable file should not stop
+		// the others being described, and on a shared machine the file that
+		// cannot be read may well belong to somebody else.
+		if err := printIdentity(row.path); err != nil {
+			fmt.Printf("Identity:    %s\n", row.name)
+			fmt.Printf("             %v\n", err)
+			continue
+		}
+		fmt.Printf("State:       %s\n", describeListing(row))
+	}
+
+	fmt.Println()
+	printServiceState()
+	return nil
+}
+
+// printIdentity is the part somebody compares against the dashboard.
+func printIdentity(path string) error {
+	cfg, err := loadConfig(path)
 	if err != nil {
 		return err
 	}
@@ -175,6 +213,7 @@ func runStatus(args []string) error {
 		return err
 	}
 
+	fmt.Printf("Identity:    %s\n", identityNameFor(path))
 	fmt.Printf("Agent:       %s\n", cfg.AgentID)
 	fmt.Printf("Version:     %s\n", version)
 	fmt.Printf("Fingerprint: %s\n", fingerprint(priv.Public().(ed25519.PublicKey)))
@@ -185,8 +224,6 @@ func runStatus(args []string) error {
 	} else {
 		fmt.Printf("Updates:     %s\n", cfg.ReleaseURL)
 	}
-
-	printRunningState(*configPath)
 	return nil
 }
 
@@ -218,14 +255,7 @@ func printRunningState(configPath string) {
 		fmt.Printf("Running:     no\n")
 	}
 
-	switch {
-	case !st.Installed:
-		fmt.Printf("At boot:     nothing will start it — no service is registered here\n")
-	case st.Enabled:
-		fmt.Printf("At boot:     starts automatically\n")
-	default:
-		fmt.Printf("At boot:     stays stopped (weirdvault-agent start changes that)\n")
-	}
+	printBootState(st)
 
 	// Only when it adds something: a supervised agent whose one process is the
 	// service's own does not need the same pid printed twice.
@@ -260,4 +290,42 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "…"
+}
+
+// printServiceState is the shared footer for a multi-identity status.
+//
+// One daemon serves every identity, so "is it running" and "will it come back"
+// are facts about the machine rather than about any one account — printing them
+// per identity would repeat the same two lines four times and imply they could
+// differ.
+func printServiceState() {
+	st := currentState()
+
+	switch {
+	case st.Installed && st.Active:
+		fmt.Printf("Daemon:      running as a %s service", st.Kind)
+		if st.PID != 0 {
+			fmt.Printf(" (pid %d)", st.PID)
+		}
+		fmt.Println()
+	case st.Installed:
+		fmt.Printf("Daemon:      not running — %s service is %s\n", st.Kind, st.Detail)
+	case readRuntimeState() != nil:
+		fmt.Printf("Daemon:      running, started by hand\n")
+	default:
+		fmt.Printf("Daemon:      not running\n")
+	}
+
+	printBootState(st)
+}
+
+func printBootState(st serviceState) {
+	switch {
+	case !st.Installed:
+		fmt.Printf("At boot:     nothing will start it — no service is registered here\n")
+	case st.Enabled:
+		fmt.Printf("At boot:     starts automatically\n")
+	default:
+		fmt.Printf("At boot:     stays stopped (weirdvault-agent start changes that)\n")
+	}
 }
