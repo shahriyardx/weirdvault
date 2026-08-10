@@ -256,18 +256,25 @@ export default function MachinesPage() {
         <div className="mt-6 space-y-3">
           {groupByMachine(live).map((group) => (
             <MachineGroup key={group[0].id} agents={group}>
-              {group.map((a) => (
-                <AgentRow
-                  key={a.id}
-                  agent={a}
-                  published={published}
-                  presence={presence}
-                  host={hosts.find((h) => h.agentId === a.id) ?? null}
-                  busy={connecting !== null}
-                  onConnect={connectToHost}
-                  onChanged={load}
-                />
-              ))}
+              {group.map((a) => {
+                // Found once and used twice: the row needs the host to know
+                // what to connect as, and `busy` is about *this* host being
+                // connected rather than any host being connected — which is
+                // what made one click disable every card on the page.
+                const host = hosts.find((h) => h.agentId === a.id) ?? null
+                return (
+                  <AgentRow
+                    key={a.id}
+                    agent={a}
+                    published={published}
+                    presence={presence}
+                    host={host}
+                    busy={host !== null && connecting === host.id}
+                    onConnect={connectToHost}
+                    onChanged={load}
+                  />
+                )
+              })}
             </MachineGroup>
           ))}
           {revoked.length > 0 && (
@@ -736,7 +743,11 @@ function AgentRow({
                   onClick={() => void onConnect(host)}
                 >
                   <PlugsConnectedIcon />
-                  Connect as {host.username}
+                  {/* Says which state it is in rather than only going grey.
+                      Opening a session takes a WebSocket, a relay hop and an
+                      SSH handshake, which is long enough for a disabled button
+                      with unchanged text to read as a click that missed. */}
+                  {busy ? "Connecting…" : `Connect as ${host.username}`}
                 </Button>
               ) : (
                 <Button asChild variant="secondary" size="sm">
