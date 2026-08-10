@@ -558,6 +558,34 @@ export default function Docs() {
                   than an item on a roadmap.
                 </p>
               </Problem>
+
+              <Problem
+                code="There is no port forwarding"
+                summary="Also permanent, and for the same kind of reason."
+              >
+                <p>
+                  <Code>ssh -L 5432:localhost:5432</Code> works by opening a
+                  listening socket <em>on your own machine</em>, so that
+                  something local — <Code>psql</Code>, a browser, a GUI client —
+                  can connect to it. A browser tab cannot open a listening
+                  socket. There is no API for it, and the one that exists is
+                  restricted to a kind of installed app this is not, so it is not
+                  a matter of waiting for browsers to catch up.
+                </p>
+                <p className="mt-2">
+                  It could be delivered by asking you to install a small daemon
+                  on your laptop. That is exactly the thing webxterm promises you
+                  never have to do, and the promise is worth more than the
+                  feature, so this is a decision rather than a gap.
+                </p>
+                <p className="mt-2">
+                  What works instead is to run the client on the machine that can
+                  already reach the service, in the terminal you already have —{" "}
+                  <Code>psql</Code>, <Code>redis-cli</Code>, <Code>curl</Code>{" "}
+                  against <Code>localhost</Code> — which needs no tunnel at all,
+                  because you are already on the far end of one.
+                </p>
+              </Problem>
             </div>
           </Section>
 

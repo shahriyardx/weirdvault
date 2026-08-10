@@ -76,9 +76,18 @@ here" and nothing more.
 | Relay | Rust, SSRF-guarded, destination-bound tokens, per-account connection quotas, agent rendezvous |
 | Transfer limit | the relay counts bytes and reports them; 1 GB a month per account on Free and 5 GB on Pro, refused at token mint so live sessions are never cut. Off unless `RELAY_USAGE_SECRET` is set, and absent entirely on a relay you host |
 
-Not built, and named here rather than left to be discovered: there is no port
-forwarding. Mosh is not on the list at all — it needs UDP, which a browser tab
-does not have.
+Named here rather than left to be discovered, and both permanent:
+
+**There is no port forwarding, and there will not be.** `-L` means something on
+your machine listens on a TCP port, and a tab cannot — there is no API, and the
+one that exists is restricted to Isolated Web Apps, so this is not waiting on
+browsers. Shipping it would take a daemon on the client machine, which is the
+one thing this product promises you never install. That promise is worth more
+than the feature. Reaching a host *through* a bastion is a different thing and
+is not ruled out by this; see `PLAN.md` §2.3.
+
+**Mosh is not on the list either** — it needs UDP, which a browser tab does not
+have.
 
 An account is a person. There are no organizations, no members, no invitations
 and no seats. Organizations, invitations, roles and team-key distribution were
