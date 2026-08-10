@@ -49,6 +49,11 @@ export async function GET(request: Request) {
 # without touching its identity or minting a new token:
 #
 #   curl -fsSL ${origin}/install.sh | sh -s -- --repair
+#
+# To add a second identity for an account that already has one here — two rows,
+# two agents, the machine listed twice, which is occasionally what you want:
+#
+#   curl -fsSL ${origin}/install.sh | sh -s -- --token=ENROLL_... --force
 
 set -eu
 
@@ -80,11 +85,18 @@ BIN_DIR="\${STATE_DIR}/bin"
 SSH_PORT="22"
 TOKEN=""
 MODE="install"
+FORCE=""
 
 for arg in "$@"; do
   case "$arg" in
     --token=*) TOKEN="\${arg#*=}" ;;
     --ssh-port=*) SSH_PORT="\${arg#*=}" ;;
+    # Enrol even though this account already has an identity on this machine.
+    # The refusal it bypasses exists because two identities for one account
+    # means two rows, both online, and the machine listed twice — so this is for
+    # somebody who means exactly that, or who is rebuilding after a config was
+    # lost. It does not touch anybody else's identity here.
+    --force) FORCE="--force" ;;
     --uninstall) MODE="uninstall" ;;
     # Reinstall the binary and the service for the enrolment already on this
     # machine. No token, because the machine is already enrolled and minting one
@@ -330,11 +342,14 @@ else
   # No --config: the identity is named after the agent id the server chooses,
   # because everybody pastes an identical command and only the token differs.
   # That is what lets several accounts share one machine.
+  # $FORCE is unquoted on purpose: it is either empty, in which case it must
+  # disappear rather than become an empty argument, or exactly "--force".
   "$BIN_TARGET" enroll \\
     --token="$TOKEN" \\
     --url="$APP_URL" \\
     --config-dir="$CONFIG_DIR" \\
-    --ssh-port="$SSH_PORT"
+    --ssh-port="$SSH_PORT" \\
+    $FORCE
 fi
 
 chown -R "$SERVICE_USER" "$CONFIG_DIR"
