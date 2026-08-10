@@ -120,6 +120,31 @@ function identityName(agentId: string): string {
 
 const POLL_MS = 2000
 
+/**
+ * How often the list refreshes itself while the tab is being looked at.
+ *
+ * Reachability changes without anybody doing anything here — a machine sleeps,
+ * a relay restarts — so a page that only loaded once starts lying quietly. Ten
+ * seconds is frequent enough that "it went offline" is noticed while somebody
+ * is looking, and cheap enough to leave running: one indexed query plus one
+ * call to the relay on a private network.
+ *
+ * Paused when the tab is hidden. A background tab left open overnight polling a
+ * relay is nothing but load, and the state it collects is thrown away unread.
+ */
+const REFRESH_MS = 10_000
+
+/**
+ * When to look again after telling a machine to do something.
+ *
+ * The reply arrives before the effect does: the agent answers, then closes its
+ * connection a moment later so the answer can escape, and the relay only then
+ * stops listing it. One refetch on the reply is therefore always too early and
+ * shows the state that was true a second ago — which reads as the command
+ * having done nothing.
+ */
+const AFTER_COMMAND_MS = [0, 1_500, 4_000]
+
 export default function MachinesPage() {
   const [agents, setAgents] = useState<Agent[] | null>(null)
   const [enrolling, setEnrolling] = useState(false)
@@ -181,6 +206,20 @@ export default function MachinesPage() {
       await load()
       setHosts(await listHosts())
     })()
+  }, [load])
+
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") void load()
+    }
+    const timer = setInterval(tick, REFRESH_MS)
+    // Also on the way back: a tab returned to after an hour should not show an
+    // hour-old answer for the ten seconds until the next tick.
+    document.addEventListener("visibilitychange", tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", tick)
+    }
   }, [load])
 
   const live = agents?.filter((a) => !a.revokedAt) ?? []
@@ -594,9 +633,26 @@ function AgentRow({
         // and the answer is information rather than a failure.
         toast.warning(body.detail ?? "The machine refused that")
       }
-      await onChanged()
     } finally {
       setBusyCommand(null)
+      // Outside the reply's own success or failure: a command that timed out
+      // may still have landed, and that is exactly when seeing the real state
+      // matters most.
+      void refreshAfterCommand()
+    }
+  }
+
+  /**
+   * Refetches a few times, because the effect trails the answer.
+   *
+   * Not a loop that waits for the state to change: a refused restart changes
+   * nothing, and a poller waiting for a difference that is never coming would
+   * spin for as long as somebody left the page open.
+   */
+  async function refreshAfterCommand() {
+    for (const delay of AFTER_COMMAND_MS) {
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
+      await onChanged()
     }
   }
 
