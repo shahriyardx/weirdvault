@@ -32,6 +32,28 @@ const (
 	localTimeout   = 10 * time.Second
 	handshakeLimit = 20 * time.Second
 
+	// How often the agent proves the control connection is still there, and how
+	// long it waits for the answer.
+	//
+	// The relay pings us on the same interval and that is not enough on its own,
+	// because the two ends fail differently. The relay has a writer: when the
+	// path is gone its pings eventually fail to send and it drops the agent. This
+	// process only ever *reads* that socket, so nothing here ever discovers a
+	// connection that stopped existing without saying so — a home router
+	// expiring its NAT mapping, a laptop suspended and resumed on another
+	// network, a relay whose machine lost power. The read simply never returns.
+	//
+	// That is the state worth naming: the relay has long since listed the machine
+	// as offline, the agent believes it is online, and it stays that way until
+	// somebody restarts it. Everything else here — the backoff, the jitter, the
+	// reconnect loop — is unreachable while that read is parked.
+	//
+	// So the agent pings too. `Ping` writes a ping and waits for the matching
+	// pong, so a timeout means the far end is not answering, and closing the
+	// socket unblocks the read and drops the run loop into its normal reconnect.
+	defaultPingInterval = 30 * time.Second
+	defaultPingTimeout  = 10 * time.Second
+
 	backoffMin = 1 * time.Second
 	backoffMax = 60 * time.Second
 
@@ -46,6 +68,13 @@ const (
 	// never work" from "the network was down". The systemd unit written by
 	// install.sh carries RestartPreventExitStatus for exactly this.
 	exitRejected = 3
+)
+
+// Variables rather than constants so the test can run the same code path in a
+// second instead of forty. Nothing outside a test writes them.
+var (
+	controlPingInterval = defaultPingInterval
+	controlPingTimeout  = defaultPingTimeout
 )
 
 // errRejected ends the run loop instead of retrying.
@@ -172,6 +201,13 @@ func serve(ctx context.Context, cfg *Config, priv ed25519.PrivateKey) error {
 	}
 	log.Printf("online")
 
+	// Started only once authenticated, so a refused handshake is reported as the
+	// refusal it is rather than racing a ping failure. Stopped when serve
+	// returns, whichever way it returns.
+	pingCtx, stopPinging := context.WithCancel(ctx)
+	defer stopPinging()
+	go keepAlive(pingCtx, conn)
+
 	for {
 		var msg controlMessage
 		if err := readJSON(ctx, conn, &msg); err != nil {
@@ -190,6 +226,43 @@ func serve(ctx context.Context, cfg *Config, priv ed25519.PrivateKey) error {
 			}(msg.Ticket, msg.Port)
 		default:
 			log.Printf("ignoring unknown control message %q", msg.Type)
+		}
+	}
+}
+
+// keepAlive pings the relay until the connection dies or the caller stops it.
+//
+// The pong is what is being waited for; the ping itself would succeed against a
+// socket whose packets are going nowhere, because a write into a dead TCP
+// connection is buffered rather than refused. `Ping` blocks for the answer,
+// which is the only thing that distinguishes a quiet connection from a gone one.
+//
+// A failure closes the socket rather than reporting anything. There is nobody to
+// report to: serve is parked in a read, and CloseNow is what returns it an error
+// so the run loop can reconnect. Pongs arrive through that same read, which is
+// why this cannot be the only thing running.
+func keepAlive(ctx context.Context, conn *websocket.Conn) {
+	ticker := time.NewTicker(controlPingInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pingCtx, cancel := context.WithTimeout(ctx, controlPingTimeout)
+			err := conn.Ping(pingCtx)
+			cancel()
+			if err != nil {
+				// Not logged when the caller is shutting down: cancelling this
+				// context is how serve stops it, and an "error" there is the
+				// mechanism working.
+				if ctx.Err() == nil {
+					log.Printf("relay stopped answering, reconnecting: %v", err)
+					conn.CloseNow()
+				}
+				return
+			}
 		}
 	}
 }

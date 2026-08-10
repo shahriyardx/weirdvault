@@ -51,6 +51,7 @@ must never exist in production, and the guard itself would never run.
 ```bash
 cd apps/relay && cargo test     # SSRF guards, token binding, quotas, rendezvous
 cd apps/ssh   && go test ./...  # key and ssh_config parsing
+cd apps/agent && go test ./...  # control-connection liveness, the port allowlist
 cd apps/web   && bun test       # audit shapes, vault merge, recovery codes, SigV4
 ```
 
@@ -73,9 +74,19 @@ docker run -d --name weirdvault-minio -p 9000:9000 \
 TEST_S3_ENDPOINT=http://127.0.0.1:9000 bun test   # those tests skip without it
 ```
 
+Two scripts cover what a unit test cannot, because the thing being checked is
+what Postgres does under concurrency rather than what a function returns. Both
+need the app running and `DATABASE_URL` pointing at the same database it uses;
+both create throwaway accounts and delete them afterwards.
+
+```bash
+bun run --cwd apps/web dev
+node apps/web/scripts/check-rate-limit.mjs    # window arithmetic, and the burst
+node apps/web/scripts/check-write-paths.mjs   # vault versioning, device ids, FKs
+```
+
 There is no automated coverage of the browser path — connecting, SFTP, host-key
-pinning, vault sync — and none of the routes against a real database. Check
-those by hand.
+pinning, the two-device sync loop. Check those by hand.
 
 ## Schema changes
 
