@@ -400,9 +400,11 @@ than only at the token mint, and running with no cloud IAM role attached.
    then failed destroy the recordings of an account that still exists — so a
    bucket that is unreachable at that moment leaves objects nothing points at.
    They are ciphertext with no surviving key holder and no row naming them, and
-   `scripts/sweep-recordings.mjs` removes them by exactly that property. Nothing
-   schedules it yet, which is what makes this a residual risk rather than a
-   handled case. Deployments with no bucket configured are unaffected: the bytes
+   the scheduled maintenance sweep removes them by exactly that property, and
+   `compose.prod.yaml` now ships the scheduler that runs it — so this is a
+   handled case on a self-hosted deployment and an outstanding one anywhere
+   `CRON_SECRET` is unset and no external scheduler is pointed at
+   `POST /api/cron`. Deployments with no bucket configured are unaffected: the bytes
    are in the row and go with it.
 8. **No third-party audit yet.** This document used to say one had to happen
    before charging for anything. Billing shipped first, so that commitment was

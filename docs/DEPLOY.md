@@ -180,16 +180,9 @@ object nothing points at rather than a row pointing at nothing: an orphan costs
 storage and is findable, a dangling row is a recording that cannot be played.
 The routes clean up after themselves, and the one case they cannot is an account
 deletion whose purge could not reach the bucket — the rows are already gone by
-then. `apps/web/scripts/sweep-recordings.mjs` deletes objects no row claims:
-
-```bash
-node apps/web/scripts/sweep-recordings.mjs --dry-run
-node apps/web/scripts/sweep-recordings.mjs
-```
-
-It needs `DATABASE_URL` and the same four `R2_*` variables, skips anything
-written in the last hour so a save in flight is never mistaken for an orphan,
-and is safe to run against a live deployment. Nothing schedules it.
+then. The scheduled maintenance sweep deletes objects no row claims — see
+below — and skips anything written in the last hour, so a save in flight is
+never mistaken for an orphan.
 
 **Deleting an account** cancels the Stripe subscription first — if that fails,
 the deletion is refused rather than leaving a charge running with no way to
@@ -197,6 +190,58 @@ reach it — then deletes the rows, then purges `rec/<user-id>/` and
 `share/<user-id>/` from the bucket. A purge that fails leaves orphans for the
 sweep; it does not fail the deletion, because there is no account left to refuse
 on behalf of.
+
+---
+
+## Scheduled maintenance
+
+Four things have to be removed on a timer, and none of them are optional once
+the app has been running for a while:
+
+| | |
+|---|---|
+| Audit rows past their retention window | 30 days, or 12 months with a subscription |
+| Abandoned enrollment tokens | minted for "Add a machine" and never used |
+| Stale rate-limit counters | one row per bucket, so the table grows with callers |
+| Orphaned recording objects | in the bucket, claimed by no row — these cost money |
+
+`POST /api/cron` does all four. **`compose.prod.yaml` ships a `cron` service that
+calls it**, so a self-hosted deployment schedules itself and the only thing to
+set is `CRON_SECRET`:
+
+```bash
+openssl rand -base64 48        # CRON_SECRET
+# optional, default 04:15 daily:
+CRON_SCHEDULE="15 4 * * *"
+```
+
+It is busybox `crond` and `wget` in the alpine base image — nothing to install,
+no network needed to start — and `docker compose logs cron` shows the report
+from each run. To use something else instead (a systemd timer, a crontab on the
+host, Upstash, a GitHub Action), delete the service and POST to the same route:
+
+```bash
+curl -X POST -H "authorization: Bearer $CRON_SECRET" https://your-app/api/cron
+curl -X POST -H "authorization: Bearer $CRON_SECRET" 'https://your-app/api/cron?dryRun=1'
+```
+
+On Vercel there is no cron container, so an external scheduler is the only
+option and this is the route to point it at.
+
+`?dryRun=1` counts what each job would do and changes nothing — worth running
+once against real data before letting a schedule loose on it.
+
+**Blank `CRON_SECRET` means the route answers 503 to everybody and nothing is
+ever pruned.** That is deliberate: an endpoint that deletes rows must not become
+reachable because a variable was forgotten. It is its own secret rather than a
+reuse of `RELAY_SECRET` or `BETTER_AUTH_SECRET`, because it travels on the wire
+on every invocation and will end up in a proxy log; those two are signing keys
+that are never transmitted.
+
+Every job is bounded, reports when it stopped short, and is safe to run twice —
+they delete only what is already unreferenced or already outside a window. A job
+that fails does not stop the others, and the response is a 500 so a scheduler
+with retries notices.
 
 ---
 
@@ -217,6 +262,9 @@ Ordered by how badly it goes wrong if you skip it.
 - [ ] **TLS on both**, with a websocket-aware proxy and a long read timeout.
 - [ ] **Postgres is not published to the host.** The compose file uses `expose`,
       not `ports`, for exactly this reason.
+- [ ] **`CRON_SECRET` is set**, or nothing is ever pruned: audit rows accumulate
+      past the window the app promises on screen, and orphaned recording objects
+      accumulate in a bucket you pay for.
 - [ ] **`TRUSTED_PROXY_HOPS` and `TRUSTED_PROXY_IPS` are both set** once a proxy
       is in front. Without them every unauthenticated rate limit — sign-up,
       sign-in, share links, agent enrollment, recovery codes — shares a single

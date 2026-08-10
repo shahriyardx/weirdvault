@@ -323,8 +323,14 @@ function unescapeXml(value: string): string {
  * same claim, and a purge that stopped at the first page would leave data
  * behind while reporting success.
  */
-export async function listPrefix(store: ObjectStore, prefix: string): Promise<string[]> {
-  const keys: string[] = [];
+export interface StoredObject {
+  key: string;
+  /** Epoch milliseconds. Zero when the bucket did not say, which no S3 does. */
+  lastModified: number;
+}
+
+export async function listObjects(store: ObjectStore, prefix: string): Promise<StoredObject[]> {
+  const objects: StoredObject[] = [];
   let token: string | undefined;
 
   for (;;) {
@@ -337,8 +343,23 @@ export async function listPrefix(store: ObjectStore, prefix: string): Promise<st
     if (!response.ok) throw new ObjectStoreError("list", response.status, await detailOf(response));
     const xml = await response.text();
 
-    for (const match of xml.matchAll(/<Key>([\s\S]*?)<\/Key>/g)) {
-      keys.push(unescapeXml(match[1]));
+    // Read as a pair from inside one <Contents>, so a key can never be matched
+    // against a different object's timestamp — which would be the one way the
+    // orphan sweep could delete something it had no business deleting.
+    for (const item of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const key = /<Key>([\s\S]*?)<\/Key>/.exec(item[1]);
+      if (!key) continue;
+      const at = /<LastModified>([\s\S]*?)<\/LastModified>/.exec(item[1]);
+      const parsed = at ? Date.parse(at[1]) : Number.NaN;
+      objects.push({
+        key: unescapeXml(key[1]),
+        // Zero, not "now", when a timestamp is unreadable. The sweep treats an
+        // object as too recent to touch when it is newer than the cutoff, so a
+        // missing timestamp must read as old-and-therefore-judged-on-its-own
+        // merits rather than as a permanent reprieve; an object nothing claims
+        // and whose age cannot be established is still an orphan.
+        lastModified: Number.isNaN(parsed) ? 0 : parsed,
+      });
     }
 
     const truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml);
@@ -347,7 +368,12 @@ export async function listPrefix(store: ObjectStore, prefix: string): Promise<st
     token = unescapeXml(next[1]);
   }
 
-  return keys;
+  return objects;
+}
+
+/** Just the keys, for callers that do not care when an object was written. */
+export async function listPrefix(store: ObjectStore, prefix: string): Promise<string[]> {
+  return (await listObjects(store, prefix)).map((object) => object.key);
 }
 
 /** How many at a time. Enough to not be slow, few enough to not look like abuse. */

@@ -1,27 +1,23 @@
 /**
- * The retention windows exist twice, and this is what stops the copies drifting.
+ * The retention windows, and the one design decision around them worth pinning.
  *
- * `scripts/prune-audit.mjs` is the thing that actually deletes rows, and it
- * cannot import this module: it is plain node, run against a production image
- * that is Next's standalone output, which ships neither `src/` nor a TypeScript
- * toolchain. So it carries its own `RETENTION_DAYS` literal. Two copies of a
- * retention promise is two chances for one to be wrong, and the dangerous
- * direction is silent — a pruner with a shorter window deletes rows the API
- * would still have returned, and nobody finds out until somebody goes looking
- * for an event that is gone.
+ * This file used to be mostly a drift guard. `scripts/prune-audit.mjs` was the
+ * thing that actually deleted rows and it could not import this module — plain
+ * node, run against Next's standalone output, which ships neither `src/` nor a
+ * TypeScript toolchain — so it carried its own `RETENTION_DAYS` literal, and
+ * these tests read that script as *text* to check the numbers still matched.
  *
- * Reading the script as text is deliberately crude, and it is the only thing
- * available: importing it would open a database connection and start deleting.
- * The parse is narrow enough to fail loudly if the declaration is reshaped,
- * which is the correct outcome — this test failing means somebody should look
- * at both files, not that the test should be relaxed.
+ * The pruner is `lib/maintenance/audit.ts` now and imports
+ * `AUDIT_RETENTION_DAYS` directly, so there is one copy and nothing to compare.
+ * Those tests are deleted rather than weakened into something that still looks
+ * like a check.
  *
- * The second test here used to assert that the pruner applied one hardcoded
- * window to the whole table, because every account was Free. Pro is a real
- * subscription now and that assertion would be a licence to delete a paying
- * customer's history at thirty days. What replaced it is the check that the
- * pruner reads both windows and chooses per user — and, specifically, that it
- * chooses by *keeping* more rather than by re-deriving the tier rule in SQL.
+ * What survives is the rule the numbers are applied by, which is a decision
+ * about SQL that no unit test can execute: the pruner chooses a window by
+ * whether the account has a subscription row *at all*, not by re-deriving
+ * `tierForSubscription`'s status logic. That asymmetry is deliberate and is the
+ * kind of thing a later reader tidies into "correctness" — with row deletion as
+ * the failure mode — so there is a tripwire for it below.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -29,53 +25,32 @@ import { describe, expect, test } from "bun:test";
 import { AUDIT_RETENTION_DAYS, auditRetentionCutoff } from "./retention";
 import { RELAY_ALLOWANCE_BYTES, tierForSubscription } from "@/lib/billing/tiers";
 
-const PRUNER = new URL("../../../scripts/prune-audit.mjs", import.meta.url).pathname;
+const PRUNER = new URL("../maintenance/audit.ts", import.meta.url).pathname;
 
-describe("the pruner's copy of the windows", () => {
-  test("matches AUDIT_RETENTION_DAYS", async () => {
+describe("the pruner over-keeps, on purpose", () => {
+  test("both windows reach the statement", async () => {
     const source = await Bun.file(PRUNER).text();
 
-    const declaration = source.match(/const RETENTION_DAYS = \{([^}]*)\}/);
-    expect(
-      declaration,
-      "scripts/prune-audit.mjs no longer declares RETENTION_DAYS as an object literal; " +
-        "if the shape changed, this test has to change with it rather than be deleted",
-    ).not.toBeNull();
-
-    const copied: Record<string, number> = {};
-    for (const [, tier, days] of declaration![1].matchAll(/(\w+)\s*:\s*(\d+)/g)) {
-      copied[tier] = Number(days);
-    }
-
-    expect(copied).toEqual(AUDIT_RETENTION_DAYS);
+    // A statement carrying only one of them is the old single-window pruner,
+    // which would delete a Pro account's year of history at the Free cutoff.
+    expect(source).toContain("AUDIT_RETENTION_DAYS.free");
+    expect(source).toContain("AUDIT_RETENTION_DAYS.pro");
   });
 
-  test("prunes per account rather than applying one window to the table", async () => {
+  test("the choice consults the subscription table and nothing about status", async () => {
     const source = await Bun.file(PRUNER).text();
 
-    // Both cutoffs have to reach the DELETE. A statement carrying only one of
-    // them is the old single-window pruner, which would delete a Pro account's
-    // year of history at the Free cutoff.
-    expect(source).toContain("RETENTION_DAYS.free");
-    expect(source).toContain("RETENTION_DAYS.pro");
-
-    // And the choice between them has to consult the subscription table. This is
-    // a tripwire for somebody reintroducing a constant tier, not a proof that
-    // the SQL is right — nothing here runs Postgres.
-    expect(source).toMatch(/from\s+"?subscription"?/i);
-  });
-
-  test("keeps rather than resolves: any subscription row wins the long window", async () => {
-    const source = await Bun.file(PRUNER).text();
-
-    // The deliberate asymmetry, asserted so it is not "tidied up" later into a
-    // transcription of tierForSubscription's status rules. The pruner cannot
-    // import that function, and a second copy of it in SQL would be a second
-    // thing to get wrong — with deletion as the failure mode. Over-keeping is
-    // invisible through the API (GET /api/audit still filters on read) and
-    // recoverable; over-deleting is neither.
-    expect(source).toContain("prune-audit deliberately over-keeps");
-    expect(source).not.toMatch(/status\s+IN\s*\(/i);
+    // Presence of a row, not a resolution of it. `tierForSubscription` weighs
+    // status and period end; transcribing that into SQL would be a second copy
+    // of a non-trivial rule in a language it cannot be tested in. Over-keeping
+    // is invisible through the API — GET /api/audit filters on read — and
+    // recoverable. Over-deleting is neither.
+    expect(source).toMatch(/from\s+"subscription"/i);
+    expect(source).not.toMatch(/status\s+in\s*\(/i);
+    // Not imported, rather than not mentioned. The doc comment names it to
+    // explain why it is deliberately *not* used, and a check that forbade the
+    // word would push somebody to delete the explanation to make a test pass.
+    expect(source).not.toMatch(/import\s*\{[^}]*\btierForSubscription\b/);
   });
 });
 

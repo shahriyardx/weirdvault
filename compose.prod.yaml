@@ -154,5 +154,55 @@ services:
       retries: 3
       start_period: 5s
 
+  # The scheduler. Nothing about this is clever, and that is the point.
+  #
+  # Audit rows past their retention window, abandoned enrollment tokens, stale
+  # rate-limit counters and recording objects no row claims all need removing on
+  # a timer. That used to be two node scripts and a paragraph in the README
+  # asking an operator to write a crontab line, which meant it had never run
+  # anywhere. Now the work is POST /api/cron and this calls it.
+  #
+  # It holds one secret and one URL. It deliberately does NOT hold DATABASE_URL
+  # or the bucket credentials: the web container already has them, and a second
+  # container with a copy of R2_SECRET_ACCESS_KEY would be a second place to
+  # rotate it and a second thing to compromise.
+  #
+  # busybox crond and busybox wget, both already in the alpine base image, so
+  # there is nothing to install at start and no network needed to boot. If you
+  # would rather schedule this elsewhere — a systemd timer, a crontab on the
+  # host, Upstash, a GitHub Action — delete this service and POST to the same
+  # route with the same header. Nothing about the work is coupled to this.
+  cron:
+    image: alpine:3.21
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      # Blank and the route answers 503 for everybody, including this. Compose
+      # refuses to start rather than running a scheduler against an endpoint
+      # that will reject it every night in a log nobody reads.
+      CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET in .env}
+      # Standard five-field crontab. Default is 04:15 daily: after midnight, so
+      # a day's rows have aged out, and not on the hour, where every cron job
+      # ever written already is.
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-15 4 * * *}
+      CRON_URL: ${CRON_URL:-http://web:3000/api/cron}
+    # `--post-data=''` makes it a POST with an empty body; the route refuses GET
+    # on purpose, so a prefetch or a link preview cannot run the cleanup.
+    #
+    # The `>> /proc/1/fd/1` is not decoration. busybox crond does not log what a
+    # command printed — it tries to *mail* it, and with no sendmail in the image
+    # the report is discarded, leaving `docker compose logs cron` showing that a
+    # job ran and nothing about what it did. Redirecting to PID 1's stdout is
+    # what puts the JSON report where `docker compose logs cron` can show it.
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        echo "$$CRON_SCHEDULE wget -q -O - --header=\"authorization: Bearer $$CRON_SECRET\" --post-data='' \"$$CRON_URL\" >> /proc/1/fd/1 2>&1 || echo 'cron: maintenance request failed' >> /proc/1/fd/1" > /etc/crontabs/root
+        echo "cron: scheduled '$$CRON_SCHEDULE' against $$CRON_URL"
+        exec crond -f -l 8 -L /dev/stdout
+
 volumes:
   pgdata:

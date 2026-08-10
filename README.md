@@ -67,7 +67,7 @@ here" and nothing more.
 | Password change | re-derives all three branches and re-wraps every portable key individually; ordered so a dropped connection is repairable rather than a lockout |
 | Recovery codes | ten single-use codes, each a sealed copy of the key material; password-equivalent by construction and labelled as such |
 | Backup | encrypted vault export, and a restore that merges rather than overwrites |
-| Activity | audit log with hostnames blinded under the audit key, resolved locally; kept 30 days on Free and 12 months on Pro, enforced by the query and by `bun run audit:prune` |
+| Activity | audit log with hostnames blinded under the audit key, resolved locally; kept 30 days on Free and 12 months on Pro, enforced by the query and by the scheduled maintenance job |
 | Recording | session capture encrypted in the browser under the vault key, replayed here, exportable as an asciicast. Saving a new recording and creating a share link need Pro; listing, playing, downloading and revoking are ungated on both tiers |
 | Recording share links | a second copy of one transcript, re-encrypted in the tab under a key generated for that link alone and carried in the URL fragment, so it opens with no account and the server never holds the key. Expiry required, optional view limit, revocable — and revoking deletes that copy |
 | Recording storage | a `bytea` column, or an R2 bucket when the four `R2_*` variables are set. Both are read whichever is written, so switching either way is not a migration. Bytes always reach the browser through a route that has already checked who is asking — there is no presigned URL anywhere, deliberately, because a share link's revocation is enforced on arrival and a bucket has never heard of `revoked_at` |

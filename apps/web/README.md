@@ -381,59 +381,65 @@ Two places enforce the window, and they need each other:
 - `GET /api/audit` never returns a row older than the cutoff. This is what makes
   the retention figure on the Activity page true at any given moment, including
   the moment after a missed cron run.
-- `scripts/prune-audit.mjs` deletes them. Real `DELETE`, no soft-delete flag —
-  the page tells users the events are gone, so they have to be gone.
+- `lib/maintenance/audit.ts` deletes them. Real `DELETE`, no soft-delete flag —
+  the page tells users the events are gone, so they have to be gone. It runs
+  from the scheduled maintenance below, in bounded batches so a large table is
+  never locked for long, and is safe to run repeatedly and concurrently with the
+  app.
+
+**The pruner deliberately over-keeps.** It chooses a window by whether the
+account has a `subscription` row at all — any row, whatever its status, however
+long ago it lapsed — rather than re-deriving `tierForSubscription`, which also
+weighs status and period end. Transcribing that rule into SQL would be a second
+copy of it with row deletion as the failure mode. Somebody who subscribed once
+and cancelled a year ago therefore keeps twelve months of rows on disk rather
+than thirty days, invisible through the app because `GET /api/audit` still
+filters on read. The asymmetry is the point: over-keeping is recoverable,
+over-deleting is not. `retention.test.ts` pins it so it is not later tidied into
+"correctness".
+
+## Scheduled maintenance
+
+Four jobs, one route, one implementation:
+
+| | |
+|---|---|
+| `audit-events` | rows past their retention window |
+| `agent-enrollments` | tokens minted and never used, an hour past expiry |
+| `rate-limit-counters` | buckets whose window closed a day ago |
+| `recording-objects` | objects in the bucket that no row claims |
 
 ```bash
-bun run audit:prune                      # delete everything past the window
-bun run audit:prune -- --dry-run         # count them, delete nothing
-bun run audit:prune -- --batch=2000      # smaller transactions on a busy box
+curl -X POST -H "authorization: Bearer $CRON_SECRET" https://your-app/api/cron
+curl -X POST -H "authorization: Bearer $CRON_SECRET" 'https://your-app/api/cron?dryRun=1'
 ```
 
-It needs `DATABASE_URL`, deletes in bounded batches so a large table is never
-locked for long, prints what it deleted, and is safe to run repeatedly and
-concurrently with the app.
+`compose.prod.yaml` ships a `cron` service that does exactly this on a schedule
+— busybox `crond` and `wget`, both already in the alpine base image — so a
+self-hosted deployment schedules itself. Set `CRON_SECRET`; everything else has
+a default. A serverless deployment has no such container and needs an external
+scheduler pointed at the same route.
 
-**The pruner deliberately over-keeps.** It cannot import `tierForSubscription`
-— it is plain node run against Next's standalone output, which ships no
-TypeScript — and transcribing that rule into SQL would be a second copy of it
-with row deletion as the failure mode. So it applies the Pro window to any
-account with a `subscription` row at all, whatever its status, and the Free
-window to accounts with none. Somebody who subscribed once and cancelled keeps
-12 months of rows on disk rather than 30 days, invisible through the API because
-`GET /api/audit` still filters on read. That asymmetry is the point: over-keeping
-is recoverable, over-deleting is not.
+Blank `CRON_SECRET` means the route answers 503 to everyone and nothing is ever
+pruned. That is deliberate: an endpoint that deletes rows must not become
+reachable because a variable was forgotten.
 
-**Nothing schedules it.** No cron container, no scheduler in the image, no timer
-inside the app. Until an operator wires one of these up, expired rows stay on
-disk — invisible through the API, but not deleted:
+**This used to be two node scripts and never ran anywhere**, because scheduling
+them meant an operator writing a crontab line for a machine this repo has never
+seen. Moving the work into `src/lib/maintenance/` also deleted two duplications
+that existed only because a plain script cannot import from `src/`: a second
+copy of the audit retention windows, guarded by a test that read a script as
+*text* to compare number literals, and a second complete implementation of AWS
+SigV4, guarded by a test that signed the same five requests with both signers
+and compared the headers. Both are gone.
 
-```cron
-# crontab: daily at 04:15
-15 4 * * * cd /srv/webxterm/apps/web && DATABASE_URL=... /usr/bin/node scripts/prune-audit.mjs >> /var/log/webxterm-prune.log 2>&1
-```
-
-```ini
-# systemd: webxterm-prune.service + webxterm-prune.timer
-[Service]
-Type=oneshot
-WorkingDirectory=/srv/webxterm/apps/web
-EnvironmentFile=/etc/webxterm.env
-ExecStart=/usr/bin/node scripts/prune-audit.mjs
-
-[Timer]
-OnCalendar=daily
-Persistent=true
-```
-
-Note that `scripts/` is **not** in the runtime image — only `migrate.mjs` is,
-because the entrypoint runs it. So a compose deployment runs this from a
-checkout with `DATABASE_URL` pointed at the container's Postgres, not with
-`docker compose run web`. The intended production answer is an authenticated
-route called by an external scheduler; see `docs/TODO.md`.
-
-The choice is deliberately left open — a scheduler is a property of the host, and
-picking one here would only mean two of them fighting on somebody's machine.
+Each job is caught separately — an unreachable bucket must not stop audit rows
+being pruned — and each is bounded, with truncation reported rather than
+swallowed, because a job that quietly stopped early reads as "nothing left to
+do". Every job deletes only what is already unreferenced or already outside a
+window, so a second run finds less to do and concurrent runs duplicate effort
+rather than cause harm. There is no lock, deliberately: a lock is a thing that
+can be held by a process that died.
 
 ## Rate limits
 
@@ -481,13 +487,14 @@ requests against a limit of three, which is exactly the burst a read-then-write
 limiter lets through. It then drives the running app to confirm sign-in turns
 from `401` into `429` and share fetches turn from `404` into `429`.
 
-Stale counters are swept by `scripts/prune-audit.mjs`, which already runs on the
-right cadence — a second cron line is a second thing to forget.
+Stale counters are one of the scheduled maintenance jobs above, so they are
+swept on the same cadence as everything else.
 
-## Sweeping orphaned recording objects
+## Orphaned recording objects
 
 Only relevant when `R2_*` is configured and recordings live in a bucket rather
-than in a `bytea` column.
+than in a `bytea` column. The sweep is one of the four scheduled maintenance
+jobs above; this is why it has to exist.
 
 There is no transaction spanning Postgres and a bucket, so every write to a
 recording is two steps and either can fail. The ordering is picked so that a
@@ -506,24 +513,13 @@ The routes clean up after themselves — a failed insert takes its object back
 out. The case they cannot cover is an account deletion whose purge could not
 reach the bucket, because by then the rows are already gone.
 
-```bash
-bun run recordings:sweep -- --dry-run           # list what it would delete
-bun run recordings:sweep                        # delete it
-bun run recordings:sweep -- --min-age-hours=6   # a wider grace window
-```
-
-It needs `DATABASE_URL` and the four `R2_*` variables, reads both `recording`
-and `recording_share` in one query — a share's copy is its own object, and a
-sweep that read only the first table would delete every live link's bytes — and
-skips anything written in the last hour, so a save in flight is never mistaken
-for an orphan. Safe to run repeatedly and against a live deployment.
-
-It signs its own S3 requests rather than importing `src/lib/storage/sigv4.ts`,
-for the same reason the pruner copies its retention windows: these scripts are
-plain node with no build step. `src/lib/storage/sweep-script.test.ts` signs the
-same five requests with both implementations and fails if the Authorization
-headers differ, which is what keeps the copy from drifting into a 403 nobody
-sees until they set up the cron.
+`lib/maintenance/objects.ts` reads both `recording` and `recording_share` before
+it lists the bucket — a share's copy is its own object, and a sweep that read
+only the first table would delete every live link's bytes. It reads the database
+first and the bucket second on purpose: an object written between the two reads
+is missing from the claimed set and looks like an orphan, and the one-hour grace
+window is what makes that harmless, so reading in this order keeps the window the
+only thing that has to be right.
 
 ## Share links
 
