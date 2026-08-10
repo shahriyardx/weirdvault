@@ -39,6 +39,10 @@ export async function GET(request: Request) {
 # It installs a binary to /usr/local/bin, writes an identity to
 # /etc/webxterm-agent, and registers a systemd service. It does not touch your
 # SSH configuration, and the agent it installs holds no SSH credentials.
+#
+# To remove all of that again:
+#
+#   curl -fsSL ${origin}/install.sh | sh -s -- --uninstall
 
 set -eu
 
@@ -49,24 +53,95 @@ CONFIG_DIR="/etc/webxterm-agent"
 SERVICE_USER="webxterm-agent"
 SSH_PORT="22"
 TOKEN=""
+MODE="install"
 
 for arg in "$@"; do
   case "$arg" in
     --token=*) TOKEN="\${arg#*=}" ;;
     --ssh-port=*) SSH_PORT="\${arg#*=}" ;;
+    --uninstall) MODE="uninstall" ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
 
+if [ "$(id -u)" -ne 0 ]; then
+  echo "error: run this as root (it manages a system service)." >&2
+  echo "       try: curl -fsSL $APP_URL/install.sh | sudo sh -s -- $*" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------- uninstall
+#
+# Every step is written to succeed when the thing it removes is already gone, so
+# a half-finished install can be cleaned up by the same command, and running it
+# twice is not an error. That matters more than usual here: the most likely
+# reason somebody runs this is that something did not work.
+
+if [ "$MODE" = "uninstall" ]; then
+  removed=""
+
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files webxterm-agent.service >/dev/null 2>&1; then
+      systemctl disable --now webxterm-agent 2>/dev/null || true
+      removed="\${removed}  the systemd service (stopped and disabled)\\n"
+    fi
+    if [ -f /etc/systemd/system/webxterm-agent.service ]; then
+      rm -f /etc/systemd/system/webxterm-agent.service
+      systemctl daemon-reload 2>/dev/null || true
+      removed="\${removed}  /etc/systemd/system/webxterm-agent.service\\n"
+    fi
+  else
+    # No systemd: whatever is running was started by hand or by a supervisor
+    # this script did not write, so it says so rather than guessing.
+    if pgrep -f "webxterm-agent run" >/dev/null 2>&1; then
+      echo "note: an agent process is running and this machine has no systemd," >&2
+      echo "      so stop it however you started it (or: pkill -f 'webxterm-agent run')." >&2
+      echo >&2
+    fi
+  fi
+
+  if [ -f "\${INSTALL_DIR}/webxterm-agent" ]; then
+    rm -f "\${INSTALL_DIR}/webxterm-agent"
+    removed="\${removed}  \${INSTALL_DIR}/webxterm-agent\\n"
+  fi
+
+  # The config holds this machine's Ed25519 private key. It is the one thing
+  # here that is worth removing even if you leave everything else, which is why
+  # it is called out separately in the summary below.
+  if [ -d "$CONFIG_DIR" ]; then
+    rm -rf "$CONFIG_DIR"
+    removed="\${removed}  \${CONFIG_DIR}/ (including this machine's private key)\\n"
+  fi
+
+  # Only if the installer created it. A pre-existing account of that name is
+  # somebody else's and is left alone.
+  if id "$SERVICE_USER" >/dev/null 2>&1; then
+    if command -v userdel >/dev/null 2>&1; then
+      userdel "$SERVICE_USER" 2>/dev/null && removed="\${removed}  the \${SERVICE_USER} system user\\n" || true
+    elif command -v deluser >/dev/null 2>&1; then
+      deluser "$SERVICE_USER" >/dev/null 2>&1 && removed="\${removed}  the \${SERVICE_USER} system user\\n" || true
+    fi
+  fi
+
+  echo
+  if [ -z "$removed" ]; then
+    echo "Nothing to remove — no webxterm agent is installed here."
+  else
+    echo "Removed:"
+    printf "%b" "$removed"
+    echo
+    echo "Nothing else was touched. Your SSH configuration, sshd, and any keys in"
+    echo "~/.ssh are exactly as they were — the agent never had anything to do with them."
+  fi
+  echo
+  echo "If you have not already, revoke this machine at $APP_URL/dashboard/machines"
+  echo "so it cannot connect even if a copy of its key exists somewhere else."
+  exit 0
+fi
+
 if [ -z "$TOKEN" ]; then
   echo "error: --token is required. Get one from $APP_URL/dashboard/machines" >&2
   exit 2
-fi
-
-if [ "$(id -u)" -ne 0 ]; then
-  echo "error: run this as root (it installs a system service)." >&2
-  echo "       try: curl -fsSL $APP_URL/install.sh | sudo sh -s -- --token=..." >&2
-  exit 1
 fi
 
 # ---------------------------------------------------------------- platform

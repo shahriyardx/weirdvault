@@ -260,6 +260,8 @@ function AgentRow({
 }) {
   const [renaming, setRenaming] = useState(false)
   const [label, setLabel] = useState(agent.label)
+  // Opened by a successful revoke, and re-openable from the revoked row after.
+  const [removalOpen, setRemovalOpen] = useState(false)
   const revoked = Boolean(agent.revokedAt)
 
   const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null
@@ -286,6 +288,10 @@ function AgentRow({
       return
     }
     toast.success("Revoked. It cannot reconnect.")
+    // Before the refresh, not after: onChanged re-fetches and re-renders the
+    // list, and opening the dialog first means it is already on screen when the
+    // row turns into its revoked form rather than appearing a beat later.
+    setRemovalOpen(true)
     await onChanged()
   }
 
@@ -387,6 +393,14 @@ function AgentRow({
           </AlertDialog>
         </div>
       )}
+
+      {revoked && (
+        <Button variant="ghost" size="sm" onClick={() => setRemovalOpen(true)}>
+          How to remove it
+        </Button>
+      )}
+
+      <RemovalDialog agent={agent} open={removalOpen} onOpenChange={setRemovalOpen} />
 
       {revoked && (
         <AlertDialog>
@@ -586,6 +600,108 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
         <DialogFooter>
           <Button variant={state.phase === "claimed" ? "default" : "ghost"} onClick={onClose}>
             {state.phase === "claimed" ? "Done" : "Close"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * What to run on the machine once its key is dead.
+ *
+ * Revoking is a row in a database on this side. The machine on the other side
+ * still has a binary, a systemd unit that will now fail every five seconds, and
+ * — the part that matters — its Ed25519 private key sitting in /etc. None of
+ * that can connect any more, but "I revoked it" and "it is gone from the box"
+ * are two different statements and only one of them was true.
+ *
+ * So this opens by itself the moment a revoke succeeds, and stays reachable from
+ * the revoked row afterwards, because a dialog somebody dismissed is a dialog
+ * they cannot get back. Nobody reads a README to find out how to uninstall
+ * something; the place they will look is the screen where they revoked it.
+ *
+ * It is deliberately not a confirmation step. Revoking already happened, the
+ * machine is already locked out, and a machine that was lost or stolen cannot be
+ * cleaned up at all — for that person this is information, not a task, and the
+ * text says so rather than leaving them feeling half-finished.
+ */
+function RemovalDialog({
+  agent,
+  open,
+  onOpenChange,
+}: {
+  agent: Agent
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  // The agent self-reports its platform at enrolment. Nothing trusts it for
+  // anything that matters; here it only picks which paragraph is true.
+  const mac = agent.os === "darwin"
+  const origin = typeof window === "undefined" ? "" : window.location.origin
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove the agent from {agent.label}</DialogTitle>
+          <DialogDescription>
+            {agent.label} can no longer connect — that took effect the moment you revoked it, and
+            nothing below changes it. What is still on the machine is the agent binary and its
+            private key. This removes both.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --uninstall`} />
+
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            {mac
+              ? "On macOS there is no service to stop — if you started the agent yourself, that " +
+                "process is stopped too. It leaves your SSH configuration and everything in " +
+                "~/.ssh untouched."
+              : "It stops and disables the service, removes the unit, the binary, the config " +
+                "directory and the service user. It leaves your SSH configuration, sshd and " +
+                "everything in ~/.ssh untouched — the agent never had anything to do with them."}
+          </p>
+
+          <details className="text-muted-foreground text-xs leading-relaxed">
+            <summary className="cursor-pointer select-none">
+              Prefer not to pipe a script to a shell?
+            </summary>
+            <div className="mt-2 space-y-1 font-mono">
+              {(mac
+                ? [
+                    "sudo pkill -f 'webxterm-agent run'",
+                    "sudo rm /usr/local/bin/webxterm-agent",
+                    "sudo rm -rf /etc/webxterm-agent",
+                  ]
+                : [
+                    "sudo systemctl disable --now webxterm-agent",
+                    "sudo rm /etc/systemd/system/webxterm-agent.service",
+                    "sudo systemctl daemon-reload",
+                    "sudo rm /usr/local/bin/webxterm-agent",
+                    "sudo rm -rf /etc/webxterm-agent",
+                    "sudo userdel webxterm-agent",
+                  ]
+              ).map((line) => (
+                <div key={line} className="break-all">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </details>
+
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            If you revoked this machine because it was lost or stolen, there is nothing for you to
+            run and nothing left to do. Revoking is what protects you: the key is retired here, so
+            the copy on that machine opens nothing.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Done
           </Button>
         </DialogFooter>
       </DialogContent>

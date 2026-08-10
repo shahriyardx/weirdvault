@@ -4,6 +4,7 @@ import {
   ArchiveIcon,
   ArrowRightIcon,
   CloudArrowUpIcon,
+  DesktopTowerIcon,
   DeviceMobileIcon,
   FileCodeIcon,
   FingerprintIcon,
@@ -48,6 +49,7 @@ const SECTIONS = [
   { id: "keys", label: "Keys" },
   { id: "files", label: "Files and editing" },
   { id: "hosts", label: "Hosts and sync" },
+  { id: "machines", label: "Machines behind a router" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ] as const
 
@@ -60,7 +62,7 @@ export default function Docs() {
       <PageHeader
         eyebrow="Documentation"
         title="Getting started"
-        description="From an empty tab to a live shell. Everything below is the whole setup — there is no agent to install on the server and no client to install on the machine you are sitting at."
+        description="From an empty tab to a live shell. Everything below is the whole setup — nothing to install on the machine you are sitting at, and nothing on the server either unless it has no public address at all."
         actions={
           <Button asChild size="sm">
             <Link href="/dashboard/terminal">
@@ -392,6 +394,78 @@ export default function Docs() {
             <Button asChild variant="outline" size="sm" className="mt-5">
               <Link href="/security">Read the threat model</Link>
             </Button>
+          </Section>
+
+          {/* ----------------------------------------------------- machines */}
+          <Section id="machines" icon={<DesktopTowerIcon />} title="Machines behind a router">
+            <P>
+              Everything above assumes we can reach your server. A box on your home network, on
+              hotel wifi, or behind a firewall with no inbound rule has no address to dial — so it
+              dials us instead. A small daemon on that machine holds one outbound connection open
+              and waits; when you open a session, the relay pairs the two.
+            </P>
+            <P>
+              This is the one thing webxterm asks you to install, and only for machines that need
+              it. It is a pipe to a port: it holds no SSH credentials, performs no handshake, and
+              sees the same ciphertext the relay does. Its key says &ldquo;the machine you enrolled
+              is here&rdquo; and nothing more.
+            </P>
+            <Step n={1} title="Add the machine">
+              <P>
+                On <A href="/dashboard/machines">Machines</A>, press <strong>Add a machine</strong>.
+                You get a command with a single-use token that expires in ten minutes. Run it on the
+                machine:
+              </P>
+              <CodeBlock className="mt-3">
+                <span className="text-muted-foreground">$ </span>
+                <span className="text-foreground">
+                  curl -fsSL https://…/install.sh | sudo sh -s -- --token=…
+                </span>
+              </CodeBlock>
+              <P className="mt-3">
+                It installs a binary, writes an identity, and registers a service that starts on
+                boot. On a system with no systemd it installs and enrols, then tells you how to run
+                it. It does not touch your SSH configuration.
+              </P>
+            </Step>
+            <Step n={2} title="Check the fingerprint">
+              <P>
+                The page waits for the machine to connect, then shows the fingerprint that machine
+                printed. Confirm it matches. That comparison is the only thing standing between your
+                account and a machine you did not mean to adopt.
+              </P>
+            </Step>
+            <Step n={3} title="Connect as you would to anything else">
+              <P>
+                A machine still needs a username and a key — the agent has neither, deliberately —
+                so the first connection asks once and remembers it as an ordinary host in your
+                vault.
+              </P>
+            </Step>
+            <P className="mt-6">
+              <strong>Removing it again.</strong> Revoking on the Machines page retires that
+              machine&rsquo;s key immediately: it cannot connect, whatever is still installed on it.
+              What revoking cannot do is reach into the machine, so the binary and its private key
+              stay on disk until you remove them:
+            </P>
+            <CodeBlock className="mt-3">
+              <span className="text-muted-foreground">$ </span>
+              <span className="text-foreground">
+                curl -fsSL https://…/install.sh | sudo sh -s -- --uninstall
+              </span>
+            </CodeBlock>
+            <P className="mt-3">
+              That stops and disables the service, and removes the unit, the binary, the config
+              directory and the service user. Your SSH configuration, <Code>sshd</Code> and
+              everything in <Code>~/.ssh</Code> are untouched — the agent never had anything to do
+              with them. The dashboard shows this command for you after you revoke, with the right
+              URL and the right steps for that machine&rsquo;s platform.
+            </P>
+            <P className="mt-3">
+              If the machine was lost or stolen there is nothing to run and nothing left to do.
+              Revoking is what protects you: the key is retired here, so the copy on that machine
+              opens nothing.
+            </P>
           </Section>
 
           {/* ----------------------------------------------- troubleshooting */}
