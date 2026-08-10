@@ -21,6 +21,7 @@ scripts
 # Build outputs regenerated inside the image.
 apps/web/public/ssh.wasm
 apps/web/public/wasm_exec.js
+apps/web/public/agent-bin
 
 .env
 .env.local

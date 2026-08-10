@@ -74,6 +74,11 @@ services:
         # built, and read again at runtime on the server. env_file covers the
         # second; only this covers the first.
         NEXT_PUBLIC_RELAY_URL: ${NEXT_PUBLIC_RELAY_URL:?set NEXT_PUBLIC_RELAY_URL in .env}
+        # Stamped into the agent binaries and their manifest, which is how a
+        # running agent decides whether a published build differs from its own.
+        # Left at "dev" nothing ever self-updates, which is safe and quiet; set
+        # it per release (a tag, a commit) to turn self-update on.
+        AGENT_VERSION: ${AGENT_VERSION:-dev}
     restart: unless-stopped
     # service_healthy, not service_started: the container migrates before it
     # serves, so it needs Postgres accepting connections rather than merely
