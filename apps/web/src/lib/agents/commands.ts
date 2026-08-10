@@ -41,6 +41,17 @@ export const AGENT_COMMANDS = ["restart", "upgrade", "stop", "revoke"] as const
 export type AgentCommand = (typeof AGENT_COMMANDS)[number]
 
 /**
+ * Adding a key this deployment will sign with in future.
+ *
+ * Not in the list above because nobody presses a button for it: it is issued by
+ * the rotation sweep, and it carries an argument, which none of the others do.
+ * The new public key travels *inside* the command string, so the signature
+ * covers it — a key carried in a field beside the signature is a key the relay
+ * could swap in transit, which is the one thing this mechanism exists to stop.
+ */
+export const ROTATE_KEY = "rotate-key"
+
+/**
  * How long a signed command is good for.
  *
  * A command is an instruction about now. Sixty seconds covers a slow hop to the
@@ -73,8 +84,9 @@ export function commandMessage(
  * an error: agents refuse unsigned commands, the dashboard does not offer them,
  * and everything else about the product works.
  */
-function signingKey(): ReturnType<typeof createPrivateKey> | null {
-  const seed = process.env.AGENT_COMMAND_SECRET
+function signingKey(
+  seed = process.env.AGENT_COMMAND_SECRET,
+): ReturnType<typeof createPrivateKey> | null {
   if (!seed) return null
 
   const raw = Buffer.from(seed, "base64")
@@ -111,6 +123,54 @@ export function commandPublicKey(): string | null {
 
 export function remoteControlConfigured(): boolean {
   return signingKey() !== null
+}
+
+/**
+ * The key being rotated away from, while a rotation is in progress.
+ *
+ * Rotation has a chicken-and-egg shape: the instruction that teaches a machine
+ * the new key cannot be signed by the new key, because the machine does not
+ * trust it yet. So an operator sets `AGENT_COMMAND_SECRET` to the new seed and
+ * `AGENT_COMMAND_SECRET_PREVIOUS` to the old one, and the sweep signs with the
+ * old one — which every machine already trusts — to hand out the new public
+ * half.
+ *
+ * Unset once the fleet has moved, which `weirdvault status` on each machine can
+ * confirm. Leaving it set is not dangerous so much as pointless: it keeps a
+ * retired key able to command the fleet.
+ */
+function previousSigningKey() {
+  return signingKey(process.env.AGENT_COMMAND_SECRET_PREVIOUS)
+}
+
+export function rotationInProgress(): boolean {
+  return previousSigningKey() !== null && signingKey() !== null
+}
+
+/**
+ * Signs the instruction that adds this deployment's current key to an agent.
+ *
+ * Signed with the *previous* key, because that is the one the agent trusts
+ * today. Returns null when there is nothing to rotate — no previous key set, or
+ * no current key to hand out — which the caller reads as "no rotation is
+ * happening" rather than as a failure.
+ */
+export function signRotation(agentId: string): SignedCommand | null {
+  const previous = previousSigningKey()
+  const publicKey = commandPublicKey()
+  if (!previous || !publicKey) return null
+
+  const command = `${ROTATE_KEY}:${publicKey}`
+  const nonce = randomBytes(32).toString("base64")
+  const expiresAt = Math.floor(Date.now() / 1000) + COMMAND_TTL_SECONDS
+  const signature = sign(null, commandMessage(agentId, command, nonce, expiresAt), previous)
+
+  return {
+    command: command as AgentCommand,
+    nonce,
+    expiresAt,
+    signature: signature.toString("base64"),
+  }
 }
 
 export interface SignedCommand {

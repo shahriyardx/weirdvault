@@ -59,6 +59,19 @@ const (
 	commandUpgrade = "upgrade"
 	commandStop    = "stop"
 	commandRevoke  = "revoke"
+
+	/*
+	   Adding a key this deployment will sign with in future.
+
+	   The new public key travels *inside* the command string — "rotate-key:<key>"
+	   — rather than beside it in a field of its own. The signature covers the
+	   command and nothing else, so a key carried outside it would be a key the
+	   relay could swap on the way past, which is the one thing this whole
+	   mechanism exists to prevent. Putting it in the signed bytes means one
+	   message format, one verify path, and no field anybody has to remember to
+	   check.
+	*/
+	commandRotateKey = "rotate-key"
 )
 
 /*
@@ -146,8 +159,12 @@ func (id *identity) verifyCommand(msg controlMessage, now time.Time) (string, er
 		return "", errors.New("command, nonce and signature are all required")
 	}
 
-	switch msg.Command {
-	case commandRestart, commandUpgrade, commandStop, commandRevoke:
+	switch {
+	case msg.Command == commandRestart,
+		msg.Command == commandUpgrade,
+		msg.Command == commandStop,
+		msg.Command == commandRevoke,
+		strings.HasPrefix(msg.Command, commandRotateKey+":"):
 	default:
 		// Refused rather than ignored, so a control plane newer than this agent
 		// gets an answer it can show somebody instead of a silence.
@@ -212,8 +229,8 @@ else is using this machine" is a fact they can act on, while a silent restart
 that cuts person B's shell is not.
 */
 func (s *supervisor) runCommand(id *identity, command string) (detail string, err error) {
-	switch command {
-	case commandStop:
+	switch {
+	case command == commandStop:
 		// One identity, not the machine. `stop` from the dashboard means "stop
 		// mine", and on a shared machine anything else would be one account
 		// turning off another's access.
@@ -222,7 +239,10 @@ func (s *supervisor) runCommand(id *identity, command string) (detail string, er
 		}
 		return "stopped; it will not start again until it is started on the machine", nil
 
-	case commandRevoke:
+	case strings.HasPrefix(command, commandRotateKey+":"):
+		return s.rotateKey(id, strings.TrimPrefix(command, commandRotateKey+":"))
+
+	case command == commandRevoke:
 		// Same as stop, plus the file. The key is already dead on the control
 		// plane — this is the copy on disk, and leaving it would mean a machine
 		// that keeps a credential for an account that has disowned it.
@@ -237,13 +257,13 @@ func (s *supervisor) runCommand(id *identity, command string) (detail string, er
 		_ = os.Remove(stoppedMarkerFor(id.path))
 		return "stopped and removed from this machine", nil
 
-	case commandRestart:
+	case command == commandRestart:
 		if busy := s.busyIdentities(); len(busy) > 0 {
 			return "", fmt.Errorf("not restarting: %s", describeBusy(busy))
 		}
 		return "restarting", s.restartProcess()
 
-	case commandUpgrade:
+	case command == commandUpgrade:
 		if busy := s.busyIdentities(); len(busy) > 0 {
 			return "", fmt.Errorf("not upgrading: %s", describeBusy(busy))
 		}
@@ -342,3 +362,55 @@ func (s *supervisor) restartProcess() error {
 
 // How long to let a reply travel before the process image is replaced.
 const restartGrace = 500 * time.Millisecond
+
+/*
+rotateKey adds a key this deployment will sign with in future.
+
+The safety of the whole scheme rests on one detail: this command arrives signed
+by a key the identity *already* trusts. So the deployment proves it holds the
+current key before being allowed to name the next one, and a relay that could
+forge this could already forge everything else — which it cannot, because it
+cannot sign at all.
+
+The old key is deliberately kept. Rotation is not one instant: some machines are
+asleep, and an operator who retires the old key the moment the new one is
+published has just made every offline machine unreachable by command until
+somebody re-enrols it. Dropping the old one is a separate decision, made when
+the fleet is known to have moved, and `weirdvault status` is what says whether it
+has.
+*/
+func (s *supervisor) rotateKey(id *identity, encoded string) (string, error) {
+	encoded = strings.TrimSpace(encoded)
+	if encoded == "" {
+		return "", errors.New("rotate-key carried no key")
+	}
+
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(raw) != ed25519.PublicKeySize {
+		return "", fmt.Errorf("rotate-key carried something that is not an Ed25519 public key")
+	}
+
+	// Idempotent: the control plane may send this again before the answer gets
+	// back, and a second copy of a key it already has is not a failure.
+	for _, existing := range id.cfg.CommandKeys {
+		if existing == encoded {
+			return "already trusted", nil
+		}
+	}
+
+	// Written through a copy so a failed save leaves the running identity
+	// exactly as it was, rather than trusting a key that is not on disk.
+	updated := *id.cfg
+	updated.CommandKeys = append(append([]string{}, id.cfg.CommandKeys...), encoded)
+
+	if err := saveConfig(id.path, &updated); err != nil {
+		return "", fmt.Errorf("could not write %s: %w", id.path, err)
+	}
+
+	id.mu.Lock()
+	id.cfg = &updated
+	id.mu.Unlock()
+
+	log.Printf("[%s] added a command signing key; %d are now trusted", id.name, len(updated.CommandKeys))
+	return fmt.Sprintf("added; %d keys trusted", len(updated.CommandKeys)), nil
+}

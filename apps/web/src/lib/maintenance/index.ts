@@ -1,6 +1,7 @@
 import { dbErrorSummary } from "@/lib/db/errors"
 import { pruneAuditEvents } from "./audit"
 import { clearStaleCounters } from "./counters"
+import { rotateAgentKeys } from "./rotate-keys"
 import { pruneAbandonedEnrollments } from "./enrollments"
 import { sweepOrphanedObjects } from "./objects"
 
@@ -91,6 +92,19 @@ export async function runMaintenance(dryRun: boolean): Promise<MaintenanceReport
         summary: dryRun
           ? `${r.expired} expired, none deleted`
           : `deleted ${r.deleted} of ${r.expired} expired`,
+        truncated: r.truncated,
+      }
+    }),
+  )
+
+  jobs.push(
+    await run("agent-command-keys", async () => {
+      const r = await rotateAgentKeys(dryRun)
+      return {
+        summary:
+          r.rotated + r.failed + r.offline === 0
+            ? "no rotation configured"
+            : `${r.rotated} ${dryRun ? "would take" : "took"} the new key, ${r.failed} refused, ${r.offline} offline`,
         truncated: r.truncated,
       }
     }),

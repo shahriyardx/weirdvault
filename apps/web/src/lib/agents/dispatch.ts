@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { type AgentCommand, signCommand } from "@/lib/agents/commands"
+import { type AgentCommand, signCommand, signRotation } from "@/lib/agents/commands"
 import { mintPresenceToken, relayInternalUrl } from "@/lib/agents/presence"
 
 /**
@@ -24,6 +24,25 @@ export type DispatchResult = {
   detail: string
   /** True only when the reason is that this deployment cannot sign at all. */
   unconfigured?: boolean
+}
+
+/**
+ * Hands one agent the key this deployment signs with now.
+ *
+ * Separate from dispatchCommand because it is signed by a *different* key — the
+ * previous one, the only key the agent trusts until this lands. Sharing the
+ * signing path would mean one function that sometimes signs with a retired key,
+ * which is a footgun in the one place that cannot afford one.
+ */
+export async function dispatchRotation(
+  accountId: string,
+  agentId: string,
+): Promise<DispatchResult> {
+  const signed = signRotation(agentId)
+  if (!signed) {
+    return { ok: false, unconfigured: true, detail: "No key rotation is configured." }
+  }
+  return deliver(accountId, agentId, signed)
 }
 
 export async function dispatchCommand(
@@ -50,6 +69,15 @@ export async function dispatchCommand(
     }
   }
 
+  return deliver(accountId, agentId, signed)
+}
+
+/** The transport half, shared by an ordinary command and a key rotation. */
+async function deliver(
+  accountId: string,
+  agentId: string,
+  signed: { command: string; nonce: string; expiresAt: number; signature: string },
+): Promise<DispatchResult> {
   const base = relayInternalUrl()
   if (!base) {
     return {

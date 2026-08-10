@@ -41,7 +41,11 @@ func fixtureIdentity(t *testing.T) *identity {
 		path:   t.TempDir() + "/fixture.json",
 		nonces: newSeenNonces(),
 		cfg: &Config{
-			AgentID:      fixtureAgentID,
+			AgentID: fixtureAgentID,
+			// A real seed, so a config written by these tests is one the agent
+			// would actually load — saveConfig/loadConfig validate, and a
+			// fixture that skipped this would pass a test the product fails.
+			PrivateKey:   base64.StdEncoding.EncodeToString(make([]byte, ed25519.SeedSize)),
 			RelayURL:     "wss://example.test/agent",
 			AllowedPorts: []int{22},
 			CommandKeys:  []string{fixturePublicKey},
@@ -295,5 +299,113 @@ func TestRevokeRemovesTheIdentityFromDisk(t *testing.T) {
 	// suppress a later re-enrolment under the same name.
 	if stoppedMarkerExists(id.path) {
 		t.Error("revoke left a stopped marker behind")
+	}
+}
+
+/*
+Key rotation, from the agent's side.
+
+The property that matters: the instruction adding a key must itself be signed by
+a key already trusted. A deployment proves it holds the current key before it
+may name the next one — and a relay, which can sign nothing, cannot do this at
+all.
+*/
+func TestRotateKeyAddsAKeySignedByTheCurrentOne(t *testing.T) {
+	dir := t.TempDir()
+	sup := newSupervisor(dir, "")
+
+	id := fixtureIdentity(t)
+	id.name = "aaaa1111"
+	id.path = filepath.Join(dir, "aaaa1111.json")
+	if err := saveConfig(id.path, id.cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	newPub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(newPub)
+
+	detail, err := sup.runCommand(id, commandRotateKey+":"+encoded)
+	if err != nil {
+		t.Fatalf("rotation failed: %v", err)
+	}
+	if !strings.Contains(detail, "2 keys") {
+		t.Errorf("expected the reply to say how many are trusted, got %q", detail)
+	}
+
+	// The old key is deliberately kept: a machine that was asleep during the
+	// rotation must still be commandable, and retiring the old key is a separate
+	// decision made by a person watching the sweep.
+	if len(id.cfg.CommandKeys) != 2 || id.cfg.CommandKeys[0] != fixturePublicKey {
+		t.Fatalf("expected both keys, got %v", id.cfg.CommandKeys)
+	}
+
+	// And it survives a restart, which is the only thing that makes it a
+	// rotation rather than a change of mind.
+	saved, err := loadConfig(id.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.CommandKeys) != 2 {
+		t.Errorf("the new key was not written to disk: %v", saved.CommandKeys)
+	}
+}
+
+// The control plane may send it again before the answer gets back.
+func TestRotateKeyIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	sup := newSupervisor(dir, "")
+
+	id := fixtureIdentity(t)
+	id.path = filepath.Join(dir, "aaaa1111.json")
+	if err := saveConfig(id.path, id.cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := sup.runCommand(id, commandRotateKey+":"+fixturePublicKey)
+	if err != nil {
+		t.Fatalf("re-sending a key it already has should not fail: %v", err)
+	}
+	if detail != "already trusted" {
+		t.Errorf("got %q, want the no-op answer", detail)
+	}
+	if len(id.cfg.CommandKeys) != 1 {
+		t.Errorf("the key was added twice: %v", id.cfg.CommandKeys)
+	}
+}
+
+// A rotation carrying nonsense must not be written; a config full of unusable
+// keys is how an identity ends up unable to verify anything.
+func TestRotateKeyRefusesSomethingThatIsNotAKey(t *testing.T) {
+	sup := newSupervisor(t.TempDir(), "")
+	id := fixtureIdentity(t)
+
+	for _, bad := range []string{"", "   ", "not-base64!", base64.StdEncoding.EncodeToString([]byte("short"))} {
+		if _, err := sup.runCommand(id, commandRotateKey+":"+bad); err == nil {
+			t.Errorf("accepted %q as a public key", bad)
+		}
+	}
+	if len(id.cfg.CommandKeys) != 1 {
+		t.Errorf("a refused rotation changed the trusted set: %v", id.cfg.CommandKeys)
+	}
+}
+
+// And the whole point: an unsigned rotation is refused before any of the above.
+func TestRotateKeyMustBeSigned(t *testing.T) {
+	id := fixtureIdentity(t)
+
+	newPub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := fixtureCommand()
+	msg.Command = commandRotateKey + ":" + base64.StdEncoding.EncodeToString(newPub)
+	// The fixture signature covers "restart", not this.
+
+	if _, err := id.verifyCommand(msg, time.Unix(fixtureExpiresAt-10, 0)); err == nil {
+		t.Fatal("a rotation the deployment did not sign was accepted")
 	}
 }
