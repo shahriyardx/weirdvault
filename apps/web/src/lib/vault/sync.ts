@@ -25,12 +25,12 @@
  */
 
 import type { Host } from "@/lib/hosts"
-import { listHosts, putHost } from "@/lib/hosts"
+import { forgetHost, listHosts, putHost } from "@/lib/hosts"
 import type { PinnedHostKey } from "@/lib/hostkeys"
-import { listPins, putPin } from "@/lib/hostkeys"
+import { forgetPin, listPins, putPin } from "@/lib/hostkeys"
 import { idbGet, idbPut } from "@/lib/idb"
-import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys"
-import { listSnippets, putSnippet, type Snippet } from "@/lib/snippets"
+import { forgetStoredKey, listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys"
+import { forgetSnippet, listSnippets, putSnippet, type Snippet } from "@/lib/snippets"
 
 import { decryptVault, encryptVault, type VaultEnvelope } from "./crypto"
 import { getTombstones, setTombstones } from "./tombstones"
@@ -217,7 +217,16 @@ export function mergeVault(local: VaultDocument, remote: VaultDocument): VaultDo
 
 /* ----------------------------------------------------------- local state --- */
 
-async function localDocument(): Promise<VaultDocument> {
+/**
+ * Everything this device holds, as a document.
+ *
+ * Exported for restore.ts, which needs the same two steps against a decrypted
+ * file rather than against the server. It used to keep private copies of both;
+ * the file header there explains why, and the answer it gave — "exporting them
+ * from sync.ts would be the better fix the day anything else needs them" — came
+ * due when the prune below had to exist in both.
+ */
+export async function readLocalVault(): Promise<VaultDocument> {
   const [hosts, stored, hostKeys, snippets, tombstones] = await Promise.all([
     listHosts(),
     listStoredKeys(),
@@ -236,15 +245,64 @@ async function localDocument(): Promise<VaultDocument> {
   }
 }
 
-async function applyLocally(doc: VaultDocument): Promise<void> {
+/**
+ * Writes a merged document over local storage: upserts what it contains, and
+ * removes what it does not.
+ *
+ * `previous` is the local document the merge was computed from, and the removal
+ * half cannot be done without it. A record it holds that `merged` does not is a
+ * record a tombstone deleted — mergeById filters exactly those — and that is the
+ * only way a record leaves the document.
+ *
+ * The removal used to be missing, and its absence made deletes one-directional
+ * in a way nothing reported. The merge dropped the record, so the push was
+ * right and the server was right and every other device that had never seen it
+ * was right; the one device still holding it in IndexedDB simply kept it,
+ * forever, because every list on screen reads IndexedDB and not the document.
+ * Delete a host on your phone and it was still on your laptop, every sync
+ * agreeing that it was gone. mergeVault has had a test asserting "a snippet
+ * deleted on one device disappears from the other" all along — true of the
+ * merge, and not true of the product, because nothing carried the answer the
+ * last few inches.
+ *
+ * Worst of the four is a key: a portable key deleted on one device stayed in
+ * this browser and stayed able to sign. Second worst is a pin, which is the
+ * case tombstones were introduced for — an unpinned server stayed rejected here
+ * however many times it was unpinned elsewhere.
+ *
+ * Bounded by construction: only ids `previous` held are considered, so a record
+ * written by another tab between the read and here is never touched. Upserts
+ * run first, so an interruption leaves a record too many rather than too few.
+ */
+export async function applyVaultLocally(
+  merged: VaultDocument,
+  previous: VaultDocument,
+): Promise<void> {
   // putHost, not saveHost: saveHost stamps updatedAt with "now", which would
   // restamp every record the server just handed us as a local edit and make the
   // next sync fight this one.
-  for (const host of doc.hosts) await putHost(host)
-  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key))
-  for (const pin of doc.hostKeys) await putPin(pin)
-  for (const snippet of doc.snippets ?? []) await putSnippet(snippet)
-  await setTombstones(doc.tombstones)
+  for (const host of merged.hosts) await putHost(host)
+  for (const key of merged.keys) await putStoredKey(fromSyncedKey(key))
+  for (const pin of merged.hostKeys) await putPin(pin)
+  for (const snippet of merged.snippets ?? []) await putSnippet(snippet)
+  await setTombstones(merged.tombstones)
+
+  await removeDeleted(previous.hosts, merged.hosts, forgetHost)
+  await removeDeleted(previous.keys, merged.keys, forgetStoredKey)
+  await removeDeleted(previous.hostKeys, merged.hostKeys, forgetPin)
+  await removeDeleted(previous.snippets ?? [], merged.snippets ?? [], forgetSnippet)
+}
+
+/** The ids `before` held and `after` does not, dropped one at a time. */
+async function removeDeleted<T extends { id: string }>(
+  before: T[],
+  after: T[],
+  forget: (id: string) => Promise<void>,
+): Promise<void> {
+  const surviving = new Set(after.map((item) => item.id))
+  for (const item of before) {
+    if (!surviving.has(item.id)) await forget(item.id)
+  }
 }
 
 /**
@@ -341,9 +399,9 @@ async function runSync(
       }
     : emptyDoc()
 
-  const local = await localDocument()
+  const local = await readLocalVault()
   const merged = mergeVault(local, remote)
-  await applyLocally(merged)
+  await applyVaultLocally(merged, local)
 
   // A key the server already holds is pushed back unchanged even if it does not
   // open — it is the only copy of that ciphertext, and dropping it from the

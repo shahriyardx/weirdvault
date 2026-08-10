@@ -151,3 +151,15 @@ export async function deleteSnippet(id: string): Promise<void> {
   await writeMap(map)
   await recordDeletion(id)
 }
+
+/**
+ * Removes a snippet without recording a deletion. Used by vault sync to land a
+ * delete another device decided — see forgetHost in lib/hosts.ts for why the
+ * tombstone must not be re-stamped here.
+ */
+export async function forgetSnippet(id: string): Promise<void> {
+  const map = await readMap()
+  if (!(id in map)) return
+  delete map[id]
+  await writeMap(map)
+}

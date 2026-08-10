@@ -136,3 +136,16 @@ export async function deleteHost(id: string): Promise<void> {
   await idbDelete(STORE, id)
   await recordDeletion(id)
 }
+
+/**
+ * Removes a host without recording a deletion.
+ *
+ * For vault sync landing a delete that some *other* device decided. The
+ * tombstone already exists and arrived with the document; writing a second one
+ * stamped `Date.now()` here would be this device claiming the decision, and a
+ * tombstone dated now would beat a legitimate re-create still sitting unsynced
+ * on a third device. Same distinction as putHost against saveHost.
+ */
+export async function forgetHost(id: string): Promise<void> {
+  await idbDelete(STORE, id)
+}

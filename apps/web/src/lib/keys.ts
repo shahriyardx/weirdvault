@@ -479,6 +479,19 @@ export async function deleteKey(id: string): Promise<void> {
   await recordDeletion(id)
 }
 
+/**
+ * Removes a stored key without recording a deletion. Used by vault sync to land
+ * a delete another device decided — see forgetHost for why the tombstone must
+ * not be re-stamped here.
+ *
+ * This one matters more than the others: a key deleted on one device that stays
+ * on this one is a credential the user believes they have destroyed, still
+ * sitting in this browser and still able to sign.
+ */
+export async function forgetStoredKey(id: string): Promise<void> {
+  await idbDelete(STORE, id)
+}
+
 /** Used by vault sync to land a portable key pulled from another device. */
 export async function putStoredKey(rec: StoredKey): Promise<void> {
   await idbPut(STORE, rec.id, rec)

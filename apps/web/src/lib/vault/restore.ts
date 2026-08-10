@@ -19,39 +19,35 @@
  *    mergeById drops any record whose stamp predates its tombstone. Importing
  *    a backup does not resurrect what you deliberately deleted.
  *
- * Route chosen, and why: mergeVault is exported and pure, but sync.ts keeps its
- * read-local and apply-local steps private to that module. The obvious way
- * around that — write the file's records straight into IndexedDB and let the
- * next syncVault sort it out — is simpler to type and quietly wrong: idbPut has
- * no stamp comparison, so an older host in the file would overwrite a newer one
- * locally before any merge got to see it, and the merge would then faithfully
- * propagate the damage. So the local read and the local apply below deliberately
- * mirror sync.ts, using only its public helpers (putHost, putStoredKey, putPin,
- * putSnippet, setTombstones). That is duplication, and it is the cheaper of the
- * two costs: if these mirrors ever drift from sync.ts the vault stops
- * converging, so they are kept short and adjacent in shape to make drift
- * obvious. Exporting the two steps from sync.ts would be the better fix the day
- * anything else needs them.
+ * Route chosen, and why: the obvious shortcut — write the file's records
+ * straight into IndexedDB and let the next syncVault sort it out — is simpler to
+ * type and quietly wrong. idbPut has no stamp comparison, so an older host in
+ * the file would overwrite a newer one locally before any merge got to see it,
+ * and the merge would then faithfully propagate the damage. So this reads local
+ * state, merges, and writes the result, using sync.ts's own readLocalVault and
+ * applyVaultLocally.
+ *
+ * Those two used to be private to sync.ts and mirrored here, with a note saying
+ * exporting them would be the better fix the day anything else needed them. That
+ * day arrived: applyVaultLocally has to remove records a tombstone deleted as
+ * well as upsert the ones that survived, and a second copy of that would have
+ * been a second chance to leave the removal out — which is exactly the bug the
+ * removal fixes.
  *
  * After the merge lands locally, a normal syncVault pushes it, which is also
  * what carries the restored records to the account's other devices.
  */
 
-import { listHosts, putHost } from "@/lib/hosts"
-import { listPins, putPin } from "@/lib/hostkeys"
-import { listStoredKeys, putStoredKey, type StoredKey } from "@/lib/keys"
-import { listSnippets, putSnippet } from "@/lib/snippets"
-
-import { decryptVault, fromB64, type VaultEnvelope } from "./crypto"
+import { decryptVault, type VaultEnvelope } from "./crypto"
 import {
+  applyVaultLocally,
   hostStamp,
   mergeVault,
+  readLocalVault,
   syncVault,
-  type SyncedKey,
   type SyncResult,
   type VaultDocument,
 } from "./sync"
-import { getTombstones, setTombstones } from "./tombstones"
 
 /**
  * A file this build has no reader for. Distinct from a decryption failure
@@ -113,56 +109,6 @@ export interface RestoreResult {
   syncError?: string
 }
 
-/* ------------------------------------------------------------- decoding --- */
-
-/**
- * fromB64 allocates a fresh, correctly sized ArrayBuffer, so handing back its
- * `.buffer` is safe; the cast only tells TypeScript what the runtime already
- * guarantees (it is never a SharedArrayBuffer).
- */
-const toBuffer = (s: string): ArrayBuffer => fromB64(s).buffer as ArrayBuffer
-
-function toB64(b: ArrayBuffer): string {
-  let s = ""
-  for (const byte of new Uint8Array(b)) s += String.fromCharCode(byte)
-  return btoa(s)
-}
-
-/**
- * Mirrors sync.ts's toSyncedKey. Device-bound keys return null: they are
- * non-extractable CryptoKey handles with no exportable representation, so there
- * is nothing to put in a document — which is the property that mode exists for.
- */
-function toSyncedKey(rec: StoredKey): SyncedKey | null {
-  if (rec.mode !== "portable" || !rec.wrapped) return null
-  return {
-    id: rec.id,
-    label: rec.label,
-    mode: "portable",
-    publicKeyRaw: toB64(rec.publicKeyRaw),
-    wrapped: {
-      iv: toB64(rec.wrapped.iv),
-      ciphertext: toB64(rec.wrapped.ciphertext),
-    },
-    createdAt: rec.createdAt,
-  }
-}
-
-/** Mirror of sync.ts's fromSyncedKey, which is private to that module. */
-function fromSyncedKey(k: SyncedKey): StoredKey {
-  return {
-    id: k.id,
-    label: k.label,
-    mode: "portable",
-    publicKeyRaw: toBuffer(k.publicKeyRaw),
-    wrapped: {
-      iv: toBuffer(k.wrapped.iv),
-      ciphertext: toBuffer(k.wrapped.ciphertext),
-    },
-    createdAt: k.createdAt,
-  }
-}
-
 /**
  * Exports predate fields: snippets were added after the first vaults were
  * written, and nothing stops someone restoring a file from that era. Filling
@@ -178,39 +124,6 @@ function normalise(doc: Partial<VaultDocument> | null | undefined): VaultDocumen
     tombstones: doc?.tombstones ?? {},
     updatedAt: doc?.updatedAt ?? 0,
   }
-}
-
-/* ----------------------------------------------------------- local state --- */
-
-/** Mirrors sync.ts's localDocument. See the file header on why it is copied. */
-async function localDocument(): Promise<VaultDocument> {
-  const [hosts, stored, hostKeys, snippets, tombstones] = await Promise.all([
-    listHosts(),
-    listStoredKeys(),
-    listPins(),
-    listSnippets(),
-    getTombstones(),
-  ])
-
-  return {
-    hosts,
-    keys: stored.map(toSyncedKey).filter((k): k is SyncedKey => k !== null),
-    hostKeys,
-    snippets,
-    tombstones,
-    updatedAt: Date.now(),
-  }
-}
-
-/** Mirrors sync.ts's applyLocally. Upserts only; deletes are tombstone-driven. */
-async function applyLocally(doc: VaultDocument): Promise<void> {
-  // putHost, not saveHost: the merge already decided which copy wins, and
-  // saveHost would restamp it as an edit made here and now.
-  for (const host of doc.hosts) await putHost(host)
-  for (const key of doc.keys) await putStoredKey(fromSyncedKey(key))
-  for (const pin of doc.hostKeys) await putPin(pin)
-  for (const snippet of doc.snippets) await putSnippet(snippet)
-  await setTombstones(doc.tombstones)
 }
 
 /* -------------------------------------------------------------- counting --- */
@@ -271,9 +184,9 @@ export async function restoreVault(
     throw new VaultDecryptionError({ cause })
   }
 
-  const local = await localDocument()
+  const local = await readLocalVault()
   const merged = mergeVault(local, imported)
-  await applyLocally(merged)
+  await applyVaultLocally(merged, local)
 
   // Stamps must match the ones mergeVault resolves on, or the counts would
   // describe a different merge than the one that happened.

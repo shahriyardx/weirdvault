@@ -79,6 +79,18 @@ export async function unpin(host: string, port: number): Promise<void> {
   await recordDeletion(id)
 }
 
+/**
+ * Removes a pin without recording an unpin.
+ *
+ * Used by vault sync to land an unpin another device decided — see forgetHost
+ * for why the tombstone must not be re-stamped here. This is the case the
+ * tombstone was introduced for: until it ran on *this* device too, a rebuilt
+ * server stayed rejected here however many times it was unpinned elsewhere.
+ */
+export async function forgetPin(id: string): Promise<void> {
+  await idbDelete(STORE, id)
+}
+
 export class HostKeyMismatchError extends Error {
   constructor(
     readonly host: string,
