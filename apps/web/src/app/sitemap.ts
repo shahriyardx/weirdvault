@@ -48,5 +48,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${origin}/pricing`, lastModified, changeFrequency: "monthly", priority: 0.8 },
     { url: `${origin}/security`, lastModified, changeFrequency: "monthly", priority: 0.8 },
     { url: `${origin}/docs`, lastModified, changeFrequency: "monthly", priority: 0.7 },
+    // Low priority and rarely changing, but listed: a policy a crawler cannot
+    // find is one a person searching for it cannot find either.
+    { url: `${origin}/privacy`, lastModified, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${origin}/terms`, lastModified, changeFrequency: "yearly", priority: 0.3 },
   ]
 }

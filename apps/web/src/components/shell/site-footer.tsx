@@ -27,12 +27,23 @@ const GROUPS = [
       { href: "/docs#keys", label: "Keys" },
     ],
   },
+  // A privacy policy nothing links to is not published, whatever URL it has.
+  {
+    title: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
+    ],
+  },
 ] as const
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.5fr_repeat(3,1fr)]">
+      <div /* The column count tracks GROUPS: four now that Legal is one of them. Left
+             at three, the fourth wrapped under the blurb on a laptop. */
+        className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-[1.5fr_repeat(4,1fr)]"
+      >
         <div>
           <Brand />
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
@@ -65,7 +76,7 @@ export function SiteFooter() {
 
       <div className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:px-6">
-          <span>© {new Date().getFullYear()} weirdvault</span>
+          <span>© {new Date().getFullYear()} WeirdVault</span>
           <span className="sm:ml-auto">End-to-end encrypted · open relay · self-hostable</span>
         </div>
       </div>
