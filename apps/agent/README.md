@@ -43,12 +43,20 @@ that follows it.
 Control connection, `wss://…/agent/control`, JSON text frames:
 
 ```
-agent → relay   {"type":"hello","agentId":"…"}
+agent → relay   {"type":"hello","agentId":"…","version":"…"}
 relay → agent   {"type":"challenge","nonce":"<32 random bytes, base64>"}
 agent → relay   {"type":"proof","signature":"<Ed25519, base64>"}
 relay → agent   {"type":"ready"}
 relay → agent   {"type":"open","ticket":"…","port":22}     (per session)
 ```
+
+`version` is a label, not a claim. It rides on hello because that is the only
+frame that already exists per reconnect, it is sent before anything is verified,
+and nothing is decided from it — the relay forwards it and the control plane
+records it only after the signature checks out. It is what stops the dashboard
+showing the build a machine was installed with months after it replaced itself.
+Optional in both directions: an agent older than the relay sends none, and a
+relay older than the agent ignores it.
 
 The signed message is domain-separated and carries the agent id:
 

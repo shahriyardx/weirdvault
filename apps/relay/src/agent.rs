@@ -126,6 +126,16 @@ pub enum OpenError {
 struct Hello {
     #[serde(rename = "agentId")]
     agent_id: String,
+    /// What build the agent says it is running, forwarded to the control plane
+    /// so the dashboard can stop showing the version a machine was installed
+    /// with months after it replaced itself.
+    ///
+    /// Optional because an agent older than this relay does not send it, and a
+    /// fleet must not need upgrading in lockstep with the thing it connects to.
+    /// Absent means "said nothing", which the control plane treats as leaving
+    /// the stored value alone rather than as an erasure.
+    #[serde(default)]
+    version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -328,7 +338,12 @@ impl Agents {
 
             let proof: Proof = recv_json(&mut ws_rx).await.map_err(Refusal::Transient)?;
             let account = verifier
-                .verify(&hello.agent_id, &nonce, &proof.signature)
+                .verify(
+                    &hello.agent_id,
+                    &nonce,
+                    &proof.signature,
+                    hello.version.as_deref(),
+                )
                 .await?;
             Ok::<_, Refusal>((hello.agent_id, account))
         };
@@ -460,16 +475,49 @@ struct Verifier {
     secret: String,
 }
 
+/// The body of a verify call.
+///
+/// A free function so a test can pin the field names the control plane reads —
+/// nothing compiles both ends of this wire, and a rename on either side would
+/// otherwise surface as agents that authenticate and a dashboard that quietly
+/// never learns what they are running. `apps/web/src/lib/agents/verify.test.ts`
+/// feeds this exact shape through the validator that receives it.
+///
+/// The version is truncated here rather than trusted: it arrives on an
+/// unauthenticated hello, and this process is the one on the internet. The
+/// control plane clamps it again on its own side, which is the point — neither
+/// end relies on the other having done it.
+fn verify_request(agent_id: &str, nonce: &str, signature: &str, version: Option<&str>) -> String {
+    let mut body = serde_json::json!({
+        "agentId": agent_id,
+        "nonce": nonce,
+        "signature": signature,
+    });
+
+    // Omitted when absent, so an older agent that says nothing is distinct from
+    // one reporting an empty string — the first leaves the stored value alone.
+    if let Some(version) = version.filter(|v| !v.is_empty()) {
+        // Cut rather than marked: truncate_utf8 next door appends an ellipsis,
+        // which is right for a close reason a human reads and wrong for an
+        // identifier a machine compares — "v1.2…" would differ from every
+        // published version forever, and the dashboard would show an update
+        // that is already installed.
+        body["version"] = serde_json::Value::String(version.chars().take(64).collect::<String>());
+    }
+    body.to_string()
+}
+
 impl Verifier {
     /// Returns the owning account id, or a refusal that says whether retrying
     /// could ever help.
-    async fn verify(&self, agent_id: &str, nonce: &str, signature: &str) -> Result<String, Refusal> {
-        let body = serde_json::json!({
-            "agentId": agent_id,
-            "nonce": nonce,
-            "signature": signature,
-        })
-        .to_string();
+    async fn verify(
+        &self,
+        agent_id: &str,
+        nonce: &str,
+        signature: &str,
+        version: Option<&str>,
+    ) -> Result<String, Refusal> {
+        let body = verify_request(agent_id, nonce, signature, version);
 
         // Unreachable is transient by definition: the control plane restarting
         // must not knock every agent in the fleet offline permanently.
@@ -565,6 +613,49 @@ mod tests {
 
         assert!(agents.pending.remove("t").is_some());
         assert!(agents.pending.remove("t").is_none());
+    }
+
+    #[test]
+    fn encodes_the_field_names_the_verify_endpoint_reads() {
+        let body = verify_request("agent-1", "nonce-1", "sig-1", Some("v1.2.3"));
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+        assert_eq!(parsed["agentId"], "agent-1");
+        assert_eq!(parsed["nonce"], "nonce-1");
+        assert_eq!(parsed["signature"], "sig-1");
+        assert_eq!(parsed["version"], "v1.2.3");
+    }
+
+    #[test]
+    fn an_agent_that_reports_no_version_sends_no_field() {
+        // Absent, not empty. The control plane leaves the stored version alone
+        // when the field is missing, so an agent too old to report one must not
+        // erase what the dashboard knows about it.
+        for silent in [None, Some("")] {
+            let parsed: serde_json::Value =
+                serde_json::from_str(&verify_request("a", "n", "s", silent)).unwrap();
+            assert!(parsed.get("version").is_none(), "sent a version for {silent:?}");
+        }
+    }
+
+    #[test]
+    fn a_version_from_the_wire_cannot_be_unbounded() {
+        let parsed: serde_json::Value =
+            serde_json::from_str(&verify_request("a", "n", "s", Some(&"x".repeat(500)))).unwrap();
+        let sent = parsed["version"].as_str().unwrap();
+        assert!(sent.chars().count() <= 64);
+        // Cut, not ellipsised: an identifier that gained a "…" would differ from
+        // every published version forever.
+        assert!(!sent.contains('…'));
+    }
+
+    #[test]
+    fn a_hello_without_a_version_still_parses() {
+        // An agent older than this relay. Requiring the field would refuse the
+        // whole fleet at the handshake, which is the opposite of a rollout.
+        let hello: Hello = serde_json::from_str(r#"{"type":"hello","agentId":"a"}"#).unwrap();
+        assert_eq!(hello.agent_id, "a");
+        assert!(hello.version.is_none());
     }
 
     #[test]

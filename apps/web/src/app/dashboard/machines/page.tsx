@@ -62,6 +62,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { agentNeedsUpdate } from "@/lib/agents/version"
 import { listHosts, type Host } from "@/lib/hosts"
 import { useSshSession } from "@/lib/ssh/session-provider"
 import { useConnectHost } from "@/lib/ssh/use-connect-host"
@@ -125,6 +126,16 @@ export default function MachinesPage() {
     onConnected: () => router.push("/dashboard/terminal"),
   })
 
+  /**
+   * The build this deployment publishes, or null when it publishes none.
+   *
+   * A machine's own version is refreshed every time it reconnects, so this
+   * comparison catches up by itself: an agent that replaces itself reports the
+   * new build on the reconnect that follows, and the next load of this page
+   * shows it. Nothing here has to poll the machine.
+   */
+  const [published, setPublished] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     const res = await fetch("/api/agents")
     if (!res.ok) {
@@ -132,8 +143,9 @@ export default function MachinesPage() {
       setAgents([])
       return
     }
-    const body = (await res.json()) as { agents: Agent[] }
+    const body = (await res.json()) as { agents: Agent[]; publishedVersion?: string | null }
     setAgents(body.agents)
+    setPublished(body.publishedVersion ?? null)
     setLoadedAt(Date.now())
   }, [])
 
@@ -181,6 +193,7 @@ export default function MachinesPage() {
               key={a.id}
               agent={a}
               now={loadedAt}
+              published={published}
               host={hosts.find((h) => h.agentId === a.id) ?? null}
               busy={connecting !== null}
               onConnect={connectToHost}
@@ -197,6 +210,7 @@ export default function MachinesPage() {
                   key={a.id}
                   agent={a}
                   now={loadedAt}
+                  published={published}
                   host={null}
                   busy={false}
                   onConnect={connectToHost}
@@ -245,6 +259,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 function AgentRow({
   agent,
   now,
+  published,
   host,
   busy,
   onConnect,
@@ -252,6 +267,8 @@ function AgentRow({
 }: {
   agent: Agent
   now: number
+  /** The build this deployment publishes, or null when it publishes none. */
+  published: string | null
   /** A saved host pointing at this machine, if one exists. */
   host: Host | null
   busy: boolean
@@ -262,10 +279,15 @@ function AgentRow({
   const [label, setLabel] = useState(agent.label)
   // Opened by a successful revoke, and re-openable from the revoked row after.
   const [removalOpen, setRemovalOpen] = useState(false)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
   const revoked = Boolean(agent.revokedAt)
 
   const seen = agent.lastSeenAt ? new Date(agent.lastSeenAt) : null
   const recent = seen !== null && now - seen.getTime() < SEEN_RECENTLY_MS
+
+  // Not shown for a revoked machine: it cannot connect, so it cannot update,
+  // and an update prompt beside "Revoked" is an instruction into a wall.
+  const outdated = !revoked && agentNeedsUpdate(agent.agentVersion, published)
 
   async function rename() {
     const res = await fetch(`/api/agents/${agent.id}`, {
@@ -331,12 +353,26 @@ function AgentRow({
               Not seen lately
             </Badge>
           )}
+          {/* Alongside the status badge rather than instead of it: whether a
+              machine is reachable and whether it is current are two facts, and
+              collapsing them would hide the one that is not being asked about. */}
+          {outdated && (
+            <Badge variant="outline" className="text-warning">
+              Update available
+            </Badge>
+          )}
         </div>
         <p className="text-muted-foreground mt-0.5 truncate font-mono text-xs">
           {agent.fingerprint}
         </p>
         <p className="text-muted-foreground mt-0.5 text-xs">
-          {[agent.hostname, agent.os && agent.arch ? `${agent.os}/${agent.arch}` : null]
+          {[
+            agent.hostname,
+            agent.os && agent.arch ? `${agent.os}/${agent.arch}` : null,
+            // Reported on every reconnect, so this is what the machine is
+            // running now rather than what it was installed with.
+            agent.agentVersion,
+          ]
             .filter(Boolean)
             .join(" · ")}
           {seen ? ` · last connected ${seen.toLocaleString()}` : ""}
@@ -364,6 +400,12 @@ function AgentRow({
                 <PlugsConnectedIcon />
                 Set up
               </Link>
+            </Button>
+          )}
+          {outdated && (
+            <Button variant="ghost" size="sm" onClick={() => setUpgradeOpen(true)}>
+              <ArrowsClockwiseIcon />
+              Update
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => setRenaming(true)}>
@@ -401,6 +443,14 @@ function AgentRow({
       )}
 
       <RemovalDialog agent={agent} open={removalOpen} onOpenChange={setRemovalOpen} />
+
+      <UpgradeDialog
+        agent={agent}
+        published={published}
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        onChanged={onChanged}
+      />
 
       {revoked && (
         <AlertDialog>
@@ -600,6 +650,125 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
         <DialogFooter>
           <Button variant={state.phase === "claimed" ? "default" : "ghost"} onClick={onClose}>
             {state.phase === "claimed" ? "Done" : "Close"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * How to move a machine onto the build this deployment publishes.
+ *
+ * The agent replaces itself — but only at startup, and only when the manifest
+ * names a version different from its own. Both halves of that are why this
+ * dialog exists rather than a button that does it: nothing here can reach into
+ * somebody's living room and restart a daemon, and pretending otherwise would
+ * put a spinner on screen that resolves to a lie.
+ *
+ * So it gives the one command that does it, and says what will happen
+ * afterwards — because the thing people actually want to know is not how to
+ * upgrade, it is how they will be able to tell that it worked.
+ *
+ * Two commands, not one, and the older one is not a fallback for the impatient:
+ * `weirdvault-agent upgrade` did not exist before this release, so every machine
+ * that is currently out of date is, by definition, running a build without it.
+ * The restart path is the one that works today; the named command is the one
+ * that works from here on.
+ */
+function UpgradeDialog({
+  agent,
+  published,
+  open,
+  onOpenChange,
+  onChanged,
+}: {
+  agent: Agent
+  published: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onChanged: () => Promise<void>
+}) {
+  // Self-reported at enrolment. Nothing trusts it for anything that matters;
+  // here it only picks which command is the right one to print.
+  const mac = agent.os === "darwin"
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update the agent on {agent.label}</DialogTitle>
+          <DialogDescription>
+            It is running <span className="font-mono">{agent.agentVersion}</span>, and this
+            deployment publishes <span className="font-mono">{published}</span>. The agent replaces
+            itself at startup — so this is a restart, not a download.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div>
+            <Label className="text-muted-foreground text-xs">On that machine</Label>
+            <div className="mt-1">
+              <CommandBlock
+                command={
+                  mac
+                    ? "sudo launchctl kickstart -k system/com.weirdvault.agent"
+                    : "sudo systemctl restart weirdvault-agent"
+                }
+              />
+            </div>
+            <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+              It checks for a newer build before it connects, replaces its own binary, and comes
+              back on the new one. Nothing is replaced mid-session, so a terminal you have open
+              right now ends when the agent restarts — the same as any restart.
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-muted-foreground text-xs">From the next version onward</Label>
+            <div className="mt-1">
+              <CommandBlock command="sudo weirdvault-agent upgrade" />
+            </div>
+            <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+              Same thing in one step, and it restarts the service itself.{" "}
+              <span className="font-mono">--check</span> says what is published without installing
+              anything. The build on that machine is older than this command, which is why the
+              restart above is what works today.
+            </p>
+          </div>
+
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            The machine reports its version every time it reconnects, so this page tells you it
+            worked on its own — refresh in a few seconds and the badge is gone.
+          </p>
+
+          <details className="text-muted-foreground text-xs leading-relaxed">
+            <summary className="cursor-pointer select-none">
+              Nothing changed after a restart?
+            </summary>
+            <p className="mt-2">
+              Run <span className="font-mono">weirdvault-agent status</span> on the machine. If it
+              says <span className="font-mono">Updates: off</span>, that agent was enrolled before
+              self-update existed and has no release URL to check — revoke it here and install it
+              again, and it will keep itself current from then on. If it reports a write error
+              instead, the systemd unit needs{" "}
+              <span className="font-mono">ReadWritePaths=/usr/local/bin</span>, which{" "}
+              <span className="font-mono">ProtectSystem=strict</span> otherwise forbids.
+            </p>
+          </details>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button
+            onClick={() => {
+              void onChanged()
+              onOpenChange(false)
+            }}
+          >
+            Refresh the list
           </Button>
         </DialogFooter>
       </DialogContent>

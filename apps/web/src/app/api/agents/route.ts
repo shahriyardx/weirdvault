@@ -10,6 +10,7 @@ import {
   MAX_PENDING_ENROLLMENTS,
   mintEnrollmentToken,
 } from "@/lib/agents/enrollment"
+import { publishedAgentVersion } from "@/lib/agents/published-version"
 
 /**
  * The owner's side of agents.
@@ -48,7 +49,14 @@ export async function GET() {
     .where(eq(schema.agent.userId, user.id))
     .orderBy(desc(schema.agent.createdAt))
 
-  return Response.json({ agents: rows })
+  // What the machines should be running, so the list can say which of them are
+  // not. Read from the manifest the agents themselves read rather than from the
+  // environment, and null when this deployment publishes no binaries at all —
+  // in which case the dashboard says nothing about versions rather than
+  // guessing. See lib/agents/version.ts.
+  const publishedVersion = await publishedAgentVersion()
+
+  return Response.json({ agents: rows, publishedVersion })
 }
 
 export async function POST() {

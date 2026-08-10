@@ -95,6 +95,19 @@ type controlMessage struct {
 	Reason    string `json:"reason"`
 	AgentID   string `json:"agentId,omitempty"`
 	Signature string `json:"signature,omitempty"`
+	// What build this is, sent on every reconnect.
+	//
+	// The version was recorded once, at enrolment, and never again — so the
+	// dashboard went on showing the build a machine was installed with long
+	// after it had replaced itself, which is worse than showing nothing: it is
+	// the screen somebody checks to find out whether an update landed.
+	//
+	// It rides on hello rather than in a message of its own because hello is
+	// the only frame that already exists per reconnect, and this is a label
+	// rather than a claim: it is sent before anything is verified and is worth
+	// exactly what an unauthenticated string is worth. Nothing is decided from
+	// it. The control plane stores it only after the signature checks out.
+	Version string `json:"version,omitempty"`
 }
 
 func runAgent(args []string) error {
@@ -279,7 +292,7 @@ func keepAlive(ctx context.Context, conn *websocket.Conn) {
 
 // authenticate proves this process holds the key the account enrolled.
 func authenticate(ctx context.Context, conn *websocket.Conn, cfg *Config, priv ed25519.PrivateKey) error {
-	hello, err := json.Marshal(controlMessage{Type: "hello", AgentID: cfg.AgentID})
+	hello, err := json.Marshal(controlMessage{Type: "hello", AgentID: cfg.AgentID, Version: version})
 	if err != nil {
 		return err
 	}

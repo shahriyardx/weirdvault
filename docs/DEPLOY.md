@@ -229,7 +229,22 @@ Two consequences worth planning around:
 - **It only takes effect on an agent restart.** `selfUpdate` runs before the
   control connection opens, so nothing is replaced mid-session — and a machine
   that stays up for months is running whatever it was installed with until
-  something restarts it. `systemctl restart weirdvault-agent`, or a reboot.
+  something restarts it. `weirdvault-agent upgrade` on the machine does both
+  steps; `systemctl restart weirdvault-agent` or a reboot does the same thing
+  the long way.
+
+**What the dashboard shows.** Every machine reports its build on each reconnect,
+and Machines compares that against the `manifest.json` your deployment publishes
+— the manifest, not `AGENT_VERSION`, because the two drift the moment somebody
+edits `.env` without rebuilding. A machine running something else gets an
+"Update available" badge and a dialog with the command; the badge clears by
+itself on the reconnect after the agent replaces itself, so a user watching that
+screen sees it land.
+
+While `AGENT_VERSION` is unset the badge never appears, deliberately. Every agent
+is `dev`, `dev` never differs from `dev`, and an update prompt would be an
+instruction that cannot work — shown to the one person who cannot fix it from
+where they are standing.
 
 Tag the release too, so the string points at a commit:
 

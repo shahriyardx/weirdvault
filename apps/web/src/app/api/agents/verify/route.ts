@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  let body: { agentId?: unknown; nonce?: unknown; signature?: unknown }
+  let body: { agentId?: unknown; nonce?: unknown; signature?: unknown; version?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -83,6 +83,23 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
+
+  /**
+   * What the agent says it is running.
+   *
+   * Optional, and absent is not the same as empty: an agent older than this
+   * relay sends no version at all, and treating that as "unknown" would blank
+   * the column for every machine in a fleet the moment the relay was upgraded.
+   * So anything that is not a usable string leaves the stored value alone.
+   *
+   * Clamped again here even though the relay already clamps it. Neither end
+   * relying on the other having done it is the point — this route's other
+   * caller is whoever finds the endpoint and the relay's secret.
+   */
+  const reportedVersion =
+    typeof body.version === "string" && body.version.trim()
+      ? body.version.trim().slice(0, 32)
+      : null
 
   const [row] = await db
     .select({
@@ -112,10 +129,19 @@ export async function POST(request: Request) {
   // Best-effort. A failed stamp is a stale "last seen" in the dashboard, and
   // refusing a verified agent over a cosmetic write would take somebody's
   // machine offline for it.
+  //
+  // The version is written here and not before the signature check, which is
+  // the whole reason it is safe to record at all: it arrives on an
+  // unauthenticated hello, and until the proof verifies, anyone who knows an
+  // agent id could otherwise rewrite what the dashboard says that machine is
+  // running.
   try {
     await db
       .update(schema.agent)
-      .set({ lastSeenAt: new Date() })
+      .set({
+        lastSeenAt: new Date(),
+        ...(reportedVersion ? { agentVersion: reportedVersion } : {}),
+      })
       .where(eq(schema.agent.id, agentId))
   } catch (e) {
     console.warn("could not stamp agent lastSeenAt", e)
