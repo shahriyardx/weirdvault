@@ -53,8 +53,6 @@ import { hasVaultPassword, registerDeviceAfterOAuth, useSession } from "@/lib/au
 import { deriveSecrets } from "@/lib/vault/kdf"
 import { setVaultKey } from "@/lib/vault/session"
 
-
-
 /**
  * What this tab has worked out about the account it is signed into.
  *
