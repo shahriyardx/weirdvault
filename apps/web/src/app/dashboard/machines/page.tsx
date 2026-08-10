@@ -333,8 +333,12 @@ function AgentRow({
         className={revoked ? "text-muted-foreground size-5" : "text-primary size-5"}
       />
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+      {/* basis-56 is the floor. Without it flex-wrap never fires on this row:
+          the buttons keep their intrinsic width, this column absorbs every
+          pixel of the shortfall, and a phone shows a four-character hostname
+          beside four full-width buttons. */}
+      <div className="min-w-0 flex-1 basis-56">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{agent.label}</span>
           {revoked ? (
             <Badge variant="outline" className="text-muted-foreground">
@@ -380,7 +384,7 @@ function AgentRow({
       </div>
 
       {!revoked && (
-        <div className="flex gap-1">
+        <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">
           {/* One click once we know who to log in as, a form the first time.
               SSH needs a username and a key; the agent holds neither, so there
               is genuinely nothing to connect with until you have said once. */}
@@ -437,7 +441,12 @@ function AgentRow({
       )}
 
       {revoked && (
-        <Button variant="ghost" size="sm" onClick={() => setRemovalOpen(true)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full sm:w-auto"
+          onClick={() => setRemovalOpen(true)}
+        >
           How to remove it
         </Button>
       )}
@@ -455,7 +464,7 @@ function AgentRow({
       {revoked && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" className="w-full sm:w-auto">
               <TrashIcon />
               Forget
             </Button>
