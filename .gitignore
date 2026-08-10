@@ -25,6 +25,11 @@ out/
 .env.bak*
 .env.*.bak
 
+# The half-written .env that scripts/deploy.sh renames into place. Ignored for
+# the same reason as the backups above: an interrupted run would otherwise leave
+# a file full of secrets that dirties the tree and blocks the next deploy.
+.env.tmp
+
 # bun
 .bun/
 

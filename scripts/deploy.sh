@@ -108,6 +108,37 @@ if [ "$PULL" -eq 1 ]; then
   fi
 fi
 
+# ---------------------------------------------------------------- version
+#
+# A tagged commit sets AGENT_VERSION; anything else leaves it alone.
+#
+# That value is what every enrolled machine compares itself against, and until
+# now it lived only in .env — so releasing meant tagging the repository and then
+# editing a file to say the same thing again, and forgetting the second step
+# published a fix that reached nobody. Twice, so far.
+#
+# Only an *exact* tag counts. `git describe` on an untagged commit produces
+# something like v1.3.0-4-gabc123, which changes on every commit and would hand
+# every machine in the field a new binary to download and re-exec after a
+# web-only redeploy — the failure docs/DEPLOY.md warns about. Tag a release and
+# the fleet moves; deploy from an untagged commit and it does not.
+
+tag="$(git describe --tags --exact-match 2>/dev/null || true)"
+if [ -n "$tag" ]; then
+  current="$(sed -n 's/^AGENT_VERSION=//p' .env | head -n1)"
+  if [ "$current" != "$tag" ]; then
+    if grep -q '^AGENT_VERSION=' .env; then
+      # A temporary file and a move, so an interrupted write cannot leave .env
+      # half-rewritten — it holds every secret this deployment has.
+      sed "s|^AGENT_VERSION=.*|AGENT_VERSION=${tag}|" .env > .env.tmp && mv .env.tmp .env
+    else
+      printf '\nAGENT_VERSION=%s\n' "$tag" >> .env
+    fi
+    echo "==> AGENT_VERSION: ${current:-unset} -> ${tag}"
+    echo "    Enrolled machines will update to this build."
+  fi
+fi
+
 # ---------------------------------------------------------------- build & run
 
 if [ "$BUILD" -eq 1 ]; then
@@ -128,13 +159,15 @@ compose ps
 # itself when the manifest's AGENT_VERSION differs from the one it is running —
 # so shipping agent changes with AGENT_VERSION untouched publishes a fix that
 # reaches nobody, silently, forever. See docs/DEPLOY.md § Agent versions.
-if [ -n "$before" ] && [ "$before" != "$after" ]; then
+if [ -n "$before" ] && [ "$before" != "$after" ] && [ -z "$tag" ]; then
   if [ -n "$(git diff --name-only "$before" "$after" -- apps/agent)" ]; then
     echo
-    echo "Note: this release changes apps/agent."
-    echo "      Bump AGENT_VERSION in .env and re-run, or no enrolled machine will"
-    echo "      ever pick it up. It currently reads:"
+    echo "Note: this release changes apps/agent, and this commit is not tagged."
+    echo "      No enrolled machine will pick it up: they compare against"
+    echo "      AGENT_VERSION, which still reads"
     echo "        $(grep '^AGENT_VERSION=' .env || echo 'AGENT_VERSION= (unset — nothing self-updates)')"
+    echo "      Tag the release and deploy again, and this takes care of itself:"
+    echo "        git tag -a v1.2.3 -m v1.2.3 && git push --tags"
   fi
 fi
 

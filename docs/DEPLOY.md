@@ -250,14 +250,22 @@ is `dev`, `dev` never differs from `dev`, and an update prompt would be an
 instruction that cannot work — shown to the one person who cannot fix it from
 where they are standing.
 
-Tag the release too, so the string points at a commit:
+**Tagging the release is how you set it.** `scripts/deploy.sh` reads the tag on
+the commit it just deployed and writes it into `.env` for you:
 
 ```bash
 git tag -a v1.0.0 -m "v1.0.0" && git push --tags
+./scripts/deploy.sh
 ```
 
-Nothing enforces that the tag and `AGENT_VERSION` match. If they drift, the
-version an agent reports is a label that leads nowhere.
+Only an *exact* tag counts. Deploying an untagged commit leaves `AGENT_VERSION`
+alone, so ordinary web-only redeploys do not hand every machine in the field a
+new binary to download and re-exec — which is what wiring this to the commit
+hash would do. If that untagged deploy changed `apps/agent`, the script says so
+and tells you to tag it.
+
+Editing `.env` by hand still works and still wins for a deploy from an untagged
+commit. What it no longer has to be is a step you remember.
 
 **Why three separate relay secrets.** `RELAY_SECRET` is an HMAC signing key that
 is never transmitted, and whose compromise turns the relay into an open proxy.
