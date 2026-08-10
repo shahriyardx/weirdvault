@@ -21,8 +21,6 @@
  * counting is not a quota.
  */
 
-import { useEffect, useSyncExternalStore } from "react"
-
 import { decryptVault, encryptVault, type VaultEnvelope } from "@/lib/vault/crypto"
 import { decodeCast, encodeCast, type Cast } from "./format"
 import { RECORDING_REQUIRES_PRO } from "./limits"
@@ -80,47 +78,6 @@ export class RecordingRequestError extends Error {
   }
 }
 
-/* ------------------------------------------------------------------- count */
-
-/**
- * The sidebar wants a badge and nothing else, so it gets a count and nothing
- * else. Cached at module scope with a listener set for the same reason snippets
- * does it: useSyncExternalStore needs a synchronous snapshot and a fetch cannot
- * give one. A stale badge after another tab records something is the accepted
- * cost; there is no push channel here to fix it with.
- */
-let cachedCount: number | null = null
-const listeners = new Set<() => void>()
-
-function publish(count: number) {
-  if (cachedCount === count) return
-  cachedCount = count
-  for (const fn of listeners) fn()
-}
-
-function subscribe(fn: () => void) {
-  listeners.add(fn)
-  return () => {
-    listeners.delete(fn)
-  }
-}
-
-export function useRecordingCount(): number {
-  const count = useSyncExternalStore(
-    subscribe,
-    () => cachedCount ?? 0,
-    // Server render: the count comes from an authenticated fetch this browser
-    // makes, so there is nothing to render on the server but zero.
-    () => 0,
-  )
-
-  useEffect(() => {
-    if (cachedCount === null) void listRecordings().catch(() => {})
-  }, [])
-
-  return count
-}
-
 /* ------------------------------------------------------------------ fetches */
 
 export interface RecordingPage {
@@ -128,7 +85,8 @@ export interface RecordingPage {
   recordings: RecordingSummary[]
   /**
    * How many the account has in total, which is not the same as how many came
-   * back. The badge and the footer both read this rather than counting the page.
+   * back. The footer reads this rather than counting the page, which would stop
+   * being true at the page size — exactly where it starts mattering.
    */
   total: number
   /**
@@ -161,7 +119,6 @@ export async function listRecordings(): Promise<RecordingPage> {
     return row ? [row] : []
   })
   const total = typeof body.total === "number" ? body.total : rows.length
-  publish(total)
   return { recordings: rows, total, storedBytes, storageLimitBytes }
 }
 
@@ -217,13 +174,11 @@ export async function saveRecording(
   const body = (await res.json()) as { recording?: unknown }
   const summary = toSummary(body.recording)
   if (!summary) throw new Error("The recording was stored but the server described it oddly.")
-  publish((cachedCount ?? 0) + 1)
   return summary
 }
 
 export async function deleteRecording(id: string): Promise<void> {
   await request(`/api/recordings/${encodeURIComponent(id)}`, { method: "DELETE" })
-  publish(Math.max(0, (cachedCount ?? 1) - 1))
 }
 
 /* ------------------------------------------------------------------ plumbing */

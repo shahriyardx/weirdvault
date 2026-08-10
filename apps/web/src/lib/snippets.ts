@@ -22,8 +22,6 @@
  * drop-in change to the four helpers below.
  */
 
-import { useEffect, useSyncExternalStore } from "react"
-
 import { idbGet, idbPut } from "./idb"
 import { recordDeletion } from "./vault/tombstones"
 
@@ -45,51 +43,6 @@ const KEY = "snippets"
 
 type SnippetMap = Record<string, Snippet>
 
-/* --------------------------------------------------------------- observers --- */
-
-/**
- * The sidebar shows a snippet count and has no other reason to load snippets,
- * so it needs to hear about writes that happen on the snippets page. A cached
- * count plus a listener set is the smallest thing that works: useSyncExternalStore
- * demands a synchronous snapshot, and IndexedDB cannot give one.
- */
-let cachedCount: number | null = null
-const listeners = new Set<() => void>()
-
-function publish(count: number) {
-  if (cachedCount === count) return
-  cachedCount = count
-  for (const fn of listeners) fn()
-}
-
-function subscribe(fn: () => void) {
-  listeners.add(fn)
-  return () => {
-    listeners.delete(fn)
-  }
-}
-
-/**
- * Reactive snippet count, or 0 until the first read completes. It is a count and
- * not a list on purpose: nothing outside the snippets page needs the bodies, and
- * holding decrypted snippet text in a component that renders on every route
- * would spread the plaintext further than it needs to go.
- */
-export function useSnippetCount(): number {
-  const count = useSyncExternalStore(
-    subscribe,
-    () => cachedCount ?? 0,
-    // Server render: IndexedDB does not exist there, and neither does the count.
-    () => 0,
-  )
-
-  useEffect(() => {
-    if (cachedCount === null) void listSnippets().catch(() => {})
-  }, [])
-
-  return count
-}
-
 /* ------------------------------------------------------------------ store --- */
 
 async function readMap(): Promise<SnippetMap> {
@@ -98,14 +51,11 @@ async function readMap(): Promise<SnippetMap> {
 
 async function writeMap(map: SnippetMap): Promise<void> {
   await idbPut(STORE, KEY, map)
-  publish(Object.keys(map).length)
 }
 
 export async function listSnippets(): Promise<Snippet[]> {
   const map = await readMap()
-  const all = Object.values(map)
-  publish(all.length)
-  return all.sort((a, b) => b.updatedAt - a.updatedAt)
+  return Object.values(map).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 /**
