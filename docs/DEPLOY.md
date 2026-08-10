@@ -430,6 +430,14 @@ docker compose -f compose.prod.yaml up -d --build
 
 The new web container migrates before it accepts traffic.
 
+`scripts/deploy.sh` is those two commands with the checks around them: that
+`.env` exists before compose reads a missing one, that the pull is a
+fast-forward rather than a merge commit created unattended on a server, and that
+a release touching `apps/agent` says so — because agent binaries ship in the web
+image but no enrolled machine replaces itself until `AGENT_VERSION` changes.
+`--no-pull` deploys what is checked out, `--prune` deletes the images the build
+replaced.
+
 The relay and web can be upgraded independently — the only contract between
 them is the token format in `apps/relay/src/token.rs`, which is versioned by
 its claims shape. Roll the relay first.
