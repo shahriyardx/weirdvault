@@ -1059,25 +1059,20 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-/**
- * How to move a machine onto the build this deployment publishes.
- *
- * The agent replaces itself — but only at startup, and only when the manifest
- * names a version different from its own. Both halves of that are why this
- * dialog exists rather than a button that does it: nothing here can reach into
- * somebody's living room and restart a daemon, and pretending otherwise would
- * put a spinner on screen that resolves to a lie.
- *
- * So it gives the one command that does it, and says what will happen
- * afterwards — because the thing people actually want to know is not how to
- * upgrade, it is how they will be able to tell that it worked.
- *
- * Two commands, not one, and the older one is not a fallback for the impatient:
- * `weirdvault upgrade` did not exist before this release, so every machine
- * that is currently out of date is, by definition, running a build without it.
- * The restart path is the one that works today; the named command is the one
- * that works from here on.
- */
+/*
+How to move a machine onto the build this deployment publishes.
+
+The agent replaces itself at startup and only when the manifest names a version
+different from its own, so this is a restart rather than a download — and both
+halves of that are why the dialog exists rather than a button that silently does
+it. Nothing here can reach into somebody's living room, and a spinner that
+resolved to a lie would be worse than a command.
+
+Short on purpose. The thing people want is the button when the machine is
+reachable and the command when it is not; what happens next is one line each,
+and the reasoning belongs in the docs rather than in a box that opens over the
+page somebody was reading.
+*/
 function UpgradeDialog({
   agent,
   published,
@@ -1096,115 +1091,71 @@ function UpgradeDialog({
   onUpgrade?: () => Promise<void>
   upgrading: boolean
 }) {
-  // Self-reported at enrolment. Nothing trusts it for anything that matters;
-  // here it only picks which command is the right one to print.
-  const mac = agent.os === "darwin"
   const origin = typeof window === "undefined" ? "" : window.location.origin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Update the agent on {agent.label}</DialogTitle>
+          <DialogTitle>Update {agent.label}</DialogTitle>
           <DialogDescription>
-            It is running <span className="font-mono">{agent.agentVersion}</span>, and this
-            deployment publishes <span className="font-mono">{published}</span>. The agent replaces
-            itself at startup — so this is a restart, not a download.
+            Running <span className="font-mono">{agent.agentVersion}</span>, published{" "}
+            <span className="font-mono">{published}</span>. It restarts to pick the new build up, so
+            it refuses while a session is open and tells you which.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          {onUpgrade && (
-            <div className="border-border rounded-lg border p-3">
-              <p className="text-sm">
-                This machine is connected, so it can be told to update from here.
-              </p>
-              <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-                It restarts to pick the new build up, which ends any session it is carrying — so it
-                refuses while one is open and says which. Nothing is replaced mid-session.
-              </p>
-              <Button
-                className="mt-3"
-                size="sm"
-                disabled={upgrading}
-                onClick={() => void onUpgrade()}
-              >
-                <ArrowsClockwiseIcon />
-                {upgrading ? "Updating…" : "Update now"}
-              </Button>
-            </div>
-          )}
-
-          <div>
-            <Label className="text-muted-foreground text-xs">On that machine</Label>
-            <div className="mt-1">
-              <CommandBlock
-                command={
-                  mac
-                    ? "sudo launchctl kickstart -k system/com.weirdvault"
-                    : "sudo systemctl restart weirdvault"
-                }
-              />
-            </div>
-            <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-              It checks for a newer build before it connects, replaces its own binary, and comes
-              back on the new one. Nothing is replaced mid-session, so a terminal you have open
-              right now ends when the agent restarts — the same as any restart.
+        {onUpgrade ? (
+          <div className="space-y-2">
+            <Button disabled={upgrading} onClick={() => void onUpgrade()}>
+              <ArrowsClockwiseIcon />
+              {upgrading ? "Updating…" : "Update now"}
+            </Button>
+            <p className="text-muted-foreground text-xs">
+              Or on the machine: <span className="font-mono">sudo weirdvault upgrade</span>
             </p>
           </div>
-
-          <div>
-            <Label className="text-muted-foreground text-xs">From the next version onward</Label>
-            <div className="mt-1">
-              <CommandBlock command="sudo weirdvault upgrade" />
-            </div>
-            <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-              Same thing in one step, and it restarts the service itself.{" "}
-              <span className="font-mono">--check</span> says what is published without installing
-              anything. The build on that machine is older than this command, which is why the
-              restart above is what works today.
+        ) : (
+          <div className="space-y-2">
+            <p className="text-muted-foreground text-sm">
+              That machine is not connected, so it cannot be told from here. On the machine:
             </p>
+            <CommandBlock command="sudo weirdvault upgrade" />
           </div>
+        )}
 
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            The machine reports its version every time it reconnects, so this page tells you it
-            worked on its own — refresh in a few seconds and the badge is gone.
+        {/* Folded: the failure is rare, and its answer is long enough to bury
+            the two lines above that are the point. */}
+        <details className="text-muted-foreground text-xs leading-relaxed">
+          <summary className="cursor-pointer select-none">Nothing changed?</summary>
+          <p className="mt-2">
+            <span className="font-mono">weirdvault logs</span> on the machine says why. A{" "}
+            <span className="font-mono">permission denied</span> means it was installed before the
+            binary moved somewhere it can replace itself — one command fixes it and keeps the
+            machine&rsquo;s identity:
           </p>
-
-          <details className="text-muted-foreground text-xs leading-relaxed">
-            <summary className="cursor-pointer select-none">
-              Nothing changed after a restart?
-            </summary>
-            <p className="mt-2">
-              Look at the log — <span className="font-mono">weirdvault logs</span>, or{" "}
-              <span className="font-mono">journalctl -u weirdvault</span>. A line saying{" "}
-              <span className="font-mono">permission denied</span> means the machine was installed
-              before the agent&rsquo;s binary was moved somewhere it can replace itself. One command
-              fixes it, and it keeps this machine&rsquo;s identity — no new token, no re-enrolling:
-            </p>
-            <div className="mt-2">
-              <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --repair`} />
-            </div>
-            <p className="mt-2">
-              If instead <span className="font-mono">weirdvault status</span> says{" "}
-              <span className="font-mono">Updates: off</span>, that agent was enrolled before
-              self-update existed and has no release URL to check. That one does need revoking and
-              installing again, and it keeps itself current from then on.
-            </p>
-          </details>
-        </div>
+          <div className="mt-2">
+            <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --repair`} />
+          </div>
+          <p className="mt-2">
+            If <span className="font-mono">weirdvault status</span> says{" "}
+            <span className="font-mono">Updates: off</span> instead, that agent predates self-update
+            and has no release URL — revoke it and install it again.
+          </p>
+        </details>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>
           <Button
+            variant="secondary"
             onClick={() => {
               void onChanged()
               onOpenChange(false)
             }}
           >
-            Refresh the list
+            Refresh
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1212,25 +1163,19 @@ function UpgradeDialog({
   )
 }
 
-/**
- * What to run on the machine once its key is dead.
- *
- * Revoking is a row in a database on this side. The machine on the other side
- * still has a binary, a systemd unit that will now fail every five seconds, and
- * — the part that matters — its Ed25519 private key sitting in /etc. None of
- * that can connect any more, but "I revoked it" and "it is gone from the box"
- * are two different statements and only one of them was true.
- *
- * So this opens by itself the moment a revoke succeeds, and stays reachable from
- * the revoked row afterwards, because a dialog somebody dismissed is a dialog
- * they cannot get back. Nobody reads a README to find out how to uninstall
- * something; the place they will look is the screen where they revoked it.
- *
- * It is deliberately not a confirmation step. Revoking already happened, the
- * machine is already locked out, and a machine that was lost or stolen cannot be
- * cleaned up at all — for that person this is information, not a task, and the
- * text says so rather than leaving them feeling half-finished.
- */
+/*
+What is left on the machine once its key is dead.
+
+Deliberately short. It opens by itself the moment a revoke succeeds, so it
+interrupts somebody who has just finished a task — and the honest content is one
+command. What used to be here, explaining what uninstall removes and what it
+leaves alone, was all true and belongs in the docs: a dialog that fills a phone
+screen gets closed, not read.
+
+The nuance that survives is the one that changes what you type — whether the
+machine was reachable when you revoked it, and so whether its copy of the key is
+already gone.
+*/
 function RemovalDialog({
   agent,
   open,
@@ -1243,86 +1188,35 @@ function RemovalDialog({
   /** False when the revoke reached the machine and the key is already gone. */
   keyStillOnMachine: boolean
 }) {
-  // The agent self-reports its platform at enrolment. Nothing trusts it for
-  // anything that matters; here it only picks which paragraph is true.
-  const mac = agent.os === "darwin"
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Remove the agent from {agent.label}</DialogTitle>
+          <DialogTitle>{agent.label} is revoked</DialogTitle>
           <DialogDescription>
-            {agent.label} can no longer connect — that took effect the moment you revoked it, and
-            nothing below changes it. What is still on the machine is the agent binary and its
-            private key. This removes both.
+            {keyStillOnMachine
+              ? "It cannot connect any more. That machine was offline, so its copy of the key is still on disk — dead, but there."
+              : "It cannot connect any more, and it was online, so it deleted its own key. Nothing left to do."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          {!keyStillOnMachine ? (
-            <Alert>
-              <CheckCircleIcon />
-              <AlertTitle>Already done</AlertTitle>
-              <AlertDescription>
-                That machine was connected when you revoked it, so it removed this identity and its
-                key by itself. Nothing below is necessary unless you also want the binary and the
-                service gone.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                That machine was not connected, so it could not be told. Its copy of the key is
-                still on disk — useless now, since this side refuses it, but still there. Remove
-                just this identity and leave any other account&rsquo;s alone:
-              </p>
-              <CommandBlock command={`sudo weirdvault remove ${identityName(agent.id)}`} />
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                <span className="font-mono">{identityName(agent.id)}</span> is what{" "}
-                <span className="font-mono">weirdvault list</span> calls it on that machine.
-              </p>
-            </>
-          )}
+        {keyStillOnMachine && (
+          <div className="space-y-2">
+            <CommandBlock command={`sudo weirdvault remove ${identityName(agent.id)}`} />
+            <p className="text-muted-foreground text-xs">
+              Lost or stolen? Nothing to run — revoking already retired the key.
+            </p>
+          </div>
+        )}
 
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            To remove the agent from that machine altogether — binary, service and every identity on
-            it:
-          </p>
-          <CommandBlock command="sudo weirdvault uninstall" />
-
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            {mac
-              ? "It stops the launchd daemon, removes it, and deletes the binary and the config " +
-                "directory. It leaves your SSH configuration, Remote Login and everything in " +
-                "~/.ssh untouched — the agent never had anything to do with them."
-              : "It stops and disables the service, removes the unit, the binary, the config " +
-                "directory and the service user. It leaves your SSH configuration, sshd and " +
-                "everything in ~/.ssh untouched — the agent never had anything to do with them."}
-          </p>
-
-          <details className="text-muted-foreground text-xs leading-relaxed">
-            <summary className="cursor-pointer select-none">
-              Prefer not to pipe a script to a shell?
-            </summary>
-            <div className="mt-2 space-y-1 font-mono">
-              {(mac
-                ? ["sudo weirdvault uninstall --yes"]
-                : ["sudo weirdvault uninstall --yes"]
-              ).map((line) => (
-                <div key={line} className="break-all">
-                  {line}
-                </div>
-              ))}
-            </div>
-          </details>
-
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            If you revoked this machine because it was lost or stolen, there is nothing for you to
-            run and nothing left to do. Revoking is what protects you: the key is retired here, so
-            the copy on that machine opens nothing.
-          </p>
-        </div>
+        {/* Folded, because wanting the whole agent gone is the rarer intent and
+            it is one command when you do. */}
+        <details className="text-muted-foreground text-xs">
+          <summary className="cursor-pointer select-none">Remove weirdvault entirely</summary>
+          <div className="mt-2">
+            <CommandBlock command="sudo weirdvault uninstall" />
+          </div>
+        </details>
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
