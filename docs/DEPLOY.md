@@ -140,6 +140,39 @@ read at runtime except `NEXT_PUBLIC_RELAY_URL`, which is inlined into the
 browser bundle at build time — changing that one needs `docker compose build
 web`, not a restart.
 
+### Where each value comes from
+
+Five are random secrets. Generate each one **separately** — reusing one value
+across two of them collapses their blast radii into one:
+
+```bash
+openssl rand -base64 48    # BETTER_AUTH_SECRET
+openssl rand -base64 48    # RELAY_SECRET          — same value on web and relay
+openssl rand -base64 48    # CRON_SECRET
+openssl rand -base64 48    # RELAY_USAGE_SECRET    — optional
+openssl rand -base64 48    # RELAY_AGENT_SECRET    — optional
+openssl rand -base64 32    # POSTGRES_PASSWORD
+```
+
+The rest you look up or decide:
+
+| | |
+|---|---|
+| `DATABASE_URL` | Write it out with the password above: `postgres://weirdvault:<POSTGRES_PASSWORD>@postgres:5432/weirdvault` |
+| `BETTER_AUTH_URL` | Your app's URL, e.g. `https://weirdvault.example.com` |
+| `NEXT_PUBLIC_RELAY_URL` | `wss://<relay host>/ws`, or `wss://<your app>/ws` if you route `/ws` to the relay on one origin |
+| `STRIPE_SECRET_KEY` | Stripe → Developers → API keys (`sk_live_…`) |
+| `STRIPE_PRICE_PRO` | Stripe → Products → your recurring price (`price_…`). It must be recurring; checkout runs in subscription mode |
+| `STRIPE_WEBHOOK_SECRET` | Stripe → Developers → Webhooks → your endpoint (`whsec_…`). Each endpoint has its own, and `stripe listen` prints a different one again |
+| `GITHUB_CLIENT_ID` / `_SECRET` | github.com/settings/developers, callback `<BETTER_AUTH_URL>/api/auth/callback/github` |
+| `R2_ENDPOINT` | Cloudflare → R2 → your bucket → Settings → S3 API (`https://<account-id>.r2.cloudflarestorage.com`) |
+| `R2_BUCKET` | The bucket name |
+| `R2_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | Cloudflare → R2 → Manage API tokens → **Object Read & Write**, scoped to that bucket alone |
+| `R2_REGION` | Leave blank for R2. Set it for MinIO, Ceph or S3, where it is part of the signature |
+| `TRUSTED_PROXY_HOPS` | Count the proxies between the internet and the app: `1` behind one reverse proxy, `2` with a CDN in front |
+| `TRUSTED_PROXY_IPS` | The address your proxy connects *from*: `172.16.0.0/12` for a container network, `127.0.0.1` for a proxy on the host |
+| `AGENT_RELEASE_BASE_URL` | Leave blank unless you serve the agent binaries from somewhere other than your own origin |
+
 ### Required
 
 | Variable | |
