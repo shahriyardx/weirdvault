@@ -6,11 +6,92 @@ entry with no trigger is a wish, not a task.
 
 ---
 
-## (nothing here right now)
+## Record that a connection happened
 
-The last entry was "schedule the two maintenance scripts", and it is done — see
-below. Add the next one when there is one; an entry with no trigger is a wish,
-not a task.
+**Now:** `audit_event` has `connection.opened` and `connection.closed` in its
+catalogue, with metadata validators, and **nothing emits them**. So the Activity
+page shows device registrations, recovery-code use, host keys pinned and keys
+installed — everything except the thing anyone would look for first. "Who
+connected to which host, when" is recorded nowhere.
+
+**Why it was skipped:** both are `source: "relay"`, and the relay has no
+database — no sqlx in its Cargo.toml, no audit code. `/api/audit` deliberately
+will not take them from a browser, because a client that could fabricate
+"connection opened" could fabricate a whole session history.
+
+**What to do instead:** the relay already does exactly this shape of thing for
+something else. `apps/relay/src/reporter.rs` batches per-account byte counts and
+POSTs them to `/api/relay/usage` with a bearer secret, on a timer, with tests
+covering the unreachable-control-plane case; `apps/relay/src/http.rs` is the
+shared client. Connection events are the same channel, the same credential and
+the same batching. The blinded `targetRef` is the one open question — the relay
+knows the host in plaintext and must not store it, so either the browser sends
+the ref with the token mint and the relay echoes it back, or the event is
+recorded without one.
+
+**Trigger:** the next time somebody asks the Activity page a question it cannot
+answer. It is the largest visible gap in the product and the plumbing already
+exists.
+
+---
+
+## Count share copies against the storage ceiling on both paths
+
+**Now:** `POST /api/recordings/[id]/shares` sums `recording` **and**
+`recording_share` before allowing a new share. `POST /api/recordings` sums only
+`recording`. So the same gigabyte ceiling is enforced asymmetrically: a share is
+refused for space a recording would have been granted.
+
+**What to do instead:** one `storedBytesFor` covering both tables, in one module
+both routes import. The shares route already has the right version and says in
+its own header that the fix belongs in the other file.
+
+**Trigger:** trivial, and worth doing the next time either route is touched.
+
+---
+
+## Make `/pricing` and Stripe agree about the price
+
+**Now:** `PRO_PRICE_USD` in `lib/billing/tiers.ts` is what `/pricing` prints.
+The amount actually charged lives in the Stripe Price object named by
+`STRIPE_PRICE_PRO`. Nothing checks that the two agree, and `tiers.ts` says so.
+
+**What to do instead:** read the price from Stripe once at startup and log a
+warning when it differs from the constant. Not a hard failure — a deployment
+with no Stripe configured must still render `/pricing`.
+
+**Trigger:** before the price ever changes. Changing it in one place and not the
+other is a page advertising a number nobody is charged.
+
+---
+
+## Give the agent a service file on macOS
+
+**Now:** the installer writes a systemd unit on Linux. On macOS it installs the
+binary and that is all, so the agent is a process somebody started in a terminal
+— it does not survive a reboot, or the terminal closing.
+
+**What to do instead:** a launchd plist at
+`/Library/LaunchDaemons/`, with `KeepAlive` and the same
+`RestartPreventExitStatus`-equivalent behaviour: exit code 3 means revoked and
+must not be restarted, which launchd expresses as `SuccessfulExit` rather than a
+status list.
+
+**Trigger:** the first macOS machine anyone but us enrols.
+
+---
+
+## Let a long-lived agent pick up its own updates
+
+**Now:** `selfUpdate()` runs once, at startup. A machine that stays up for three
+months never gets a fix — including a fix to the update path itself.
+
+**What to do instead:** check on the same timer that already exists for the
+control connection's ping, and apply on the next clean reconnect rather than
+mid-session.
+
+**Trigger:** the first agent fix that matters after there are agents in the
+field.
 
 ---
 
