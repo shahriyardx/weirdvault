@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
+import { BodyError, readBody, statusForBodyError } from "@/lib/recording/blobs";
 
 /**
  * The public end of a share link. No session, by design.
@@ -68,7 +69,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
       ),
     )
     .returning({
+      id: schema.recordingShare.id,
       ciphertext: schema.recordingShare.ciphertext,
+      storageKey: schema.recordingShare.storageKey,
       views: schema.recordingShare.views,
       maxViews: schema.recordingShare.maxViews,
       expiresAt: schema.recordingShare.expiresAt,
@@ -79,11 +82,46 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   // guessing tokens which of their guesses named a real share.
   if (!row) return Response.json({ error: "not found" }, { status: 404 });
 
+  /**
+   * The bytes, which may be in the row above or in a bucket.
+   *
+   * A bucket is the one thing that can fail after the view has already been
+   * spent, because the count and the check have to be a single statement and
+   * the fetch cannot be part of it. So a failure refunds the view: the caller
+   * is getting nothing, and a link limited to three views should not be worth
+   * two after a bucket had a bad minute. The refund is its own atomic UPDATE,
+   * so it cannot lose a concurrent increment; what it cannot survive is this
+   * process dying between the two statements, which spends one view and is the
+   * smallest failure available here.
+   *
+   * Never presigned, and this route is the reason the whole app proxies. What
+   * stands between a revoked link and the transcript is the WHERE clause above,
+   * evaluated when the request arrives. A signed URL is evaluated by a bucket
+   * that has never heard of `revoked_at`, so handing one out would mean revoke
+   * stops meaning revoked for as long as the signature lives.
+   */
+  let blob: Buffer | null;
+  try {
+    blob = await readBody(row);
+  } catch (e) {
+    if (!(e instanceof BodyError)) throw e;
+    await db
+      .update(schema.recordingShare)
+      .set({ views: sql`greatest(${schema.recordingShare.views} - 1, 0)` })
+      .where(eq(schema.recordingShare.id, row.id));
+    return Response.json({ error: e.message }, { status: statusForBodyError(e) });
+  }
+
+  // A live share with no bytes. The revoke path nulls both columns and stamps
+  // `revoked_at`, which the WHERE clause above already excluded, so reaching
+  // here means the two got out of step — 404 rather than a crash on a null.
+  if (!blob) return Response.json({ error: "not found" }, { status: 404 });
+
   return Response.json(
     {
       // The envelope the owner's browser wrote, byte for byte. This route has
       // never been able to open it and does not become able to by serving it.
-      blob: row.ciphertext.toString("utf8"),
+      blob: blob.toString("utf8"),
       // The count including this fetch, so the viewer can say how many views
       // are left rather than implying the link is inexhaustible.
       views: row.views,

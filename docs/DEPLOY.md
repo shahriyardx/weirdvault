@@ -103,6 +103,7 @@ Set on Vercel:
 | `RELAY_AGENT_SECRET` | **must match the relay exactly.** Blank means machines with no public address cannot be enrolled at all — the relay refuses agent connections and the dashboard says so rather than minting a token for an agent that could never connect |
 | `NEXT_PUBLIC_RELAY_URL` | `wss://your-relay/ws` |
 | `AGENT_RELEASE_BASE_URL` | Where agent binaries are published. Defaults to `<your origin>/agent-bin`, which is what `bun run agent` writes — set it if you serve them from a release host instead |
+| `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where session recordings are stored. All four or none; see below |
 | `TRUSTED_PROXY_HOPS` | `1` on Vercel — its edge appends the client address; unset means no address is recorded |
 
 `NEXT_PUBLIC_*` is inlined at build time, so changing the relay URL means a
@@ -123,6 +124,75 @@ live database and is for local development only.
 
 ---
 
+## Recording storage
+
+Session recordings are the one thing this app stores that is measured in
+megabytes. By default the encrypted blob is a `bytea` column, and for a
+self-hosted install that is the right answer: the recordings are in the backup
+you already take, deleting one is a foreign key rather than a reconciliation
+job, and there is nothing to sweep.
+
+Set all four `R2_*` variables and new recordings go to a bucket instead, leaving
+the row with its metadata and an object key. What that buys is a `pg_dump` whose
+size tracks data volume rather than recording volume — which is a hosted
+deployment's problem and not a home server's.
+
+```bash
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com   # the bucket's S3 API endpoint
+R2_BUCKET=webxterm-recordings
+R2_ACCESS_KEY_ID=...        # an API token scoped to Object Read & Write, this bucket only
+R2_SECRET_ACCESS_KEY=...
+```
+
+Any S3-compatible endpoint works — MinIO, Ceph, S3 itself — in which case set
+`R2_REGION` too, since it is part of the signature and a wrong one is a 403. R2
+has one region and it defaults to `auto`.
+
+Three things to get right, in descending order of how badly they go wrong:
+
+- **The bucket must have no public URL.** Not the `r2.dev` development
+  subdomain, not a custom domain. Neither is on by default and neither should be
+  turned on. Objects are fetched by the server with these credentials and
+  proxied to the browser through a route that has already checked who is asking;
+  there is no presigned-URL path anywhere in the codebase, deliberately.
+- **Set all four or none.** Three of four is a typo, and it is treated as one:
+  the app names the missing variable at startup and keeps writing to Postgres,
+  rather than quietly doing that on a deployment whose operator believes
+  otherwise.
+- **Give the token the narrowest scope that works.** Object Read & Write on this
+  bucket. It never needs to create a bucket or see any other one.
+
+Switching it on is not a migration. Rows written before and after are both
+readable, in both directions, so old recordings keep playing and turning it back
+off does not strand anything. Nothing backfills, either — existing blobs stay in
+Postgres until they are deleted.
+
+**Orphans.** There is no transaction spanning Postgres and a bucket, so every
+write is two steps. The ordering is chosen so a half-failure always leaves an
+object nothing points at rather than a row pointing at nothing: an orphan costs
+storage and is findable, a dangling row is a recording that cannot be played.
+The routes clean up after themselves, and the one case they cannot is an account
+deletion whose purge could not reach the bucket — the rows are already gone by
+then. `apps/web/scripts/sweep-recordings.mjs` deletes objects no row claims:
+
+```bash
+node apps/web/scripts/sweep-recordings.mjs --dry-run
+node apps/web/scripts/sweep-recordings.mjs
+```
+
+It needs `DATABASE_URL` and the same four `R2_*` variables, skips anything
+written in the last hour so a save in flight is never mistaken for an orphan,
+and is safe to run against a live deployment. Nothing schedules it.
+
+**Deleting an account** cancels the Stripe subscription first — if that fails,
+the deletion is refused rather than leaving a charge running with no way to
+reach it — then deletes the rows, then purges `rec/<user-id>/` and
+`share/<user-id>/` from the bucket. A purge that fails leaves orphans for the
+sweep; it does not fail the deletion, because there is no account left to refuse
+on behalf of.
+
+---
+
 ## Production checklist
 
 Ordered by how badly it goes wrong if you skip it.
@@ -140,9 +210,12 @@ Ordered by how badly it goes wrong if you skip it.
 - [ ] **TLS on both**, with a websocket-aware proxy and a long read timeout.
 - [ ] **Postgres is not published to the host.** The compose file uses `expose`,
       not `ports`, for exactly this reason.
+- [ ] **The recordings bucket has no public URL**, if you configured one. No
+      `r2.dev` subdomain, no custom domain. See above.
 - [ ] Back up the `pgdata` volume. It holds encrypted vault blobs — useless to
       an attacker, and irreplaceable to your users, since **you cannot decrypt
-      them to help someone who lost their password.**
+      them to help someone who lost their password.** If recordings are in a
+      bucket, they are not in that backup and need their own.
 - [ ] Publish your relay's egress IPs so users can allowlist them.
 
 ## Scaling

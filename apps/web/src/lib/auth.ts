@@ -11,6 +11,7 @@ import { ipPrefix, type AuditEventType } from "@/lib/audit/events";
 import { clientAddress } from "@/lib/audit/address";
 import { BillingNotConfiguredError } from "@/lib/billing/stripe";
 import { cancelSubscriptionForDeletion } from "@/lib/billing/subscription";
+import { purgeAccountObjects } from "@/lib/storage/purge";
 
 /**
  * Better Auth owns accounts and sessions. That is the whole list.
@@ -554,6 +555,40 @@ export const auth = betterAuth({
                   "first.",
           });
         }
+      },
+
+      /**
+       * Take the recordings out of the bucket, once the rows are gone.
+       *
+       * Everything else this account had is a foreign key away: the vault blob,
+       * the audit trail, the devices, the agents, the recordings themselves all
+       * cascade from the user row. Object storage is the one thing Postgres
+       * cannot reach, and a recording is the single most sensitive artefact the
+       * product produces — a transcript of somebody's work on their servers.
+       * Leaving them in a bucket after "delete my account" is the gap this
+       * closes.
+       *
+       * After rather than before, and it does not throw. lib/storage/purge.ts
+       * sets out both choices at length; the short version is that purging first
+       * would let a failed deletion destroy the recordings of an account that
+       * still exists, and throwing here would show an error for a deletion that
+       * has already happened. An object left behind is orphaned rather than
+       * lost, and `scripts/sweep-recordings.mjs` finds it by exactly the
+       * property that makes it an orphan.
+       *
+       * On a deployment with no bucket configured this is a no-op that says
+       * nothing, because there is nothing to say: the ciphertext was in the row
+       * and went with it.
+       */
+      afterDelete: async (user) => {
+        const purged = await purgeAccountObjects(user.id);
+        if (!purged.attempted) return;
+        console.info(
+          `account deletion: purged ${purged.deleted} stored recording object(s)` +
+            (purged.failed > 0
+              ? `, ${purged.failed} could not be removed and are now orphaned`
+              : ""),
+        );
       },
     },
   },

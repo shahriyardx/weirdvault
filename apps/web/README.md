@@ -426,13 +426,55 @@ OnCalendar=daily
 Persistent=true
 ```
 
-```bash
-# compose: a one-shot against the running web image
-docker compose run --rm web node scripts/prune-audit.mjs
-```
+Note that `scripts/` is **not** in the runtime image — only `migrate.mjs` is,
+because the entrypoint runs it. So a compose deployment runs this from a
+checkout with `DATABASE_URL` pointed at the container's Postgres, not with
+`docker compose run web`. The intended production answer is an authenticated
+route called by an external scheduler; see `docs/TODO.md`.
 
 The choice is deliberately left open — a scheduler is a property of the host, and
 picking one here would only mean two of them fighting on somebody's machine.
+
+## Sweeping orphaned recording objects
+
+Only relevant when `R2_*` is configured and recordings live in a bucket rather
+than in a `bytea` column.
+
+There is no transaction spanning Postgres and a bucket, so every write to a
+recording is two steps and either can fail. The ordering is picked so that a
+half-failure always leaves the same shape — an object that no row claims:
+
+- Creating writes the object first and the row second. The reverse would leave a
+  row pointing at bytes that were never written, which is a recording in
+  somebody's list that cannot be played. An orphan is invisible and merely costs
+  storage.
+- Deleting destroys the object first and the row second, and refuses outright if
+  the object cannot be destroyed. Reporting a successful delete over ciphertext
+  still sitting in a bucket is the one outcome that must not happen, because the
+  row was the last thing that knew whose it was.
+
+The routes clean up after themselves — a failed insert takes its object back
+out. The case they cannot cover is an account deletion whose purge could not
+reach the bucket, because by then the rows are already gone.
+
+```bash
+bun run recordings:sweep -- --dry-run           # list what it would delete
+bun run recordings:sweep                        # delete it
+bun run recordings:sweep -- --min-age-hours=6   # a wider grace window
+```
+
+It needs `DATABASE_URL` and the four `R2_*` variables, reads both `recording`
+and `recording_share` in one query — a share's copy is its own object, and a
+sweep that read only the first table would delete every live link's bytes — and
+skips anything written in the last hour, so a save in flight is never mistaken
+for an orphan. Safe to run repeatedly and against a live deployment.
+
+It signs its own S3 requests rather than importing `src/lib/storage/sigv4.ts`,
+for the same reason the pruner copies its retention windows: these scripts are
+plain node with no build step. `src/lib/storage/sweep-script.test.ts` signs the
+same five requests with both implementations and fails if the Authorization
+headers differ, which is what keeps the copy from drifting into a 403 nobody
+sees until they set up the cron.
 
 ## Share links
 

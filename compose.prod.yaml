@@ -82,9 +82,14 @@ services:
       postgres:
         condition: service_healthy
     # Everything: DATABASE_URL, BETTER_AUTH_*, the three relay secrets, Stripe,
-    # GitHub, TRUSTED_PROXY_HOPS, AGENT_RELEASE_BASE_URL. Adding a variable to
-    # .env is all it takes — no second edit here, which is what used to leave
-    # five documented variables reaching the file and never the container.
+    # GitHub, R2_*, TRUSTED_PROXY_HOPS, AGENT_RELEASE_BASE_URL. Adding a
+    # variable to .env is all it takes — no second edit here, which is what used
+    # to leave five documented variables reaching the file and never the
+    # container.
+    #
+    # The R2_* four are why this is the web service and not the relay: the
+    # bucket credentials belong to the process that authorizes a request before
+    # it fetches an object, and the relay never touches a recording.
     env_file:
       - .env
     ports:

@@ -6,10 +6,18 @@ import { tierFor } from "@/lib/billing/subscription";
 import { canRecordOnTier } from "@/lib/billing/tiers";
 import { db, schema } from "@/lib/db";
 import {
+  BodyError,
+  discardBody,
+  statusForBodyError,
+  writeBody,
+  type StoredBody,
+} from "@/lib/recording/blobs";
+import {
   MAX_ACCOUNT_RECORDING_BYTES,
   MAX_BLOB_BYTES,
   RECORDING_REQUIRES_PRO,
 } from "@/lib/recording/limits";
+import { recordingKey } from "@/lib/storage/objects";
 
 /**
  * Session recordings: list and create.
@@ -37,6 +45,14 @@ import {
  * number the quota counts, and a quota that trusts the party being counted is
  * not a quota. It is also simply the more correct number: it describes the bytes
  * this route actually stored.
+ *
+ * Where it stored them is not this file's business. `writeBody` puts the
+ * envelope in a bucket or in a `bytea` column depending on how the deployment
+ * is configured, and the only thing that shows here is the ordering: the bytes
+ * are written before the row, and a row that fails to insert takes them back
+ * out. lib/recording/blobs.ts says why that direction and not the other.
+ * `size_bytes` stays in Postgres either way, because the ceiling below is an
+ * accounting question and does not move with the bytes.
  *
  * Two ceilings apply on the way in, both from lib/recording/limits.ts so that
  * /pricing and the recordings page can state the same figures this route
@@ -264,19 +280,50 @@ export async function POST(request: Request) {
     ownedDeviceId = owned?.id ?? null;
   }
 
-  const [row] = await db
-    .insert(schema.recording)
-    .values({
-      id: crypto.randomUUID(),
-      userId: user.id,
-      deviceId: ownedDeviceId,
-      targetRef: (targetRef as string | undefined) ?? null,
-      ciphertext: Buffer.from(blob, "utf8"),
-      sizeBytes,
-      durationMs: Math.round(durationMs),
-      startedAt: started,
-    })
-    .returning(SUMMARY);
+  // The id is minted here rather than by the insert, because the object key is
+  // built from it and the object is written first.
+  const id = crypto.randomUUID();
+
+  let stored: StoredBody;
+  try {
+    stored = await writeBody(recordingKey(user.id, id), Buffer.from(blob, "utf8"));
+  } catch (e) {
+    if (!(e instanceof BodyError)) throw e;
+    return Response.json(
+      {
+        error:
+          "The recording could not be stored: " +
+          e.message +
+          " Nothing was saved, and the transcript is still in the tab that made it — try again " +
+          "before reloading.",
+      },
+      { status: statusForBodyError(e) },
+    );
+  }
+
+  let row;
+  try {
+    [row] = await db
+      .insert(schema.recording)
+      .values({
+        id,
+        userId: user.id,
+        deviceId: ownedDeviceId,
+        targetRef: (targetRef as string | undefined) ?? null,
+        ...stored,
+        sizeBytes,
+        durationMs: Math.round(durationMs),
+        startedAt: started,
+      })
+      .returning(SUMMARY);
+  } catch (e) {
+    // The bytes are already in the bucket and no row will ever name them. Taking
+    // them back out here is what keeps the sweep script a backstop rather than a
+    // requirement — see discardBody, which is deliberately quiet about its own
+    // failures because this path is already failing.
+    await discardBody(stored);
+    throw e;
+  }
 
   return Response.json({ recording: row }, { status: 201 });
 }

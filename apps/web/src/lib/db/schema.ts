@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   customType,
   index,
   integer,
@@ -392,6 +394,21 @@ export const relayUsage = pgTable(
  * ciphertext. Duration and size are outside it because a list has to sort and
  * a quota has to count, and neither reveals anything the row's existence does
  * not already.
+ *
+ * ── Where the bytes are
+ *
+ * Two places, and exactly one of them per row. `ciphertext` is the original
+ * `bytea` column and `storage_key` names an object in a bucket; which one a
+ * deployment writes is decided by whether `R2_*` is configured, and both are
+ * read, so a deployment that switches on object storage keeps serving every
+ * recording it already had. See lib/storage/objects.ts for why both are
+ * supported rather than one being the answer.
+ *
+ * The check constraint is the part worth being strict about. Two sources for
+ * one blob is how a read path acquires a silent preference, and a row carrying
+ * both would make "which is the real one" a question about the order of two
+ * `if`s in a route. Never both, enforced by Postgres. Both null is allowed and
+ * means the bytes are gone — which is what a revoked share is, below.
  */
 export const recording = pgTable(
   "recording",
@@ -403,14 +420,29 @@ export const recording = pgTable(
     deviceId: text("device_id").references(() => device.id, { onDelete: "set null" }),
     /** Blinded host reference. Never a hostname. */
     targetRef: text("target_ref"),
-    ciphertext: bytea("ciphertext").notNull(),
+    /** The envelope itself, when this deployment stores blobs in Postgres. */
+    ciphertext: bytea("ciphertext"),
+    /**
+     * `rec/<user_id>/<recording_id>`, when it stores them in a bucket.
+     *
+     * Stored rather than derived from the two ids it is built from, because a
+     * key that is recomputed on every read is a key that changes when the
+     * formula does, and the objects already in the bucket would not follow.
+     */
+    storageKey: text("storage_key"),
     /** Outside the envelope so a quota can be counted without decrypting. */
     sizeBytes: integer("size_bytes").notNull(),
     durationMs: integer("duration_ms").notNull(),
     startedAt: timestamp("started_at").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("recording_user_time_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("recording_user_time_idx").on(t.userId, t.createdAt),
+    check(
+      "recording_one_body_idx",
+      sql`not (${t.ciphertext} is not null and ${t.storageKey} is not null)`,
+    ),
+  ],
 );
 
 /**
@@ -424,12 +456,19 @@ export const recording = pgTable(
  * link is the key, so possession is access, and the only controls that mean
  * anything are how long it lives and how many times it can be spent.
  *
- * Revoking stamps `revoked_at`, empties `ciphertext` and zeroes `size_bytes`,
- * which stops the next fetch and returns the bytes to the account's ceiling. The
- * row survives so the owner can still see that a link existed and when it was
- * cut off. What it does not do is recall anything: a viewer who already fetched
- * the transcript has it, and the link still carries a working key — there is
- * simply nothing left for it to open. The UI must not imply more than that.
+ * Revoking stamps `revoked_at`, destroys the second copy of the bytes and zeroes
+ * `size_bytes`, which stops the next fetch and returns the bytes to the
+ * account's ceiling. The row survives so the owner can still see that a link
+ * existed and when it was cut off. What it does not do is recall anything: a
+ * viewer who already fetched the transcript has it, and the link still carries a
+ * working key — there is simply nothing left for it to open. The UI must not
+ * imply more than that.
+ *
+ * "Destroys the bytes" is one of two statements depending on where they are:
+ * `ciphertext` is set to null, or the object `storage_key` names is deleted from
+ * the bucket and the column nulled. A revoked share is therefore the row shape
+ * with neither column set, which is why the check constraint forbids both being
+ * present rather than requiring one of them.
  *
  * The timestamps here are `timestamptz` while the rest of this schema is not,
  * and the difference is deliberate. `expires_at` is the only timestamp in the
@@ -466,8 +505,13 @@ export const recordingShare = pgTable(
      *
      * The cost is a second copy of the bytes, which is why a share counts
      * against the account's recording storage the same as the original.
+     *
+     * Null when the copy lives in the bucket instead — see `storage_key` — or
+     * when the share has been revoked and there is no copy at all.
      */
-    ciphertext: bytea("ciphertext").notNull(),
+    ciphertext: bytea("ciphertext"),
+    /** `share/<user_id>/<share_id>`, when the copy is an object. */
+    storageKey: text("storage_key"),
     /** Counted against the storage ceiling, so it is stored rather than derived. */
     sizeBytes: integer("size_bytes").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -484,6 +528,10 @@ export const recordingShare = pgTable(
     // index that sum scans every share row in the deployment on every "Create
     // the link" — the same argument recording_user_time_idx exists for.
     index("recording_share_user_idx").on(t.userId),
+    check(
+      "recording_share_one_body_idx",
+      sql`not (${t.ciphertext} is not null and ${t.storageKey} is not null)`,
+    ),
   ],
 );
 

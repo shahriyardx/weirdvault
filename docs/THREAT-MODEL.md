@@ -23,8 +23,8 @@ this way isn't a claim, it's marketing.
 | Authenticator secret and backup codes | `two_factor.secret` and `two_factor.backup_codes`, both encrypted under `BETTER_AUTH_SECRET` (`storeBackupCodes: "encrypted"`, set in `lib/auth.ts`) | Session impersonation, at a higher bar than the row above: it needs a database dump **and** the application secret, because verifying a code means the server can read it back. Ten working sign-in credentials per enrolled account if both are held. Still **not** vault decryption — nothing here derives a key |
 | Connection metadata | Relay logs, `audit_event` | Reveals which hosts exist and when they're used |
 | Transfer volume | `relay_usage` | Per-account bytes moved through the relay, totalled by month. Names no host and no destination — it is one row per account per month — but it is the one piece of connection metadata we now retain in a database rather than only in a log, and it says when an account was busy |
-| Session recordings | `recording.ciphertext`, encrypted under the vault key | Terminal output verbatim, including anything a shell echoed back. Undecryptable without the user's password, and deleted only when the user deletes it — nothing expires them |
-| Shared recordings | `recording_share.ciphertext` — the same transcript again, encrypted under a key that exists only for that link | The same contents, with a different exposure: the key is in the link's fragment and never reaches us, but possession of the link *is* access. `GET /api/shares/[token]` serves this copy with no session, so anyone the link is forwarded to can read it. Bounded by a required expiry and an optional view limit; revoking destroys this copy, expiry only stops it being served |
+| Session recordings | `recording.ciphertext`, or an object in a bucket that `recording.storage_key` names — encrypted under the vault key either way | Terminal output verbatim, including anything a shell echoed back. Undecryptable without the user's password, and deleted only when the user deletes it — nothing expires them |
+| Shared recordings | `recording_share.ciphertext`, or its own object under `recording_share.storage_key` — the same transcript again, encrypted under a key that exists only for that link | The same contents, with a different exposure: the key is in the link's fragment and never reaches us, but possession of the link *is* access. `GET /api/shares/[token]` serves this copy with no session, so anyone the link is forwarded to can read it. Bounded by a required expiry and an optional view limit; revoking destroys this copy, expiry only stops it being served |
 
 ---
 
@@ -140,6 +140,30 @@ somebody enumerating tokens — that is 256 bits of path segment doing the work
 alone. This joins the IP-level limits listed as outstanding in §7. Nothing prunes
 expired shares either: an expired link stops being served at once, but its
 ciphertext stays on disk until the owner revokes it or deletes the recording.
+
+**Never presigned.** When recordings are configured to live in a bucket, this
+route still fetches the object with server credentials and serves the bytes
+itself. It is the one place where handing back a signed URL would break a
+promise rather than merely widen a surface: revocation is enforced here, when
+the request arrives, and a signed URL is redeemed at a bucket that has never
+heard of `revoked_at`. There is no presign function anywhere in the codebase,
+which is how that stays true rather than being a convention.
+
+### Where the recording bytes are
+
+A bucket, when one is configured, and a `bytea` column otherwise. The
+distinction is deliberately *not* a trust boundary: what is stored is an AES-GCM
+envelope whose key is derived from the user's password in their browser and
+never transmitted, so a compromised bucket, a leaked access key or a
+misconfigured public URL each yield ciphertext and nothing else. That is why
+moving the bytes out was a plumbing change and not a security decision.
+
+It is not a reason to be casual about the bucket. The object key is
+`rec/<user-id>/<recording-id>`, which is filing rather than a capability —
+unguessable is not authorized, and neither is unreadable. The bucket must have
+no public URL (no `r2.dev` subdomain, no custom domain); every read goes through
+a route that has already checked who is asking. The credentials belong to the
+control plane only. The relay never touches a recording and holds none of them.
 
 ### What we do NOT protect against
 Stated plainly rather than buried:
@@ -343,7 +367,18 @@ with no cloud IAM role attached.
    open control connection carrying no new sessions. Closing it would require
    the control plane to reach into every relay instance, which is the coupling
    the token design exists to avoid.
-7. **No third-party audit yet.** This document used to say one had to happen
+7. **Recording objects can outlive the account that owned them.** Deleting an
+   account cascades the rows away and then purges `rec/<user-id>/` and
+   `share/<user-id>/` from the bucket. The purge runs after the deletion has
+   committed — deliberately, because running it first would let a deletion that
+   then failed destroy the recordings of an account that still exists — so a
+   bucket that is unreachable at that moment leaves objects nothing points at.
+   They are ciphertext with no surviving key holder and no row naming them, and
+   `scripts/sweep-recordings.mjs` removes them by exactly that property. Nothing
+   schedules it yet, which is what makes this a residual risk rather than a
+   handled case. Deployments with no bucket configured are unaffected: the bytes
+   are in the row and go with it.
+8. **No third-party audit yet.** This document used to say one had to happen
    before charging for anything. Billing shipped first, so that commitment was
    broken rather than met, and recording it here is more useful than quietly
    rewording it. No outside firm has reviewed this code and there is no SOC 2 or
@@ -362,4 +397,6 @@ with no cloud IAM role attached.
    warning.
 5. Publish what the relay can see, in the product, not just here.
 6. Get a third-party audit. This was written as "before billing anyone" and
-   billing shipped without one; see residual risk 7.
+   billing shipped without one; see residual risk 8.
+7. If recordings are in a bucket, the bucket has no public URL and no route
+   hands out a presigned one. Proxying is the only way bytes reach a browser.

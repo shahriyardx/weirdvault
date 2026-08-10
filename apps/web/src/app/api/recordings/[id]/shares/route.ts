@@ -6,11 +6,20 @@ import { tierFor } from "@/lib/billing/subscription";
 import { canRecordOnTier } from "@/lib/billing/tiers";
 import { db, schema } from "@/lib/db";
 import {
+  BodyError,
+  destroyBody,
+  discardBody,
+  statusForBodyError,
+  writeBody,
+  type StoredBody,
+} from "@/lib/recording/blobs";
+import {
   MAX_ACCOUNT_RECORDING_BYTES,
   MAX_BLOB_BYTES,
   RECORDING_REQUIRES_PRO,
 } from "@/lib/recording/limits";
 import { MAX_SHARE_TTL_MS, MAX_SHARE_VIEWS, newShareToken } from "@/lib/recording/share";
+import { shareKey } from "@/lib/storage/objects";
 
 /**
  * The owner's side of sharing: make a link, list the links, cut one off.
@@ -261,20 +270,46 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const token = newShareToken();
+  // Minted here rather than by the insert, because the object key is built from
+  // it and the object is written first. Same ordering as POST /api/recordings,
+  // for the reasons in lib/recording/blobs.ts.
+  const shareId = crypto.randomUUID();
 
-  const [row] = await db
-    .insert(schema.recordingShare)
-    .values({
-      id: crypto.randomUUID(),
-      recordingId: id,
-      userId: user.id,
-      token,
-      ciphertext: Buffer.from(blob, "utf8"),
-      sizeBytes,
-      expiresAt: expires,
-      maxViews: views,
-    })
-    .returning(SUMMARY);
+  let stored: StoredBody;
+  try {
+    stored = await writeBody(shareKey(user.id, shareId), Buffer.from(blob, "utf8"));
+  } catch (e) {
+    if (!(e instanceof BodyError)) throw e;
+    return Response.json(
+      {
+        error:
+          "The share copy could not be stored, so no link was created: " +
+          e.message +
+          " The recording itself is untouched.",
+      },
+      { status: statusForBodyError(e) },
+    );
+  }
+
+  let row;
+  try {
+    [row] = await db
+      .insert(schema.recordingShare)
+      .values({
+        id: shareId,
+        recordingId: id,
+        userId: user.id,
+        token,
+        ...stored,
+        sizeBytes,
+        expiresAt: expires,
+        maxViews: views,
+      })
+      .returning(SUMMARY);
+  } catch (e) {
+    await discardBody(stored);
+    throw e;
+  }
 
   // The token travels back exactly once, because it is one half of a link the
   // caller is about to build and then cannot rebuild: the other half is a key
@@ -309,6 +344,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
  * anyone holding the link still holds a working key; there is simply nothing
  * left for it to open. The row itself survives, revoked and empty, so the owner
  * can still see that a link existed and when it was cut off.
+ *
+ * "Destroys the ciphertext" is one statement about two storage backends, and
+ * the second one is why this handler reads before it writes. When the copy is
+ * an object, the key has to be known before it can be deleted, and the delete
+ * has to succeed before the row stops pointing at it — otherwise revoking would
+ * report success over a share copy still sitting in a bucket, and the row that
+ * named it would be the last thing that could have found it again.
+ *
+ * This is also the one place where a presigned URL would have quietly broken a
+ * promise. Revocation is enforced when a request arrives at /api/shares/[token];
+ * a signed URL minted before it keeps working until it expires, because a bucket
+ * has never heard of `revoked_at`. Shares proxy for that reason and not as a
+ * preference — see lib/storage/objects.ts.
  */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -320,14 +368,54 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return Response.json({ error: "share (query parameter) required" }, { status: 400 });
   }
 
+  // Scoped by share, recording and owner — the same three the UPDATE below
+  // carries, so this read grants nothing the write would not have.
+  const [existing] = await db
+    .select({
+      ciphertext: schema.recordingShare.ciphertext,
+      storageKey: schema.recordingShare.storageKey,
+    })
+    .from(schema.recordingShare)
+    .where(
+      and(
+        eq(schema.recordingShare.id, shareId),
+        eq(schema.recordingShare.recordingId, id),
+        eq(schema.recordingShare.userId, user.id),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) return Response.json({ error: "not found" }, { status: 404 });
+
+  try {
+    await destroyBody(existing);
+  } catch (e) {
+    if (!(e instanceof BodyError)) throw e;
+    return Response.json(
+      {
+        error:
+          "The shared copy could not be destroyed, so the link was left working: " +
+          e.message +
+          " Nothing was changed. Try again — a link reported as revoked while its bytes are " +
+          "still fetchable would be worse than this refusal.",
+      },
+      { status: statusForBodyError(e) },
+    );
+  }
+
   // Idempotent: revoking an already-revoked share keeps the original timestamp
   // and succeeds, because the caller's intent — this link must not work — is
-  // already true and answering 404 would suggest otherwise.
+  // already true and answering 404 would suggest otherwise. Two revokes racing
+  // both delete the object, which S3 treats as idempotent too, and both land
+  // here where `coalesce` keeps the first timestamp.
   const revoked = await db
     .update(schema.recordingShare)
     .set({
       revokedAt: sql`coalesce(${schema.recordingShare.revokedAt}, now())`,
-      ciphertext: Buffer.alloc(0),
+      // Null rather than an empty buffer, so that "there are no bytes" has one
+      // spelling across both backends and the check constraint holds.
+      ciphertext: null,
+      storageKey: null,
       sizeBytes: 0,
     })
     .where(

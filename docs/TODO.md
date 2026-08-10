@@ -6,88 +6,74 @@ entry with no trigger is a wish, not a task.
 
 ---
 
-## Move recording storage to R2
+## Schedule the two maintenance scripts
 
-**Now:** `recording.ciphertext` is a `bytea` column in Postgres, written by
-`POST /api/recordings` and read back whole by `GET /api/recordings/:id`.
-`recording_share.ciphertext` holds a second, separately re-encrypted copy. Limits
-are in `apps/web/src/lib/recording/limits.ts`: 4 MB captured per session, 12 MB
-per stored blob, 1 GB per account.
+**Now:** `apps/web/scripts/prune-audit.mjs` deletes audit rows past their
+retention window, and `apps/web/scripts/sweep-recordings.mjs` deletes stored
+recording objects no row claims. Both are safe to run repeatedly, against a live
+deployment, and neither has ever run: nothing schedules them and neither is in
+the runtime image.
 
-**Why this is fine today.** Deletion is a foreign key rather than a
-reconciliation job, there is one set of credentials rather than two, and there
-are no orphaned objects to sweep. At current volume it costs nothing.
+**What is survivable about that, and what is not.** Pruning is invisible when
+skipped, because `GET /api/audit` applies the same cutoff on read — an unpruned
+row is already gone as far as the app is concerned, and running the script is
+what makes it gone from disk. The sweep is not: an orphaned object costs storage
+forever and no read path hides it.
 
-**Why it does not stay fine.** At 1 GB × N accounts the blobs are in every
-`pg_dump`, so backup size and restore time track recording volume rather than
-data volume. TOAST churn from large writes and deletes lands on a table that is
-also queried for listings, which is the read path a user waits on.
+**What to do instead.** An authenticated route per script, called by an external
+scheduler (Upstash QStash or similar) rather than a cron container this repo
+would have to assume exists. That means a shared secret in the same shape as
+`RELAY_USAGE_SECRET` — a bearer token the endpoint checks, distinct from every
+other secret, blank meaning the route refuses rather than runs unauthenticated.
 
-**What to do instead.** Object storage — R2, since egress is free and the app is
-already on Hetzner where egress is not. The row keeps its metadata and gains an
-object key; the ciphertext moves out.
+Two things the routes need that the scripts get for free from being scripts: a
+bound on how long one call may run, since a serverless invocation has a limit
+and a sweep over a large bucket does not, and an answer for concurrent
+invocations. Both are already safe to interrupt — they make real progress and
+resume — so the bound can be a batch count rather than a lock.
 
-The migration is unusually cheap here, and the reason is worth stating: the blob
-is **already ciphertext the server cannot read**. The vault key never leaves the
-browser, so the storage backend is not a trust boundary and moving the bytes to
-a third party does not weaken the threat model. That is not true of most systems
-that make this move, and it is the thing that makes it a plumbing change rather
-than a security decision.
+**Trigger:** the first real deployment with a bucket. Until then a checkout with
+production credentials is a fine way to run something only needed after a
+failure.
 
-Sketch:
+---
 
-- `recording.storage_key text` and `recording.ciphertext bytea` both nullable,
-  so rows can be read from either place while the backfill runs.
-- Write new recordings to R2 and set `storage_key`; read prefers `storage_key`
-  and falls back to `ciphertext`.
-- Backfill existing rows, then drop the column.
-- Deletion becomes two steps and can half-fail. Delete the object first and the
-  row second: a row pointing at a missing object is a broken playback, an object
-  with no row is invisible and merely costs storage. Reconcile the second case
-  with a sweep, not with a transaction that cannot exist across two systems.
-- `MAX_ACCOUNT_RECORDING_BYTES` stays enforced in Postgres from `size_bytes`.
-  The ceiling is an accounting question and does not move with the bytes.
-- Shares get the same treatment; `revoke` currently empties `ciphertext` and
-  zeroes `size_bytes`, which becomes an object delete.
+## Done, kept here for the reasoning
 
-**Who can read the object.** An R2 bucket is private. There is no public URL for
-an object unless the bucket is deliberately given one — the `r2.dev` development
-subdomain, or a custom domain attached to it. Neither is on by default and
-neither should be turned on here. Without them the only ways to read an object
-are the S3 API with an access key, a presigned URL, or a Worker binding, and all
-three are things the server does on purpose.
+### Recording storage moved to object storage
 
-So the question is not how to hide the object; it is what serves the bytes to the
-browser. Two answers, and the cheap-looking one is wrong:
+Shipped. `recording.storage_key` and `recording_share.storage_key` name an
+object; `ciphertext` is still there and still used when no bucket is configured.
+A check constraint forbids both at once. `lib/storage/` holds the SigV4 signer
+and the client, `lib/recording/blobs.ts` is the only code that knows there are
+two places bytes can be, and `lib/storage/purge.ts` removes an account's objects
+after the account is deleted.
 
-- **Proxy through the route.** `GET /api/recordings/[id]` keeps its shape and
-  swaps `row.ciphertext` for a fetch from R2 with server-side credentials. The
-  authorization surface does not change at all — same `id = ? AND user_id = ?`
-  WHERE clause — and no URL exists that works without a session cookie.
-- **Presign and redirect.** The route authorizes as it does now, then hands back
-  a short-lived signed URL and the bytes go R2 → browser. This adds a second
-  thing that grants access: the URL is a bearer credential, good for its whole
-  lifetime, to anyone who ends up holding it — browser history, a `Referer`
-  header, a proxy log, a screenshot of the address bar.
+Three decisions from the original plan that are worth not re-litigating:
 
-Take the proxy. Presigning saves server egress on a blob capped at 12 MB, and
-buys an authorization surface that is not the one the route file was written to
-keep singular.
+- **Proxy, never presign.** `GET /api/recordings/[id]` fetches the object with
+  server credentials and serves it through the same `id = ? AND user_id = ?`
+  WHERE clause it always had. A presigned URL would be a second thing that
+  grants access — a bearer credential good for its whole lifetime to whoever
+  ends up holding it, in browser history, a `Referer` header, a proxy log. There
+  is no presign function in `sigv4.ts`, which is how that stays decided.
 
-For shares it is not a preference. `/api/shares/[token]` authenticates nobody and
-revocation is a row stamp: `revoked_at` is checked when the request arrives. A
-presigned URL minted before revocation keeps working until it expires, because
-R2 has never heard of `revoked_at`. Presigning a share object means revoke stops
-meaning revoked, which is the one promise that route makes. Shares proxy.
+  For `/api/shares/[token]` it is not a preference at all. That route
+  authenticates nobody and enforces `revoked_at` when the request arrives; a
+  signed URL minted before a revocation keeps working after it, because a bucket
+  has never heard of `revoked_at`.
 
-**Neither of those is the last line.** The object is ciphertext the vault key
-opens, and that key is derived in the browser and never sent. A leaked presigned
-URL, a leaked access key, a compromised bucket — each yields an AES-GCM envelope
-and nothing else. That is the property that makes this a plumbing change, and it
-is a reason the access-control story can be simple rather than a reason it can be
-skipped: unguessable is not authorized, and neither is unreadable. Give object
-keys a `rec/<user_id>/<recording_id>` shape so account deletion and orphan sweeps
-can work by prefix, and treat that shape as filing, not as a secret.
+- **Postgres was not replaced, and there was no backfill.** Both backends are
+  read, always, in both directions. A deployment can turn a bucket on after a
+  year and every existing recording keeps playing; turning it off gives the old
+  ones back. The fallback is not scaffolding to remove later.
 
-**Trigger:** before real users have real recordings. Doing it after means a
-backfill against live data for no benefit that waiting bought.
+- **The ordering is the design.** Object before row on the way in, object before
+  row on the way out, so a half-failure always leaves an orphan rather than a
+  row pointing at nothing — the first is recoverable and the second is a
+  recording that cannot be played. A delete whose object cannot be destroyed
+  refuses rather than deleting the row anyway.
+
+What is **not** solved: nothing backfills, so a deployment that switches on a
+bucket keeps its old blobs in `pg_dump` until they are deleted. And the sweep
+that recovers orphans is still a script somebody has to run — see above.

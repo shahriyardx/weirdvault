@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
+import { BodyError, destroyBody, readBody, statusForBodyError } from "@/lib/recording/blobs";
 
 /**
  * One recording: fetch the blob, or delete it.
@@ -56,6 +57,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .select({
       id: schema.recording.id,
       ciphertext: schema.recording.ciphertext,
+      storageKey: schema.recording.storageKey,
       startedAt: schema.recording.startedAt,
       durationMs: schema.recording.durationMs,
       sizeBytes: schema.recording.sizeBytes,
@@ -67,11 +69,37 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   if (!row) return Response.json({ error: "not found" }, { status: 404 });
 
+  // The bytes may be in the row or in a bucket, and this route serves them the
+  // same either way — deliberately. The alternative was a redirect to a
+  // presigned URL, which would add a second thing that grants access to a
+  // transcript: a bearer credential good for its whole lifetime to whoever ends
+  // up holding it, in browser history, in a Referer header, in a proxy log. The
+  // authorization surface this file is arranged around is the WHERE clause
+  // above, and it stays the only one. See docs/TODO.md and lib/storage/objects.ts.
+  let blob: Buffer | null;
+  try {
+    blob = await readBody(row);
+  } catch (e) {
+    if (!(e instanceof BodyError)) throw e;
+    return Response.json({ error: e.message }, { status: statusForBodyError(e) });
+  }
+
+  // A row with no bytes at all. Nothing produces one today — a recording is
+  // written with its envelope and deleted with it — so this is the shape of a
+  // bug elsewhere rather than a state to design around, and it says so instead
+  // of throwing on `.toString()` of a null.
+  if (!blob) {
+    return Response.json(
+      { error: "This recording has no stored data. Nothing was lost that this row can recover." },
+      { status: 410 },
+    );
+  }
+
   return Response.json({
     id: row.id,
     // The same envelope the browser wrote, byte for byte. This route has never
     // been able to read it and does not become able to by serving it.
-    blob: row.ciphertext.toString("utf8"),
+    blob: blob.toString("utf8"),
     startedAt: row.startedAt,
     durationMs: row.durationMs,
     sizeBytes: row.sizeBytes,
@@ -84,6 +112,58 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  // Scoped by owner, as everything in this file is, and read before anything is
+  // destroyed because the object keys are only knowable from the rows.
+  const [row] = await db
+    .select({
+      ciphertext: schema.recording.ciphertext,
+      storageKey: schema.recording.storageKey,
+    })
+    .from(schema.recording)
+    .where(and(eq(schema.recording.id, id), eq(schema.recording.userId, user.id)))
+    .limit(1);
+
+  if (!row) return Response.json({ error: "not found" }, { status: 404 });
+
+  // The shares go too, and their bytes are a separate copy under a separate
+  // key. `recording_share` cascades from the row below, so if these are not
+  // destroyed first they become objects nothing in the database has ever heard
+  // of — the exact orphan the ordering here exists to avoid. Scoped by
+  // recording AND owner, so this cannot reach another account's shares even if
+  // the foreign key were ever loosened.
+  const shares = await db
+    .select({
+      ciphertext: schema.recordingShare.ciphertext,
+      storageKey: schema.recordingShare.storageKey,
+    })
+    .from(schema.recordingShare)
+    .where(
+      and(
+        eq(schema.recordingShare.recordingId, id),
+        eq(schema.recordingShare.userId, user.id),
+      ),
+    );
+
+  // Bytes first, row second. If the bucket refuses, the row is left exactly as
+  // it was and the caller is told — reporting a successful delete while the
+  // ciphertext is still in a bucket is the one outcome this handler must never
+  // produce, because there would be nothing left afterwards that knows the
+  // object was ever anybody's.
+  try {
+    for (const body of [row, ...shares]) await destroyBody(body);
+  } catch (e) {
+    if (!(e instanceof BodyError)) throw e;
+    return Response.json(
+      {
+        error:
+          "The stored recording could not be destroyed, so nothing was deleted: " +
+          e.message +
+          " Your recording is exactly as it was. Try again.",
+      },
+      { status: statusForBodyError(e) },
+    );
+  }
 
   // `returning` is what distinguishes "deleted" from "there was nothing of
   // yours by that id". Without it the route would report success for a delete

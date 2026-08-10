@@ -12,6 +12,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:studio": "drizzle-kit studio",
     "audit:prune": "node scripts/prune-audit.mjs",
+    "recordings:sweep": "node scripts/sweep-recordings.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
