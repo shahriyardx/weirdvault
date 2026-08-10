@@ -6,6 +6,7 @@
 | [`DEPLOY.md`](DEPLOY.md) | Self-hosting: compose, TLS, every environment variable and where its value comes from |
 | [`THREAT-MODEL.md`](THREAT-MODEL.md) | What each party can and cannot see, and what is deliberately not protected against |
 | [`TODO.md`](TODO.md) | Understood work not done yet, each with the trigger that would start it |
+| [`MULTI-ACCOUNT-AGENTS.md`](MULTI-ACCOUNT-AGENTS.md) | Planned: several accounts on one machine, reachability, and controlling an agent from the dashboard |
 | [`PHASE0-RESULTS.md`](PHASE0-RESULTS.md) · [`PHASE2-SPIKE.md`](PHASE2-SPIKE.md) | The de-risking results the architecture was chosen from |
 
 The product plan and its decision record live in [`../PLAN.md`](../PLAN.md).
