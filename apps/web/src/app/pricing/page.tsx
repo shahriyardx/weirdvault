@@ -446,7 +446,7 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
         back. A device-bound key never leaves the browser that generated it — clear that
         browser&apos;s storage and the key is gone for good; you would generate a new one and add a
         line to <code className="text-foreground">~/.ssh/authorized_keys</code>, or connect once
-        with a password and let weirdvault install it. The vault key is derived from your password
+        with a password and let WeirdVault install it. The vault key is derived from your password
         in your browser and never sent to us, so there is no reset on our side that could decrypt
         the blob — a recovery code enrolled in advance is the only way back in. It does not stand in
         for an authenticator app: if you have enrolled one, the sign-in a code attempts still stops

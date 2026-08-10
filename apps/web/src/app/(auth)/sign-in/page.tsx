@@ -6,7 +6,7 @@ import { pageMetadata } from "@/lib/seo"
 export const metadata: Metadata = pageMetadata({
   title: "Sign in",
   description:
-    "Sign in to weirdvault. Your password is stretched with Argon2id in the browser; only a one-way derived token reaches the server.",
+    "Sign in to WeirdVault. Your password is stretched with Argon2id in the browser; only a one-way derived token reaches the server.",
   path: "/sign-in",
   // The landing page is what should rank for this product. These two are
   // thin duplicates of it wrapped around a form, and an indexed sign-in page

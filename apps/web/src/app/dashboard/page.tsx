@@ -191,7 +191,7 @@ function EmptyState() {
             Nothing stored on this device yet
           </CardTitle>
           <CardDescription>
-            Three steps, none of which install anything. If you already use weirdvault elsewhere,
+            Three steps, none of which install anything. If you already use WeirdVault elsewhere,
             sign in and unlock the vault instead — your hosts and portable keys arrive with the
             first sync.
           </CardDescription>

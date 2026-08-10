@@ -40,7 +40,7 @@ const PRO_TRANSFER = formatBytes(RELAY_ALLOWANCE_BYTES.pro)
 export const metadata: Metadata = pageMetadata({
   title: "Docs",
   description:
-    "Getting started with weirdvault: authorise a key on stock sshd, understand portable and " +
+    "Getting started with WeirdVault: authorise a key on stock sshd, understand portable and " +
     "device-bound keys, move files over SFTP, and read the errors when a connection fails.",
   path: "/docs",
 })
@@ -101,7 +101,7 @@ export default function Docs() {
               <Step n={3} title="Authorise the key on the server">
                 Copy the public key and append it to <Code>~/.ssh/authorized_keys</Code> on the
                 host. If you would rather not leave the browser, connect once with a password and
-                let weirdvault write the line for you. Both routes are in{" "}
+                let WeirdVault write the line for you. Both routes are in{" "}
                 <A href="#server">Server setup</A>.
               </Step>
               <Step n={4} title="Add the host">
@@ -124,7 +124,7 @@ export default function Docs() {
           {/* -------------------------------------------------------- server */}
           <Section id="server" icon={<PlugsConnectedIcon />} title="Server setup">
             <P>
-              weirdvault speaks to stock <Code>sshd</Code>. There is no package to install, no
+              WeirdVault speaks to stock <Code>sshd</Code>. There is no package to install, no
               daemon to run, and no port to open beyond the one you already use for SSH. The entire
               server-side change is one line.
             </P>
@@ -185,7 +185,7 @@ export default function Docs() {
               <p>
                 The relay dials your server from the public internet. If the host sits behind NAT
                 with no forwarded port, or behind a firewall that only allows a specific office
-                range, the relay cannot reach it — and weirdvault has nothing on the server to open
+                range, the relay cannot reach it — and WeirdVault has nothing on the server to open
                 a tunnel back out, because there is deliberately nothing on the server.
               </p>
               <p className="mt-2">
@@ -198,7 +198,7 @@ export default function Docs() {
             <H3 className="mt-10">Password first, key after</H3>
             <P className="mt-3">
               If the server already accepts passwords, you can skip the copying entirely. Choose{" "}
-              <em>Password</em> for the first connection, and once you are authenticated weirdvault
+              <em>Password</em> for the first connection, and once you are authenticated WeirdVault
               appends the public key to <Code>authorized_keys</Code> itself, creating{" "}
               <Code>~/.ssh</Code> with the right modes if it has to. The password is used for that
               one connection; every connection after it is key-based.
@@ -251,7 +251,7 @@ export default function Docs() {
               key.
             </P>
             <P className="mt-3">
-              This is a real boundary, not a policy we promise to honour, and it is why weirdvault
+              This is a real boundary, not a policy we promise to honour, and it is why WeirdVault
               has no &ldquo;export private key&rdquo; button. It also means the largest residual
               risk is not key theft but the JavaScript we serve you — the{" "}
               <A href="/security">threat model</A> says so plainly.
@@ -321,7 +321,7 @@ export default function Docs() {
               </Row>
               <Row icon={<ArchiveIcon />} title="A tar fast path for many small files">
                 Thousands of tiny files are dominated by per-file round trips, not by bytes. When it
-                detects that shape — a <Code>node_modules</Code>, a source tree — weirdvault streams
+                detects that shape — a <Code>node_modules</Code>, a source tree — WeirdVault streams
                 the set as a single tar over the same connection and unpacks on the far side.
               </Row>
               <Row icon={<FileCodeIcon />} title="Edit remote files in place">
@@ -342,7 +342,7 @@ export default function Docs() {
 
             <H3 className="mt-8">Host key pinning</H3>
             <P className="mt-3">
-              The first time you connect, weirdvault shows the server&apos;s host key fingerprint
+              The first time you connect, WeirdVault shows the server&apos;s host key fingerprint
               and pins it once you accept. Every reconnect compares the key the server presents
               against that pin, and a mismatch refuses the connection outright — the session does
               not open and you are told which fingerprint was expected. Replacing a pin is a
@@ -408,7 +408,7 @@ export default function Docs() {
               and waits; when you open a session, the relay pairs the two.
             </P>
             <P>
-              This is the one thing weirdvault asks you to install, and only for machines that need
+              This is the one thing WeirdVault asks you to install, and only for machines that need
               it. It is a pipe to a port: it holds no SSH credentials, performs no handshake, and
               sees the same ciphertext the relay does. Its key says &ldquo;the machine you enrolled
               is here&rdquo; and nothing more.
@@ -517,7 +517,7 @@ export default function Docs() {
                   matching host keys.
                 </p>
                 <p className="mt-2">
-                  The other one is that something is sitting between you and the server. weirdvault
+                  The other one is that something is sitting between you and the server. WeirdVault
                   cannot tell these apart, which is exactly why it refuses instead of asking. Verify
                   the fingerprint out of band — on the console, through your provider&apos;s
                   dashboard, from a machine you trust:
@@ -529,7 +529,7 @@ export default function Docs() {
                   </span>
                 </CodeBlock>
                 <p className="mt-2">
-                  Only when that matches what weirdvault reports should you clear the pin on the
+                  Only when that matches what WeirdVault reports should you clear the pin on the
                   host and reconnect.
                 </p>
               </Problem>
@@ -575,7 +575,7 @@ export default function Docs() {
                   the total can carry up to a minute of the previous month&rsquo;s traffic.
                 </p>
                 <p className="mt-2">
-                  The limit is on <em>our</em> relay, not on weirdvault. It exists because that
+                  The limit is on <em>our</em> relay, not on WeirdVault. It exists because that
                   bandwidth costs us money. Point <Code>NEXT_PUBLIC_RELAY_URL</Code> at a relay you
                   run and nothing counts anything — see{" "}
                   <A href="/security#self-host">self-hosting</A>.
@@ -625,7 +625,7 @@ export default function Docs() {
                 </p>
                 <p className="mt-2">
                   It could be delivered by asking you to install a small daemon on your laptop. That
-                  is exactly the thing weirdvault promises you never have to do, and the promise is
+                  is exactly the thing WeirdVault promises you never have to do, and the promise is
                   worth more than the feature, so this is a decision rather than a gap.
                 </p>
                 <p className="mt-2">

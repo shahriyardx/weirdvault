@@ -6,7 +6,7 @@ import { pageMetadata } from "@/lib/seo"
 export const metadata: Metadata = pageMetadata({
   title: "Create account",
   description:
-    "Create a weirdvault account. Unlimited hosts and devices, encrypted sync included, and a vault key that is derived on your device and never sent.",
+    "Create a WeirdVault account. Unlimited hosts and devices, encrypted sync included, and a vault key that is derived on your device and never sent.",
   path: "/sign-up",
   // The landing page is what should rank for this product. These two are
   // thin duplicates of it wrapped around a form, and an indexed sign-in page

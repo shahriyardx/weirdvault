@@ -681,7 +681,7 @@ function ImportKeyDialog({
                   />
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Used once, here, to decrypt the file. It is not stored, and the key does not
-                    keep it — weirdvault has nowhere to type a passphrase at connect time.
+                    keep it — WeirdVault has nowhere to type a passphrase at connect time.
                   </p>
                 </div>
               )}
@@ -1097,7 +1097,7 @@ function EmptyState({ onGenerate, onImport }: { onGenerate: () => void; onImport
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Setting up a server is one line appended to ~/.ssh/authorized_keys on stock sshd. If you
-            would rather not paste it, connect once with a password and weirdvault installs the line
+            would rather not paste it, connect once with a password and WeirdVault installs the line
             for you.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">

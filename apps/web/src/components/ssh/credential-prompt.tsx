@@ -165,7 +165,7 @@ function PromptForm({
                 able to fill it rather than copy it across by hand every time.
                 What is NOT declared is autoComplete="current-password" — that
                 is the signal meaning "the login password for this site", and it
-                is how the weirdvault account password would end up being sent to
+                is how the WeirdVault account password would end up being sent to
                 a remote server. "off" is ignored by browsers on password fields,
                 which is a nuisance elsewhere and exactly right here: managers
                 still offer their entries, and nothing claims this is ours. */}

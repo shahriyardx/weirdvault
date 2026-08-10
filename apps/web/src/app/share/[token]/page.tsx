@@ -383,7 +383,7 @@ function FailureState({ kind, detail }: { kind: ShareFailure; detail: string }) 
 
       <Card className="mt-4">
         <CardContent className="flex flex-col items-start gap-2">
-          <p className="font-heading text-sm font-medium">What weirdvault is</p>
+          <p className="font-heading text-sm font-medium">What WeirdVault is</p>
           <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
             An SSH client that runs in a browser tab, with a vault the server cannot read. Session
             recordings are encrypted before they are stored, and a share link carries its own key so

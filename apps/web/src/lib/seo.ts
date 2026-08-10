@@ -25,14 +25,25 @@ import { configuredOrigin } from "@/lib/origin"
  *
  * ── Titles
  *
- * The root layout sets a `%s · weirdvault` template, so a page passes the bare
+ * The root layout sets a `%s · WeirdVault` template, so a page passes the bare
  * page name and gets the suffix. What a page must NOT do is repeat the product
  * name in its own title, which is how titles like
- * "weirdvault Pricing · weirdvault" happen.
+ * "WeirdVault Pricing · WeirdVault" happen.
  */
 
-/** The product name, in the one place both the template and the OG tags read. */
-export const SITE_NAME = "weirdvault"
+/**
+ * The product name as it is *displayed* — title case, everywhere a person reads
+ * it: the browser tab, search results, link previews, the wordmark, the footer.
+ *
+ * Lowercase "weirdvault" survives wherever it is an identifier rather than a
+ * name, and those are deliberately not renamed: the agent binary
+ * (`weirdvault-agent`), its config directory, the cookie prefix, localStorage
+ * keys, generated filenames, the Postgres role and database, and the HKDF
+ * domain separator in the recovery route — that last one is part of a
+ * cryptographic construction, and changing the string would invalidate every
+ * envelope already issued.
+ */
+export const SITE_NAME = "WeirdVault"
 
 /**
  * The one-sentence description of the product.
@@ -118,6 +129,41 @@ export function pageMetadata({
  * somebody's terminal session into a chat preview, which is the opposite of
  * what a link nobody else should read is for.
  */
+/**
+ * A dashboard page's title, kept out of the index.
+ *
+ * Every page under /dashboard is a Client Component, which cannot export
+ * metadata — so each route carries a one-line layout that calls this. Without
+ * them every tab in the application read "WeirdVault — SSH in your browser",
+ * which is useless the moment somebody has three of them open, and is the state
+ * a person spends most of their time looking at.
+ *
+ * Spreads NOINDEX rather than restating it: a dashboard page that gained a title
+ * and quietly lost its noindex would be the worst possible outcome of adding
+ * one.
+ */
+export function dashboardMetadata(title: string): Metadata {
+  return { ...NOINDEX, title }
+}
+
+/**
+ * The dashboard layout's own metadata, which has to carry the title template as
+ * well as a title.
+ *
+ * Next applies `title.template` to *child* segments and not to the segment that
+ * declares it — and a segment that sets a plain string title declares no
+ * template, so its children have none either. The dashboard layout sets one, so
+ * without this every page under it rendered a bare "Hosts" or "Terminal" with
+ * no product name at all: the tab said less than it had before the titles were
+ * added.
+ */
+export function dashboardRootMetadata(): Metadata {
+  return {
+    ...NOINDEX,
+    title: { default: "Dashboard", template: `%s · ${SITE_NAME}` },
+  }
+}
+
 export const NOINDEX: Metadata = {
   robots: { index: false, follow: false, nocache: true },
   // Explicitly none, rather than inheriting the root layout's "/" — a page

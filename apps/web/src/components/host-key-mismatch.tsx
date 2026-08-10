@@ -31,7 +31,7 @@ export function HostKeyMismatchWarning() {
             {mismatch.host}:{mismatch.port}
           </b>{" "}
           is not the one pinned for this host. Either the server was rebuilt, or something is
-          intercepting this connection. weirdvault refused to continue.
+          intercepting this connection. WeirdVault refused to continue.
         </p>
 
         <dl className="space-y-1 text-[11px]">

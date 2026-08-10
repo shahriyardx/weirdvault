@@ -8,7 +8,7 @@ import { VaultUnlock } from "@/components/vault-unlock"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { SessionProvider } from "@/lib/ssh/session-provider"
 import { VaultSync } from "@/lib/vault/auto-sync"
-import { NOINDEX } from "@/lib/seo"
+import { dashboardRootMetadata } from "@/lib/seo"
 import { accountGate } from "@/lib/auth"
 
 /**
@@ -17,8 +17,11 @@ import { accountGate } from "@/lib/auth"
  * sign-in page — a dozen duplicates standing in for pages the public cannot
  * reach. robots.ts disallows the path as well; this is the half that still
  * applies to a crawler that ignores robots.txt.
+ *
+ * The title is the overview's own, and the fallback for any dashboard route
+ * that has not given itself one.
  */
-export const metadata = NOINDEX
+export const metadata = dashboardRootMetadata()
 
 /**
  * The dashboard is the application, not a section of the website.

@@ -18,7 +18,7 @@ import { pageMetadata } from "@/lib/seo"
 export const metadata: Metadata = pageMetadata({
   title: "Security",
   description:
-    "How weirdvault terminates SSH inside the browser tab, what the relay and control plane can and cannot see, " +
+    "How WeirdVault terminates SSH inside the browser tab, what the relay and control plane can and cannot see, " +
     "and the residual risks we have not solved.",
   path: "/security",
 })
@@ -147,7 +147,7 @@ export default function SecurityPage() {
       <PageHeader
         eyebrow="Security"
         title="What we can and cannot see"
-        description="weirdvault terminates SSH inside your browser tab, so our security story is an argument about where bytes are decrypted. Here is that architecture, what it actually guarantees, and — in the same detail — what it does not."
+        description="WeirdVault terminates SSH inside your browser tab, so our security story is an argument about where bytes are decrypted. Here is that architecture, what it actually guarantees, and — in the same detail — what it does not."
         actions={
           <Button asChild variant="outline">
             <Link href="#threat-model">Threat model</Link>
@@ -175,7 +175,7 @@ export default function SecurityPage() {
               A browser cannot open a raw TCP socket, so something has to sit between the tab and
               port 22. In most browser SSH products that something is a server which speaks SSH on
               your behalf: it holds your key, it decrypts your session, and you are trusting it with
-              everything. weirdvault is built the other way round — the SSH client is a WebAssembly
+              everything. WeirdVault is built the other way round — the SSH client is a WebAssembly
               module running in the page, and the thing in the middle is a dumb pipe.
             </P>
 

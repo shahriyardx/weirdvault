@@ -1080,7 +1080,7 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
             codes={codes}
             format={(c) => c}
             filename={`weirdvault-backup-codes-${new Date().toISOString().slice(0, 10)}.txt`}
-            fileTitle="weirdvault two-factor backup codes"
+            fileTitle="WeirdVault two-factor backup codes"
             fileNote="Each code works once, in place of a code from your authenticator app. Anyone holding one can complete a sign-in that has already got past your password."
             warning="Shown once. Save them before you leave this page."
             onAcknowledge={() => setCodes(null)}
@@ -2297,7 +2297,7 @@ function GeneratedCodes({
   onAcknowledge,
   format = formatRecoveryCode,
   filename = `weirdvault-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`,
-  fileTitle = "weirdvault recovery codes",
+  fileTitle = "WeirdVault recovery codes",
   fileNote = "Each code works once. Anyone holding one can sign in and read your vault.",
   warning = "Shown once. Save them before you leave this page.",
 }: {
@@ -2503,7 +2503,7 @@ function ImportSection() {
           // right file.
           reason: looksLikeEnvelope(parsed)
             ? `This is a vault export in format v${String((parsed as { v: unknown }).v)}, which this build cannot read. It was written by a newer version of weirdvault.`
-            : "This is not a weirdvault vault export. Expected a JSON object with v, iv and ct fields.",
+            : "This is not a WeirdVault vault export. Expected a JSON object with v, iv and ct fields.",
         })
         return
       }

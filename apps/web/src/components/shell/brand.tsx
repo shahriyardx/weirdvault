@@ -35,7 +35,7 @@ export function Brand({
           size === "sm" ? "size-5" : "size-6",
         )}
       />
-      <span className={labelClassName}>weirdvault</span>
+      <span className={labelClassName}>WeirdVault</span>
     </Link>
   )
 }
