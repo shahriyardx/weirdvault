@@ -135,8 +135,8 @@ function ConnectForm() {
 
       <h1 className="font-heading text-xl font-semibold tracking-tight">Connect to a host</h1>
       <p className="text-muted-foreground mt-1.5 text-sm">
-        The SSH client runs in this tab. Your key signs the handshake without
-        ever being readable, and the host key is pinned on first contact.
+        The SSH client runs in this tab. Your key signs the handshake without ever being readable,
+        and the host key is pinned on first contact.
       </p>
 
       <form onSubmit={submit} className="mt-6 space-y-4">
@@ -169,9 +169,9 @@ function ConnectForm() {
                 </Select>
                 {machine && (
                   <p className="text-muted-foreground text-xs leading-relaxed">
-                    SSH straight into {machine.label}. It has no address to dial, so
-                    its agent carries the connection to sshd there — same handshake,
-                    same key, same host key check.
+                    SSH straight into {machine.label}. It has no address to dial, so its agent
+                    carries the connection to sshd there — same handshake, same key, same host key
+                    check.
                   </p>
                 )}
               </div>
@@ -223,7 +223,6 @@ function ConnectForm() {
                 required
               />
             </div>
-
           </CardContent>
         </Card>
 
@@ -267,9 +266,8 @@ function ConnectForm() {
                   Use a password once
                 </Label>
                 <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
-                  Connect with your password and webxterm appends the public key
-                  to authorized_keys for you, so you never have to run a command
-                  by hand.
+                  Connect with your password and webxterm appends the public key to authorized_keys
+                  for you, so you never have to run a command by hand.
                 </p>
               </div>
               <Switch id="usepw" checked={usePassword} onCheckedChange={setUsePassword} />

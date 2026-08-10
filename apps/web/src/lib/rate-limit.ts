@@ -162,10 +162,7 @@ export async function enforce(
   rule: Rule,
   options: { userId?: string | null; message?: string } = {},
 ): Promise<Response | null> {
-  const decision = await consume(
-    keyFor(bucket, subjectFor(request.headers, options.userId)),
-    rule,
-  );
+  const decision = await consume(keyFor(bucket, subjectFor(request.headers, options.userId)), rule);
   if (decision.allowed) return null;
   return tooManyRequests(decision, options.message);
 }

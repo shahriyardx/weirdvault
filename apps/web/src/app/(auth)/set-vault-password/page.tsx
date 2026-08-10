@@ -49,11 +49,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  hasVaultPassword,
-  registerDeviceAfterOAuth,
-  useSession,
-} from "@/lib/auth-client";
+import { hasVaultPassword, registerDeviceAfterOAuth, useSession } from "@/lib/auth-client";
 import { deriveSecrets } from "@/lib/vault/kdf";
 import { setVaultKey } from "@/lib/vault/session";
 
@@ -190,8 +186,8 @@ export default function SetVaultPasswordPage() {
         <CardHeader>
           <CardTitle className="text-base">Your account could not be checked</CardTitle>
           <CardDescription>
-            We could not read which sign-in methods this account has, so this page
-            does not know whether it has anything to do. Nothing was changed.
+            We could not read which sign-in methods this account has, so this page does not know
+            whether it has anything to do. Nothing was changed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -229,9 +225,8 @@ export default function SetVaultPasswordPage() {
         <CardHeader>
           <CardTitle className="text-base">You are not signed in</CardTitle>
           <CardDescription>
-            This page sets the vault password for an account that is already
-            authenticated. There is no session in this tab, so there is nothing
-            to set it on.
+            This page sets the vault password for an account that is already authenticated. There is
+            no session in this tab, so there is nothing to set it on.
           </CardDescription>
         </CardHeader>
         <CardFooter className="text-xs text-muted-foreground">
@@ -259,11 +254,10 @@ export default function SetVaultPasswordPage() {
           Set your vault password
         </CardTitle>
         <CardDescription>
-          GitHub has proved who you are. It has not given us anything that could
-          decrypt your data — and neither has anything else, which is the point.
-          Your hosts and keys are encrypted with a key derived from a password on
-          your own device, so that key has to come from something we never see.
-          This is that something.
+          GitHub has proved who you are. It has not given us anything that could decrypt your data —
+          and neither has anything else, which is the point. Your hosts and keys are encrypted with
+          a key derived from a password on your own device, so that key has to come from something
+          we never see. This is that something.
         </CardDescription>
       </CardHeader>
 
@@ -272,22 +266,20 @@ export default function SetVaultPasswordPage() {
             can reproduce. Stated before the field, not after it. */}
         <div className="space-y-2 rounded-md border border-border bg-card/40 p-3 text-xs/relaxed text-muted-foreground">
           <p>
-            This is a second secret, and it is not your GitHub password. Signing
-            in proves who you are; this derives the key that opens your vault.
-            The two are separate on purpose: we hold a one-way branch of this one
-            and could not open your vault with it if we were made to.
+            This is a second secret, and it is not your GitHub password. Signing in proves who you
+            are; this derives the key that opens your vault. The two are separate on purpose: we
+            hold a one-way branch of this one and could not open your vault with it if we were made
+            to.
           </p>
           <p>
-            We cannot reset it. There is no email link that would help, because
-            there is nothing on our side to reset — losing it means the
-            ciphertext stays closed for everyone, including us. Enrol recovery
-            codes in Settings once you are in.
+            We cannot reset it. There is no email link that would help, because there is nothing on
+            our side to reset — losing it means the ciphertext stays closed for everyone, including
+            us. Enrol recovery codes in Settings once you are in.
           </p>
           <p>
-            Your key is tied to <span className="text-foreground">{email}</span>,
-            the address GitHub gave us. Changing your primary email at GitHub
-            later will not change it here, which is deliberate: the address is
-            part of the derivation, and moving it would strand the vault.
+            Your key is tied to <span className="text-foreground">{email}</span>, the address GitHub
+            gave us. Changing your primary email at GitHub later will not change it here, which is
+            deliberate: the address is part of the derivation, and moving it would strand the vault.
           </p>
         </div>
 
@@ -308,8 +300,8 @@ export default function SetVaultPasswordPage() {
               aria-describedby="vault-password-hint"
             />
             <p id="vault-password-hint" className="text-xs/relaxed text-muted-foreground">
-              Ten characters or more. It is never stored anywhere, on your device
-              or ours, so choose something you can reproduce exactly.
+              Ten characters or more. It is never stored anywhere, on your device or ours, so choose
+              something you can reproduce exactly.
             </p>
           </div>
 
@@ -330,9 +322,7 @@ export default function SetVaultPasswordPage() {
                 every other password field checks itself against a vault that
                 already exists. */}
             {confirm.length > 0 && confirm !== password && (
-              <p className="text-xs/relaxed text-destructive">
-                The two do not match.
-              </p>
+              <p className="text-xs/relaxed text-destructive">The two do not match.</p>
             )}
           </div>
 
@@ -359,22 +349,19 @@ export default function SetVaultPasswordPage() {
           </Button>
 
           <p className="text-xs/relaxed text-muted-foreground">
-            The button pauses for a second or two — longer on a phone. That is
-            the key derivation running here. The wait is the work.
+            The button pauses for a second or two — longer on a phone. That is the key derivation
+            running here. The wait is the work.
           </p>
         </form>
       </CardContent>
 
       <CardFooter className="flex-col items-start gap-2 text-xs text-muted-foreground">
         <p>
-          This password also becomes a second way in: email and password will work
-          from now on, alongside GitHub.
+          This password also becomes a second way in: email and password will work from now on,
+          alongside GitHub.
         </p>
         <p>
-          <Link
-            href="/security"
-            className="underline underline-offset-4 hover:text-foreground"
-          >
+          <Link href="/security" className="underline underline-offset-4 hover:text-foreground">
             How the key is derived, and what we store instead
           </Link>
         </p>

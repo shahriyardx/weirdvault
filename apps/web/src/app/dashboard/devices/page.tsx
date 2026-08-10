@@ -262,8 +262,7 @@ export default function DevicesPage() {
         });
       } else {
         toast.success(`Revoked ${device.label}`, {
-          description:
-            "The id is tombstoned, so that browser cannot register under it again.",
+          description: "The id is tombstoned, so that browser cannot register under it again.",
         });
       }
     } catch (e) {
@@ -280,9 +279,7 @@ export default function DevicesPage() {
     // The API sorts by last seen. Revoked records are kept for reference rather
     // than for action, so they sink below the live ones; sort is stable, so the
     // server's ordering survives within each group.
-    return [...devices].sort(
-      (a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null),
-    );
+    return [...devices].sort((a, b) => Number(a.revokedAt !== null) - Number(b.revokedAt !== null));
   }, [devices]);
 
   const stats = useMemo(() => {
@@ -309,25 +306,21 @@ export default function DevicesPage() {
         <AlertTitle>Revoking is permanent for that device</AlertTitle>
         <AlertDescription>
           <p>
-            Revoking marks the record revoked, deletes the sessions stamped with
-            that device id, and refuses any later attempt to register that
-            browser&rsquo;s signing key again. A session is stamped when that
-            browser registers, which happens on every sign-in — a session older
-            than its browser&rsquo;s first registration carries no device id and
-            is not matched, so use &ldquo;sign out everywhere&rdquo; in Settings
-            if you need to be certain. The id is tombstoned rather than deleted,
-            so it is never reissued and older activity rows stay resolvable.
-            Signing in there again enrols a new device, with a new key and a new
-            record.
+            Revoking marks the record revoked, deletes the sessions stamped with that device id, and
+            refuses any later attempt to register that browser&rsquo;s signing key again. A session
+            is stamped when that browser registers, which happens on every sign-in — a session older
+            than its browser&rsquo;s first registration carries no device id and is not matched, so
+            use &ldquo;sign out everywhere&rdquo; in Settings if you need to be certain. The id is
+            tombstoned rather than deleted, so it is never reissued and older activity rows stay
+            resolvable. Signing in there again enrols a new device, with a new key and a new record.
           </p>
           <p>
-            What it does not do: reach into a browser you no longer control. A
-            connection already open there is not torn down, a relay token already
-            issued stays valid for the rest of its minute, and device-bound keys
-            stay in that browser&rsquo;s storage. If the device is lost, also
-            remove those keys from{" "}
-            <code className="text-foreground">~/.ssh/authorized_keys</code> on the
-            hosts it could reach.
+            What it does not do: reach into a browser you no longer control. A connection already
+            open there is not torn down, a relay token already issued stays valid for the rest of
+            its minute, and device-bound keys stay in that browser&rsquo;s storage. If the device is
+            lost, also remove those keys from{" "}
+            <code className="text-foreground">~/.ssh/authorized_keys</code> on the hosts it could
+            reach.
           </p>
         </AlertDescription>
       </Alert>
@@ -350,13 +343,12 @@ export default function DevicesPage() {
               {localBoundKeys !== null && localBoundKeys > 0 && (
                 <>
                   {" · "}
-                  {localBoundKeys} device-bound {localBoundKeys === 1 ? "key" : "keys"}{" "}
-                  in this browser
+                  {localBoundKeys} device-bound {localBoundKeys === 1 ? "key" : "keys"} in this
+                  browser
                 </>
               )}
-              . Key counts exist for this browser only: a device-bound key never
-              leaves the machine that made it, so neither the server nor this page
-              can say what any other device holds.
+              . Key counts exist for this browser only: a device-bound key never leaves the machine
+              that made it, so neither the server nor this page can say what any other device holds.
             </CardDescription>
             <CardAction>
               <Button
@@ -396,16 +388,14 @@ export default function DevicesPage() {
         <CardContent className="flex items-start gap-2.5 text-muted-foreground">
           <ShieldWarningIcon className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className="min-w-0">
-            A device record is a label, a platform string and an Ed25519 public
-            key that this browser generated and cannot export. Revoking it ends
-            the sessions stamped with its id and refuses that key for good. Say
-            what is not true of it: the server never challenges the key, so
-            registering a device is authenticated by your session and not by a
-            signature — a stolen session could enrol a device of its own choosing
-            until a challenge-response exists. Last-seen networks are truncated to
-            a /24 for IPv4 and a /48 for IPv6, and are only as trustworthy as the
-            proxy in front of the app; with none configured they are recorded as
-            unknown rather than guessed.{" "}
+            A device record is a label, a platform string and an Ed25519 public key that this
+            browser generated and cannot export. Revoking it ends the sessions stamped with its id
+            and refuses that key for good. Say what is not true of it: the server never challenges
+            the key, so registering a device is authenticated by your session and not by a signature
+            — a stolen session could enrol a device of its own choosing until a challenge-response
+            exists. Last-seen networks are truncated to a /24 for IPv4 and a /48 for IPv6, and are
+            only as trustworthy as the proxy in front of the app; with none configured they are
+            recorded as unknown rather than guessed.{" "}
             <Link href="/security" className="text-primary hover:underline">
               Read the threat model
             </Link>
@@ -598,12 +588,11 @@ function RevokeDialog({
               —
             </span>
             <span className="min-w-0">
-              Sessions stamped with this device id are deleted, so that
-              browser&rsquo;s next request is rejected — with up to five minutes
-              of lag, because a session that has read itself recently is served
-              from a short-lived cookie cache rather than the database. A session
-              that was never tied to a device id is not matched at all, and stays
-              live until it expires or is signed out.
+              Sessions stamped with this device id are deleted, so that browser&rsquo;s next request
+              is rejected — with up to five minutes of lag, because a session that has read itself
+              recently is served from a short-lived cookie cache rather than the database. A session
+              that was never tied to a device id is not matched at all, and stays live until it
+              expires or is signed out.
             </span>
           </li>
           <li className="flex gap-2">
@@ -611,8 +600,8 @@ function RevokeDialog({
               —
             </span>
             <span className="min-w-0">
-              The id is tombstoned, not deleted, so it can never be registered
-              again and existing activity rows still resolve to a name.
+              The id is tombstoned, not deleted, so it can never be registered again and existing
+              activity rows still resolve to a name.
             </span>
           </li>
           <li className="flex gap-2">
@@ -686,9 +675,8 @@ function UnauthorizedState() {
         </span>
         <p className="font-heading text-sm font-medium">Sign in to see your devices</p>
         <p className="max-w-lg text-muted-foreground">
-          The device registry belongs to an account, and this session is not
-          signed in — or it has just ended, which is what happens when you revoke
-          the browser you are sitting at.
+          The device registry belongs to an account, and this session is not signed in — or it has
+          just ended, which is what happens when you revoke the browser you are sitting at.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
           <Link href="/sign-in">Sign in</Link>
@@ -713,14 +701,11 @@ function ErrorState({
       <AlertTitle>Could not load your devices</AlertTitle>
       <AlertDescription>
         <p>
-          {reason} Nothing is listed below because nothing was read — this is not
-          an empty registry, it is an unanswered request.
+          {reason} Nothing is listed below because nothing was read — this is not an empty registry,
+          it is an unanswered request.
         </p>
         <Button variant="outline" size="sm" className="mt-1" onClick={onRetry} disabled={busy}>
-          <ArrowsClockwiseIcon
-            data-icon="inline-start"
-            className={cn(busy && "animate-spin")}
-          />
+          <ArrowsClockwiseIcon data-icon="inline-start" className={cn(busy && "animate-spin")} />
           Try again
         </Button>
       </AlertDescription>
@@ -740,9 +725,8 @@ function EmptyState() {
         </span>
         <p className="font-heading text-sm font-medium">No devices registered</p>
         <p className="max-w-lg text-muted-foreground">
-          A device is registered the first time a browser enrols with this
-          account. The registry is genuinely empty — the request succeeded and
-          returned nothing.
+          A device is registered the first time a browser enrols with this account. The registry is
+          genuinely empty — the request succeeded and returned nothing.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
           <Link href="/dashboard/terminal">Open terminal</Link>

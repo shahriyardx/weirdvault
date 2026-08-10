@@ -71,18 +71,11 @@ export default function DashboardOverview() {
 
     (async () => {
       try {
-        const [hosts, keys, pins] = await Promise.all([
-          listHosts(),
-          listStoredKeys(),
-          listPins(),
-        ]);
+        const [hosts, keys, pins] = await Promise.all([listHosts(), listStoredKeys(), listPins()]);
         if (!cancelled) setSnapshot({ hosts, keys, pins, readAt: Date.now() });
       } catch (e) {
         if (cancelled) return;
-        setError(
-          (e as Error)?.message ??
-            "IndexedDB is unavailable in this browser context.",
-        );
+        setError((e as Error)?.message ?? "IndexedDB is unavailable in this browser context.");
         setSnapshot({ hosts: [], keys: [], pins: [], readAt: Date.now() });
       }
     })();
@@ -113,9 +106,9 @@ export default function DashboardOverview() {
           <ShieldWarningIcon />
           <AlertTitle>Local storage could not be read</AlertTitle>
           <AlertDescription>
-            {error} Private browsing windows and blocked site data both prevent
-            the vault from opening. Nothing was lost — the records are still on
-            any device where you have unlocked the vault.
+            {error} Private browsing windows and blocked site data both prevent the vault from
+            opening. Nothing was lost — the records are still on any device where you have unlocked
+            the vault.
           </AlertDescription>
         </Alert>
       )}
@@ -198,9 +191,9 @@ function EmptyState() {
             Nothing stored on this device yet
           </CardTitle>
           <CardDescription>
-            Three steps, none of which install anything. If you already use
-            webxterm elsewhere, sign in and unlock the vault instead — your hosts
-            and portable keys arrive with the first sync.
+            Three steps, none of which install anything. If you already use webxterm elsewhere, sign
+            in and unlock the vault instead — your hosts and portable keys arrive with the first
+            sync.
           </CardDescription>
         </CardHeader>
 
@@ -249,9 +242,9 @@ function EmptyState() {
         <CardContent className="flex items-start gap-2.5 text-muted-foreground">
           <LockKeyIcon className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className="min-w-0">
-            This page stays empty until you add something, even if your account
-            already has hosts. The vault is a zero-knowledge blob — the server
-            cannot list it, search it, or render it for you.
+            This page stays empty until you add something, even if your account already has hosts.
+            The vault is a zero-knowledge blob — the server cannot list it, search it, or render it
+            for you.
           </p>
         </CardContent>
       </Card>
@@ -316,20 +309,14 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
 
   return (
     <div className="mt-6 space-y-6">
-      <CredentialPrompt
-        pending={prompt.pending}
-        keys={usableKeys}
-        onSettle={prompt.settle}
-      />
+      <CredentialPrompt pending={prompt.pending} keys={usableKeys} onSettle={prompt.settle} />
       {/* ------------------------------------------------------------ stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={<HardDrivesIcon />}
           label="Hosts"
           value={hosts.length}
-          caption={
-            hosts.length === 0 ? "None saved on this device" : "Saved on this device"
-          }
+          caption={hosts.length === 0 ? "None saved on this device" : "Saved on this device"}
         />
         <Stat
           icon={<KeyIcon />}
@@ -365,9 +352,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
           <Card>
             <CardHeader className="border-b border-border">
               <CardTitle>Your hosts</CardTitle>
-              <CardDescription>
-                Quick connect, ordered by last use.
-              </CardDescription>
+              <CardDescription>Quick connect, ordered by last use.</CardDescription>
               <CardAction>
                 <Button asChild variant="ghost" size="xs">
                   <Link href="/dashboard/hosts">
@@ -400,9 +385,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
                             by itself on first connection, and a mismatch
                             refuses the connection outright rather than asking. */}
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate font-medium text-foreground">
-                            {h.label}
-                          </span>
+                          <span className="truncate font-medium text-foreground">{h.label}</span>
                         </div>
                         <p className="truncate text-muted-foreground">
                           {h.username}@{h.hostname}:{h.port}
@@ -429,8 +412,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
 
             {hosts.length > 6 && (
               <CardContent className="border-t border-border pt-(--card-spacing) text-muted-foreground">
-                {hosts.length - 6} more{" "}
-                {hosts.length - 6 === 1 ? "host" : "hosts"} on this device.{" "}
+                {hosts.length - 6} more {hosts.length - 6 === 1 ? "host" : "hosts"} on this device.{" "}
                 <Link href="/dashboard/hosts" className="text-primary hover:underline">
                   See all
                 </Link>
@@ -444,8 +426,8 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
             <CardHeader className="border-b border-border">
               <CardTitle>Recent activity</CardTitle>
               <CardDescription>
-                Reconstructed from local records. Session contents are never
-                recorded, here or anywhere else.
+                Reconstructed from local records. Session contents are never recorded, here or
+                anywhere else.
               </CardDescription>
               <CardAction>
                 <Button asChild variant="ghost" size="xs">
@@ -467,10 +449,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
               ) : (
                 <ul className="divide-y divide-border">
                   {activity.slice(0, 7).map((e) => (
-                    <li
-                      key={e.id}
-                      className="flex items-start gap-3 px-(--card-spacing) py-2.5"
-                    >
+                    <li key={e.id} className="flex items-start gap-3 px-(--card-spacing) py-2.5">
                       <span
                         aria-hidden
                         className="mt-px grid size-6 shrink-0 place-items-center rounded-sm border border-border bg-secondary text-primary"
@@ -501,18 +480,14 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
                 Security posture
               </CardTitle>
               <CardDescription>
-                What this device can actually verify, not what we would like to
-                claim.
+                What this device can actually verify, not what we would like to claim.
               </CardDescription>
             </CardHeader>
 
             <CardContent className="px-0">
               <ul className="divide-y divide-border">
                 {posture.map((p) => (
-                  <li
-                    key={p.text}
-                    className="flex items-start gap-2.5 px-(--card-spacing) py-2.5"
-                  >
+                  <li key={p.text} className="flex items-start gap-2.5 px-(--card-spacing) py-2.5">
                     <span
                       className={cn(
                         "mt-px shrink-0",
@@ -531,9 +506,7 @@ function PopulatedState({ snapshot }: { snapshot: VaultSnapshot }) {
                     </span>
                     <span className="min-w-0 text-foreground">
                       {p.text}
-                      {p.hint && (
-                        <span className="block text-muted-foreground">{p.hint}</span>
-                      )}
+                      {p.hint && <span className="block text-muted-foreground">{p.hint}</span>}
                     </span>
                   </li>
                 ))}
@@ -570,9 +543,7 @@ function Stat({
       <CardContent className="min-w-0">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <span className="[&_svg]:size-3.5">{icon}</span>
-          <span className="truncate text-[10px] font-medium tracking-wider uppercase">
-            {label}
-          </span>
+          <span className="truncate text-[10px] font-medium tracking-wider uppercase">{label}</span>
         </div>
         <p className="mt-1.5 font-heading text-2xl leading-none font-semibold tabular-nums">
           {value}
@@ -629,11 +600,7 @@ interface ActivityEntry {
  * timestamps the records already carry, which is honest about its resolution:
  * one entry per record, not one per event.
  */
-function buildActivity(
-  hosts: Host[],
-  keys: StoredKey[],
-  pins: PinnedHostKey[],
-): ActivityEntry[] {
+function buildActivity(hosts: Host[], keys: StoredKey[], pins: PinnedHostKey[]): ActivityEntry[] {
   const entries: ActivityEntry[] = [];
 
   for (const h of hosts) {

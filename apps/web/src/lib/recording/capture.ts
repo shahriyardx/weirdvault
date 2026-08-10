@@ -547,9 +547,7 @@ async function persist(recorder: ActiveRecorder) {
     // A plan refusal is the one failure a retry cannot get past. Everything else
     // — a locked vault, a dropped connection, a full account — is a state that
     // can change while the transcript sits here.
-    recorder.retryable = !(
-      error instanceof RecordingRequestError && error.kind === "plan"
-    );
+    recorder.retryable = !(error instanceof RecordingRequestError && error.kind === "plan");
     rebuild();
     announceFailure(recorder);
   }

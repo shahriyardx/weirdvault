@@ -355,10 +355,7 @@ export default function HostsPage() {
           {loading ? (
             <LoadingRows />
           ) : hosts.length === 0 ? (
-            <EmptyState
-              onAdd={() => setForm(blankForm())}
-              onImport={() => setImportOpen(true)}
-            />
+            <EmptyState onAdd={() => setForm(blankForm())} onImport={() => setImportOpen(true)} />
           ) : filtered.length === 0 ? (
             <NoMatches query={query} onClear={() => setQuery("")} />
           ) : (
@@ -396,8 +393,8 @@ export default function HostsPage() {
 
         {!loading && hosts.length > 0 && (
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            Search runs in this tab. The vault syncs as an encrypted blob, so the
-            server has nothing to query.
+            Search runs in this tab. The vault syncs as an encrypted blob, so the server has nothing
+            to query.
           </p>
         )}
       </div>
@@ -408,8 +405,8 @@ export default function HostsPage() {
           <DialogHeader>
             <DialogTitle>{form?.id ? "Edit host" : "Add host"}</DialogTitle>
             <DialogDescription>
-              Saved to this browser and to the encrypted vault. Nothing here is
-              readable by the relay or by us.
+              Saved to this browser and to the encrypted vault. Nothing here is readable by the
+              relay or by us.
             </DialogDescription>
           </DialogHeader>
 
@@ -486,10 +483,7 @@ export default function HostsPage() {
               {form.auth === "key" ? (
                 <div className="grid gap-1.5">
                   <Label htmlFor="host-key">Key</Label>
-                  <Select
-                    value={form.keyId}
-                    onValueChange={(v) => setForm({ ...form, keyId: v })}
-                  >
+                  <Select value={form.keyId} onValueChange={(v) => setForm({ ...form, keyId: v })}>
                     <SelectTrigger id="host-key" className="w-full">
                       <SelectValue placeholder="Choose a key" />
                     </SelectTrigger>
@@ -503,15 +497,15 @@ export default function HostsPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Device-bound keys only work in this browser. Portable keys
-                    travel with the vault.
+                    Device-bound keys only work in this browser. Portable keys travel with the
+                    vault.
                   </p>
                 </div>
               ) : (
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  You will be asked for the password each time you connect. We do
-                  not store it — a saved password would be a plaintext credential
-                  in your vault, and the vault is the one thing we cannot read.
+                  You will be asked for the password each time you connect. We do not store it — a
+                  saved password would be a plaintext credential in your vault, and the vault is the
+                  one thing we cannot read.
                 </p>
               )}
 
@@ -560,9 +554,8 @@ export default function HostsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {pendingDelete?.label}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the saved connection on every synced device. The
-              pinned host key and any SSH keys stay where they are, and the
-              server itself is untouched.
+              This deletes the saved connection on every synced device. The pinned host key and any
+              SSH keys stay where they are, and the server itself is untouched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -582,11 +575,7 @@ export default function HostsPage() {
         onImported={handleImported}
       />
 
-      <CredentialPrompt
-        pending={prompt.pending}
-        keys={usableKeys}
-        onSettle={prompt.settle}
-      />
+      <CredentialPrompt pending={prompt.pending} keys={usableKeys} onSettle={prompt.settle} />
     </>
   );
 }
@@ -841,9 +830,8 @@ function ImportConfigDialog({
         <DialogHeader>
           <DialogTitle>Import from ssh_config</DialogTitle>
           <DialogDescription>
-            Reads the Host blocks out of an OpenSSH config and turns the ones
-            that describe a specific machine into saved hosts. Nothing is
-            written until you have looked at the list.
+            Reads the Host blocks out of an OpenSSH config and turns the ones that describe a
+            specific machine into saved hosts. Nothing is written until you have looked at the list.
           </DialogDescription>
         </DialogHeader>
 
@@ -863,17 +851,14 @@ function ImportConfigDialog({
                 className="w-full resize-y rounded-none border border-input bg-transparent px-2.5 py-2 font-mono text-[11px] leading-relaxed transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
               />
               <p className="text-xs text-muted-foreground">
-                Usually ~/.ssh/config. It is parsed in this tab and never sent
-                anywhere.
+                Usually ~/.ssh/config. It is parsed in this tab and never sent anywhere.
               </p>
             </div>
 
             <div className="grid gap-1.5">
               <Label htmlFor="config-file">Or choose the file</Label>
               <Input id="config-file" type="file" onChange={handleFile} />
-              {fileName && (
-                <p className="text-xs text-muted-foreground">Read from {fileName}.</p>
-              )}
+              {fileName && <p className="text-xs text-muted-foreground">Read from {fileName}.</p>}
             </div>
 
             {loadingCore && (
@@ -886,8 +871,7 @@ function ImportConfigDialog({
                   {percent === null
                     ? `Loading the SSH core — ${megabytes(core.loaded)} so far`
                     : `Loading the SSH core — ${megabytes(core.loaded)} of about ${megabytes(core.total)}`}
-                  . The config parser lives in the same WebAssembly module as SSH
-                  itself.
+                  . The config parser lives in the same WebAssembly module as SSH itself.
                 </p>
               </div>
             )}
@@ -899,9 +883,9 @@ function ImportConfigDialog({
                 <AlertDescription>
                   <p>{coreError}</p>
                   <p>
-                    The config parser lives in that module, so there is nothing
-                    here to read the file with until it arrives. It is a static
-                    file and a retry is usually all it takes.
+                    The config parser lives in that module, so there is nothing here to read the
+                    file with until it arrives. It is a static file and a retry is usually all it
+                    takes.
                   </p>
                   <p>
                     <Button
@@ -947,7 +931,8 @@ function ImportConfigDialog({
                 : `${candidates.length} ${candidates.length === 1 ? "entry" : "entries"} found${
                     duplicates > 0 ? `, ${duplicates} already saved` : ""
                   }.`}
-              {audit && audit.skipped.length > 0 &&
+              {audit &&
+                audit.skipped.length > 0 &&
                 ` ${audit.skipped.length} skipped — listed below.`}
             </p>
 
@@ -964,9 +949,9 @@ function ImportConfigDialog({
                   spellCheck={false}
                 />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  A Host block with no User leaves ssh to fall back on your local
-                  login name. A browser cannot see that name, so those entries
-                  need one typed here before they can be saved.
+                  A Host block with no User leaves ssh to fall back on your local login name. A
+                  browser cannot see that name, so those entries need one typed here before they can
+                  be saved.
                 </p>
               </div>
             )}
@@ -1009,16 +994,16 @@ function ImportConfigDialog({
                             </span>
                             {entry.identityFile && (
                               <span className="mt-1 block text-muted-foreground">
-                                IdentityFile {entry.identityFile} — a path this browser cannot
-                                open. <Link href="/dashboard/keys">Import that key</Link> and
-                                pick it on the host afterwards.
+                                IdentityFile {entry.identityFile} — a path this browser cannot open.{" "}
+                                <Link href="/dashboard/keys">Import that key</Link> and pick it on
+                                the host afterwards.
                               </span>
                             )}
                             {entry.proxyJump && (
                               <span className="mt-1 block text-muted-foreground">
-                                ProxyJump {entry.proxyJump} — not supported yet. This host is
-                                saved as a direct connection, which will only work if the
-                                relay can reach it.
+                                ProxyJump {entry.proxyJump} — not supported yet. This host is saved
+                                as a direct connection, which will only work if the relay can reach
+                                it.
                               </span>
                             )}
                           </span>
@@ -1039,9 +1024,7 @@ function ImportConfigDialog({
                   {audit.skipped.map((skip, i) => (
                     <li key={`${skip.pattern}-${i}`} className="px-2.5 py-2">
                       <code className="text-foreground">Host {skip.pattern}</code>
-                      <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                        {skip.reason}
-                      </p>
+                      <p className="mt-0.5 leading-relaxed text-muted-foreground">{skip.reason}</p>
                     </li>
                   ))}
                 </ul>
@@ -1055,17 +1038,16 @@ function ImportConfigDialog({
                 <AlertDescription>
                   {audit.includes > 0 && (
                     <p>
-                      {audit.includes} Include{" "}
-                      {audit.includes === 1 ? "line is" : "lines are"} ignored. Whatever those
-                      files declare is not in the list above; paste them in separately.
+                      {audit.includes} Include {audit.includes === 1 ? "line is" : "lines are"}{" "}
+                      ignored. Whatever those files declare is not in the list above; paste them in
+                      separately.
                     </p>
                   )}
                   {audit.matches > 0 && (
                     <p>
-                      {audit.matches} Match{" "}
-                      {audit.matches === 1 ? "block is" : "blocks are"} not understood, and the
-                      options inside are read as though they applied unconditionally. Check the
-                      addresses above against the file before importing.
+                      {audit.matches} Match {audit.matches === 1 ? "block is" : "blocks are"} not
+                      understood, and the options inside are read as though they applied
+                      unconditionally. Check the addresses above against the file before importing.
                     </p>
                   )}
                 </AlertDescription>
@@ -1077,12 +1059,11 @@ function ImportConfigDialog({
               <AlertTitle>What is not carried over</AlertTitle>
               <AlertDescription>
                 <p>
-                  Every entry is saved as a key-authenticated host with no key
-                  chosen, so you are asked which one to use on the first
-                  connection. IdentityFile cannot be followed — the file is on
-                  your disk, and this page has no access to it — so import the
-                  key itself on the <Link href="/dashboard/keys">Keys page</Link>.
-                  ProxyJump is not implemented at all.
+                  Every entry is saved as a key-authenticated host with no key chosen, so you are
+                  asked which one to use on the first connection. IdentityFile cannot be followed —
+                  the file is on your disk, and this page has no access to it — so import the key
+                  itself on the <Link href="/dashboard/keys">Keys page</Link>. ProxyJump is not
+                  implemented at all.
                 </p>
               </AlertDescription>
             </Alert>
@@ -1183,9 +1164,7 @@ function HostRow({
         <Fingerprint pin={pin} />
       </TableCell>
 
-      <TableCell className="hidden text-muted-foreground sm:table-cell">
-        {lastUsed(host)}
-      </TableCell>
+      <TableCell className="hidden text-muted-foreground sm:table-cell">{lastUsed(host)}</TableCell>
 
       <TableCell className="text-right">
         {/* Connecting is why this list exists, so it is a button rather than
@@ -1228,8 +1207,8 @@ function Fingerprint({ pin }: { pin?: PinnedHostKey }) {
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          No host key pinned yet. The first connection pins whatever the server
-          presents, and every reconnect after that is checked against it.
+          No host key pinned yet. The first connection pins whatever the server presents, and every
+          reconnect after that is checked against it.
         </TooltipContent>
       </Tooltip>
     );
@@ -1267,15 +1246,14 @@ function EmptyState({ onAdd, onImport }: { onAdd: () => void; onImport: () => vo
         <div className="max-w-xl">
           <h2 className="font-heading text-sm font-medium">No hosts saved yet</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            A host is a label, an address and the key to use. Everything you add
-            is encrypted in the browser before it is stored, and the ciphertext
-            syncs to your other devices, so the same list is there when you open
-            a tab somewhere else.
+            A host is a label, an address and the key to use. Everything you add is encrypted in the
+            browser before it is stored, and the ciphertext syncs to your other devices, so the same
+            list is there when you open a tab somewhere else.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            The server holds a blob it has no key for, which means it cannot
-            search your hosts on your behalf. That is why the search box above
-            filters locally, over records this tab has already decrypted.
+            The server holds a blob it has no key for, which means it cannot search your hosts on
+            your behalf. That is why the search box above filters locally, over records this tab has
+            already decrypted.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1298,12 +1276,10 @@ function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-3 py-10">
-        <h2 className="font-heading text-sm font-medium">
-          Nothing matches &ldquo;{query}&rdquo;
-        </h2>
+        <h2 className="font-heading text-sm font-medium">Nothing matches &ldquo;{query}&rdquo;</h2>
         <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          The filter looks at labels, addresses, usernames, folders and tags on
-          the hosts this tab has decrypted.
+          The filter looks at labels, addresses, usernames, folders and tags on the hosts this tab
+          has decrypted.
         </p>
         <Button variant="outline" onClick={onClear}>
           Clear search

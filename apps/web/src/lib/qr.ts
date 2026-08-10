@@ -422,12 +422,7 @@ function drawVersion(set: Setter, size: number, version: number) {
 }
 
 /** XOR the mask over every non-function module. Self-inverse. */
-function applyMask(
-  modules: boolean[][],
-  reserved: boolean[][],
-  size: number,
-  mask: number,
-) {
+function applyMask(modules: boolean[][], reserved: boolean[][], size: number, mask: number) {
   for (let row = 0; row < size; row++) {
     for (let col = 0; col < size; col++) {
       if (reserved[row][col]) continue;

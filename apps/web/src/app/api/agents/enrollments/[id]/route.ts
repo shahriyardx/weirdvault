@@ -19,10 +19,7 @@ import { db, schema } from "@/lib/db";
  * clean up for the sake of a few seconds' latency nobody is watching for.
  */
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
@@ -36,10 +33,7 @@ export async function GET(
     })
     .from(schema.agentEnrollment)
     .where(
-      and(
-        eq(schema.agentEnrollment.id, id),
-        eq(schema.agentEnrollment.userId, session.user.id),
-      ),
+      and(eq(schema.agentEnrollment.id, id), eq(schema.agentEnrollment.userId, session.user.id)),
     )
     .limit(1);
 

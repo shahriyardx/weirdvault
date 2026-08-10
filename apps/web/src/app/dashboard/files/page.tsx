@@ -89,8 +89,8 @@ export default function FilesPage() {
         <div className="max-w-sm text-center">
           <h2 className="font-heading text-sm font-medium">No sessions open</h2>
           <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-            Connect to a host to browse, upload and edit files. SFTP rides the
-            same connection as the terminal.
+            Connect to a host to browse, upload and edit files. SFTP rides the same connection as
+            the terminal.
           </p>
           <Button asChild className="mt-4" size="sm">
             <Link href="/dashboard/connect">

@@ -98,9 +98,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * cutoff moves continuously rather than dropping a month of history at midnight
  * on the first, which is the behaviour "30 days" describes to a reader.
  */
-export function auditRetentionCutoff(
-  tier: AuditRetentionTier,
-  now: Date = new Date(),
-): Date {
+export function auditRetentionCutoff(tier: AuditRetentionTier, now: Date = new Date()): Date {
   return new Date(now.getTime() - auditRetentionDays(tier) * DAY_MS);
 }

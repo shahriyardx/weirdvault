@@ -30,9 +30,8 @@ export function HostKeyMismatchWarning() {
           <b>
             {mismatch.host}:{mismatch.port}
           </b>{" "}
-          is not the one pinned for this host. Either the server was rebuilt, or
-          something is intercepting this connection. webxterm refused to
-          continue.
+          is not the one pinned for this host. Either the server was rebuilt, or something is
+          intercepting this connection. webxterm refused to continue.
         </p>
 
         <dl className="space-y-1 text-[11px]">
@@ -51,9 +50,9 @@ export function HostKeyMismatchWarning() {
         </dl>
 
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Only clear the pin if you know why the key changed. Verify the new
-          fingerprint out of band first — run <code>ssh-keyscan</code> from a
-          trusted network, or check your provider&apos;s console.
+          Only clear the pin if you know why the key changed. Verify the new fingerprint out of band
+          first — run <code>ssh-keyscan</code> from a trusted network, or check your provider&apos;s
+          console.
         </p>
 
         <div className="flex flex-wrap items-center gap-2">

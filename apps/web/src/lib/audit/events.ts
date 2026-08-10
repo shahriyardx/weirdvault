@@ -82,8 +82,7 @@ type Validator = (v: unknown) => boolean;
 
 const isFingerprint: Validator = (v) =>
   typeof v === "string" && /^SHA256:[A-Za-z0-9+/]{43}$/.test(v);
-const isUuid: Validator = (v) =>
-  typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);
+const isUuid: Validator = (v) => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);
 const isSmallInt: Validator = (v) =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1e12;
 const isBoolean: Validator = (v) => typeof v === "boolean";
@@ -129,8 +128,15 @@ export const AUDIT_METADATA: Record<AuditEventType, Record<string, Validator>> =
   "passkey.used": {},
   "connection.opened": { port: isSmallInt },
   "connection.closed": { bytesUp: isSmallInt, bytesDown: isSmallInt, durationMs: isSmallInt },
-  "key.installed": { keyId: isUuid, fingerprint: isFingerprint, result: isEnum("installed", "already-present") },
-  "hostkey.pinned": { fingerprint: isFingerprint, keyType: isEnum("ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256") },
+  "key.installed": {
+    keyId: isUuid,
+    fingerprint: isFingerprint,
+    result: isEnum("installed", "already-present"),
+  },
+  "hostkey.pinned": {
+    fingerprint: isFingerprint,
+    keyType: isEnum("ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256"),
+  },
   "hostkey.mismatch": { expected: isFingerprint, presented: isFingerprint },
   "hostkey.cleared": { fingerprint: isFingerprint },
 };

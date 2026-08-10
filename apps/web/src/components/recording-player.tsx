@@ -2,11 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
-import {
-  ArrowCounterClockwiseIcon,
-  PauseIcon,
-  PlayIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { ArrowCounterClockwiseIcon, PauseIcon, PlayIcon } from "@phosphor-icons/react/dist/ssr";
 import "@xterm/xterm/css/xterm.css";
 
 import { Button } from "@/components/ui/button";
@@ -168,11 +164,7 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
       // and the grid rarely filled the box, and a clipped right-hand column now
       // that it does.
       const available = Math.max(1, outer.clientWidth - BOX_PADDING * 2);
-      const next = Math.min(
-        available / naturalWidth,
-        room / naturalHeight,
-        MAX_SCALE,
-      );
+      const next = Math.min(available / naturalWidth, room / naturalHeight, MAX_SCALE);
       setScale(next);
       setBoxHeight(naturalHeight * next);
     };
@@ -375,9 +367,9 @@ export function RecordingPlayer({ cast }: { cast: Cast }) {
       </div>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {cast.header.cols}×{cast.header.rows} as recorded, scaled to fit. This is
-        a replay of what the terminal printed — nothing here is connected to a
-        host and nothing you press is sent anywhere.
+        {cast.header.cols}×{cast.header.rows} as recorded, scaled to fit. This is a replay of what
+        the terminal printed — nothing here is connected to a host and nothing you press is sent
+        anywhere.
       </p>
     </div>
   );

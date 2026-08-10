@@ -87,12 +87,7 @@ export function verifyAgentSignature(args: {
     });
 
     // Ed25519 signs the message directly; the algorithm argument must be null.
-    return cryptoVerify(
-      null,
-      verifyingMessage(args.agentId, args.nonce),
-      key,
-      signature,
-    );
+    return cryptoVerify(null, verifyingMessage(args.agentId, args.nonce), key, signature);
   } catch {
     return false;
   }

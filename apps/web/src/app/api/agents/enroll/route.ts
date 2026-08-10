@@ -86,10 +86,7 @@ export async function POST(request: Request) {
   const releaseUrl = agentReleaseUrl(new URL(request.url).origin);
   const relayUrl = agentRelayUrl();
   if (!relayUrl) {
-    return Response.json(
-      { error: "this deployment has no relay configured" },
-      { status: 503 },
-    );
+    return Response.json({ error: "this deployment has no relay configured" }, { status: 503 });
   }
 
   let body: Record<string, unknown>;

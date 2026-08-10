@@ -48,8 +48,7 @@ async function run<T>(
 export const idbGet = <T>(store: StoreName, key: string) =>
   run<T | undefined>(store, "readonly", (s) => s.get(key));
 
-export const idbGetAll = <T>(store: StoreName) =>
-  run<T[]>(store, "readonly", (s) => s.getAll());
+export const idbGetAll = <T>(store: StoreName) => run<T[]>(store, "readonly", (s) => s.getAll());
 
 export const idbPut = <T>(store: StoreName, key: string, value: T) =>
   run<IDBValidKey>(store, "readwrite", (s) => s.put(value, key));
@@ -57,5 +56,4 @@ export const idbPut = <T>(store: StoreName, key: string, value: T) =>
 export const idbDelete = (store: StoreName, key: string) =>
   run<undefined>(store, "readwrite", (s) => s.delete(key));
 
-export const idbClear = (store: StoreName) =>
-  run<undefined>(store, "readwrite", (s) => s.clear());
+export const idbClear = (store: StoreName) => run<undefined>(store, "readwrite", (s) => s.clear());

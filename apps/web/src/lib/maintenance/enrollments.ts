@@ -39,9 +39,7 @@ export interface EnrollmentPruneResult {
   abandoned: number;
 }
 
-export async function pruneAbandonedEnrollments(
-  dryRun: boolean,
-): Promise<EnrollmentPruneResult> {
+export async function pruneAbandonedEnrollments(dryRun: boolean): Promise<EnrollmentPruneResult> {
   const cutoff = new Date(Date.now() - GRACE_MS);
 
   // Both `used_at IS NULL` and the cutoff, together. Without the first this

@@ -208,11 +208,7 @@ export default function MachinesPage() {
         </div>
       )}
 
-      <CredentialPrompt
-        pending={prompt.pending}
-        keys={usableKeys}
-        onSettle={prompt.settle}
-      />
+      <CredentialPrompt pending={prompt.pending} keys={usableKeys} onSettle={prompt.settle} />
 
       {enrolling && (
         <EnrollDialog
@@ -378,10 +374,9 @@ function AgentRow({
               <AlertDialogHeader>
                 <AlertDialogTitle>Revoke {agent.label}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  The agent on that machine stops being able to connect, and no new
-                  session can be opened through it. Sessions already open keep running.
-                  To use the machine again you would install the agent afresh with a new
-                  token.
+                  The agent on that machine stops being able to connect, and no new session can be
+                  opened through it. Sessions already open keep running. To use the machine again
+                  you would install the agent afresh with a new token.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -405,11 +400,10 @@ function AgentRow({
             <AlertDialogHeader>
               <AlertDialogTitle>Remove {agent.label} from the list?</AlertDialogTitle>
               <AlertDialogDescription>
-                Revoking retired this machine&rsquo;s key permanently. Removing the
-                record frees that key, so a machine still holding its agent.json
-                could enrol it again — with a fresh token, which only you can
-                create. If you revoked it because it was lost or stolen, leave it
-                here.
+                Revoking retired this machine&rsquo;s key permanently. Removing the record frees
+                that key, so a machine still holding its agent.json could enrol it again — with a
+                fresh token, which only you can create. If you revoked it because it was lost or
+                stolen, leave it here.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -458,9 +452,12 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
   // Held in a ref so the polling effect can stop without being restarted by
   // every state change it causes.
   const stopped = useRef(false);
-  useEffect(() => () => {
-    stopped.current = true;
-  }, []);
+  useEffect(
+    () => () => {
+      stopped.current = true;
+    },
+    [],
+  );
 
   useEffect(() => {
     void (async () => {
@@ -544,8 +541,8 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
           <div className="space-y-3">
             <CommandBlock command={state.command} />
             <p className="text-muted-foreground text-sm">
-              Waiting for the machine to connect… This token is single-use and expires
-              in ten minutes.
+              Waiting for the machine to connect… This token is single-use and expires in ten
+              minutes.
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
               Prefer not to pipe to a shell? Download the agent, then run{" "}
@@ -562,8 +559,8 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
               <CheckCircleIcon />
               <AlertTitle>{state.agent.hostname ?? "A machine"} connected</AlertTitle>
               <AlertDescription>
-                Check that this fingerprint matches the one printed on that machine
-                before you rely on it. They are the same key, shown twice on purpose.
+                Check that this fingerprint matches the one printed on that machine before you rely
+                on it. They are the same key, shown twice on purpose.
               </AlertDescription>
             </Alert>
 
@@ -579,9 +576,8 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
               <TerminalWindowIcon />
               <AlertTitle>Next: add it as a host</AlertTitle>
               <AlertDescription>
-                The machine can now carry connections. Add a host from Connect, choose
-                this machine, and give it the username and key you would use over SSH —
-                the agent holds neither.
+                The machine can now carry connections. Add a host from Connect, choose this machine,
+                and give it the username and key you would use over SSH — the agent holds neither.
               </AlertDescription>
             </Alert>
           </div>
@@ -600,9 +596,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
 function CommandBlock({ command }: { command: string }) {
   return (
     <div className="border-border bg-muted/40 flex items-start gap-2 rounded-lg border p-3">
-      <code className="min-w-0 flex-1 font-mono text-xs leading-relaxed break-all">
-        {command}
-      </code>
+      <code className="min-w-0 flex-1 font-mono text-xs leading-relaxed break-all">{command}</code>
       <Button
         variant="ghost"
         size="icon"

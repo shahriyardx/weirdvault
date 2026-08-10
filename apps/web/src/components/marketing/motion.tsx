@@ -20,13 +20,7 @@
  *    than the flash it costs.
  */
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -165,13 +159,7 @@ export function ScrollScene({
  * Pointer-driven only: it never fires on touch, where there is no hover state
  * to speak of and a tilt would just fight the scroll.
  */
-export function TiltCard({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function TiltCard({ children, className }: { children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {

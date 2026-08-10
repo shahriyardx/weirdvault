@@ -120,9 +120,7 @@ export async function rememberHost(
 ): Promise<Host | null> {
   const existing = (await listHosts()).find(
     (h) =>
-      h.hostname === fields.hostname &&
-      h.port === fields.port &&
-      h.username === fields.username,
+      h.hostname === fields.hostname && h.port === fields.port && h.username === fields.username,
   );
   if (!existing && !opts.create) return null;
 

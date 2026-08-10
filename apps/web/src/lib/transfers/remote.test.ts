@@ -78,18 +78,10 @@ describe("copyBetweenHosts", () => {
     const dst = sink();
 
     await withTimeout(
-      copyBetweenHosts(
-        endpoint(src.handle),
-        endpoint(dst.handle),
-        "/srv/a.txt",
-        "/var/www",
-        false,
-      ),
+      copyBetweenHosts(endpoint(src.handle), endpoint(dst.handle), "/srv/a.txt", "/var/www", false),
     );
 
-    expect(Buffer.concat(dst.received.map((c) => Buffer.from(c))).toString()).toBe(
-      "onetwothree",
-    );
+    expect(Buffer.concat(dst.received.map((c) => Buffer.from(c))).toString()).toBe("onetwothree");
   });
 
   test("the destination filename is the source basename, in the target directory", async () => {
@@ -173,13 +165,7 @@ describe("copyBetweenHosts", () => {
 
     await expect(
       withTimeout(
-        copyBetweenHosts(
-          endpoint(src.handle),
-          endpoint(dst.handle),
-          "/srv/a",
-          "/dst",
-          false,
-        ),
+        copyBetweenHosts(endpoint(src.handle), endpoint(dst.handle), "/srv/a", "/dst", false),
       ),
     ).rejects.toThrow("disk full");
   });

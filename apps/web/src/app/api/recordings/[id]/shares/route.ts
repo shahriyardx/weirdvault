@@ -150,10 +150,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .select(SUMMARY)
     .from(schema.recordingShare)
     .where(
-      and(
-        eq(schema.recordingShare.recordingId, id),
-        eq(schema.recordingShare.userId, user.id),
-      ),
+      and(eq(schema.recordingShare.recordingId, id), eq(schema.recordingShare.userId, user.id)),
     )
     .orderBy(desc(schema.recordingShare.createdAt));
 

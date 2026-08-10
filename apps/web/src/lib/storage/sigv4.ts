@@ -68,8 +68,15 @@ export function encodeRfc3986(value: string): string {
   let out = "";
   for (const byte of Buffer.from(value, "utf8")) {
     const c = String.fromCharCode(byte);
-    if ((byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a) ||
-        (byte >= 0x30 && byte <= 0x39) || c === "-" || c === "_" || c === "." || c === "~") {
+    if (
+      (byte >= 0x41 && byte <= 0x5a) ||
+      (byte >= 0x61 && byte <= 0x7a) ||
+      (byte >= 0x30 && byte <= 0x39) ||
+      c === "-" ||
+      c === "_" ||
+      c === "." ||
+      c === "~"
+    ) {
       out += c;
     } else {
       out += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
@@ -93,14 +100,16 @@ export function encodePath(key: string): string {
 
 function canonicalQuery(query: Record<string, string> | undefined): string {
   if (!query) return "";
-  return Object.entries(query)
-    .map(([k, v]) => [encodeRfc3986(k), encodeRfc3986(v)] as const)
-    // Sorted by encoded name, which is what the specification says and is not
-    // the same order as sorting the raw names once anything non-alphanumeric is
-    // involved.
-    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-    .map(([k, v]) => `${k}=${v}`)
-    .join("&");
+  return (
+    Object.entries(query)
+      .map(([k, v]) => [encodeRfc3986(k), encodeRfc3986(v)] as const)
+      // Sorted by encoded name, which is what the specification says and is not
+      // the same order as sorting the raw names once anything non-alphanumeric is
+      // involved.
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&")
+  );
 }
 
 /* ------------------------------------------------------------------- hashing */
@@ -118,7 +127,12 @@ function hmac(key: Buffer | string, data: string): Buffer {
  * published test vector that does not depend on a request at all, which makes
  * it the cheapest thing to be sure of.
  */
-export function signingKey(secretAccessKey: string, dateStamp: string, region: string, service: string): Buffer {
+export function signingKey(
+  secretAccessKey: string,
+  dateStamp: string,
+  region: string,
+  service: string,
+): Buffer {
   const kDate = hmac(`AWS4${secretAccessKey}`, dateStamp);
   const kRegion = hmac(kDate, region);
   const kService = hmac(kRegion, service);
@@ -169,7 +183,10 @@ export function canonicalRequest(req: SignableRequest, payloadHash: string): Can
 
 /** `20250810T134500Z` and `20250810`, the two forms the algorithm wants. */
 export function timestamps(now: Date): { amzDate: string; dateStamp: string } {
-  const amzDate = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const amzDate = now
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
   return { amzDate, dateStamp: amzDate.slice(0, 8) };
 }
 

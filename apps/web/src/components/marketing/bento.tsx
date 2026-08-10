@@ -72,12 +72,7 @@ function Sculpture({
         {icon}
       </div>
       {/* Face. */}
-      <div
-        className={cn(
-          "relative",
-          accent ? "text-primary/25" : "text-foreground/[0.09]",
-        )}
-      >
+      <div className={cn("relative", accent ? "text-primary/25" : "text-foreground/[0.09]")}>
         {icon}
       </div>
       {/* Highlight, clipped to the upper half so the light has a direction. */}
@@ -141,9 +136,7 @@ function Cell({
         <h3 className="font-heading text-xl leading-[1.15] font-semibold tracking-tight text-balance sm:text-2xl">
           {title}
         </h3>
-        <p className="mt-2.5 text-sm leading-relaxed text-pretty text-muted-foreground">
-          {body}
-        </p>
+        <p className="mt-2.5 text-sm leading-relaxed text-pretty text-muted-foreground">{body}</p>
       </div>
 
       {href && (

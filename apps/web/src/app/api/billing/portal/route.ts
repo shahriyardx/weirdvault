@@ -1,11 +1,7 @@
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
-import {
-  BillingNotConfiguredError,
-  appOrigin,
-  stripeClient,
-} from "@/lib/billing/stripe";
+import { BillingNotConfiguredError, appOrigin, stripeClient } from "@/lib/billing/stripe";
 import { subscriptionFor } from "@/lib/billing/subscription";
 
 /**
@@ -71,7 +67,10 @@ export async function POST(request: Request) {
     // The most common real cause of a failure here is that the billing portal
     // has never been configured in the Stripe dashboard, which is a setting
     // rather than a bug, so the message says so instead of blaming the request.
-    console.error("billing portal session could not be created", e instanceof Error ? e.message : e);
+    console.error(
+      "billing portal session could not be created",
+      e instanceof Error ? e.message : e,
+    );
     return Response.json(
       {
         error:

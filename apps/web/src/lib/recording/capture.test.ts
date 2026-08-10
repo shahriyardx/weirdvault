@@ -94,9 +94,9 @@ describe("cast round trip", () => {
     expect(() => decodeCast(`${good}[1,"z","x"]\n`)).toThrow(/unknown event kind/);
     expect(() => decodeCast(`${good}not json\n`)).toThrow(CastFormatError);
     expect(() => decodeCast(`${good}[1,"r","wide"]\n`)).toThrow(/COLSxROWS/);
-    expect(() =>
-      decodeCast('{"v":1,"cols":0,"rows":24,"startedAt":0,"durationMs":0}'),
-    ).toThrow(/cols/);
+    expect(() => decodeCast('{"v":1,"cols":0,"rows":24,"startedAt":0,"durationMs":0}')).toThrow(
+      /cols/,
+    );
   });
 
   test("blank lines are the one thing skipped", () => {

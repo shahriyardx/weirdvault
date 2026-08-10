@@ -93,11 +93,7 @@ async function saltFor(email: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", material));
 }
 
-async function hkdf(
-  master: Uint8Array,
-  info: string,
-  bytes = 32,
-): Promise<Uint8Array> {
+async function hkdf(master: Uint8Array, info: string, bytes = 32): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey("raw", master as BufferSource, "HKDF", false, [
     "deriveBits",
   ]);
@@ -157,10 +153,7 @@ async function deriveBranches(email: string, password: string): Promise<RawSecre
   return { authToken, vaultKey, auditKey };
 }
 
-export async function deriveSecrets(
-  email: string,
-  password: string,
-): Promise<DerivedSecrets> {
+export async function deriveSecrets(email: string, password: string): Promise<DerivedSecrets> {
   const raw = await deriveBranches(email, password);
   try {
     return await importRawSecretBytes(raw);

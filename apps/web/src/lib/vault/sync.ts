@@ -174,8 +174,7 @@ function mergeById<T extends { id: string }>(
  * The stamp hosts merge on. Exported so restore.ts counts against the same
  * number the merge resolved on rather than a second, drifting copy of it.
  */
-export const hostStamp = (h: Host): number =>
-  h.updatedAt ?? h.lastUsedAt ?? h.createdAt;
+export const hostStamp = (h: Host): number => h.updatedAt ?? h.lastUsedAt ?? h.createdAt;
 
 /**
  * Pure, so it can be tested without a network or a database — which matters,

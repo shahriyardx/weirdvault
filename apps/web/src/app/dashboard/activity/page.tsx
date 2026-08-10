@@ -79,11 +79,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   EMITTED_EVENTS,
   EMITTED_SOURCES,
@@ -103,10 +99,7 @@ import {
   type AuditRow,
   type DeviceSummary,
 } from "@/lib/audit/query";
-import {
-  AUDIT_RETENTION_LABEL,
-  type AuditRetentionWindow,
-} from "@/lib/audit/retention";
+import { AUDIT_RETENTION_LABEL, type AuditRetentionWindow } from "@/lib/audit/retention";
 import { getAuditKey, requestUnlock, useVaultUnlocked } from "@/lib/vault/session";
 import { cn } from "@/lib/utils";
 
@@ -162,10 +155,7 @@ const EVENT_ICONS: Record<AuditEventType, typeof KeyIcon> = {
   "hostkey.cleared": FingerprintIcon,
 };
 
-const SOURCE_META: Record<
-  string,
-  { label: string; Icon: typeof DatabaseIcon; tone: string }
-> = {
+const SOURCE_META: Record<string, { label: string; Icon: typeof DatabaseIcon; tone: string }> = {
   server: { label: "server", Icon: DatabaseIcon, tone: "text-primary" },
   relay: { label: "relay", Icon: BroadcastIcon, tone: "text-primary" },
   client: { label: "client", Icon: MonitorIcon, tone: "text-warning" },
@@ -403,10 +393,7 @@ export default function ActivityPage() {
     };
   }, [unlocked]);
 
-  const deviceIndex = useMemo(
-    () => new Map(devices.map((d) => [d.id, d])),
-    [devices],
-  );
+  const deviceIndex = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
 
   const deviceLabel = useCallback(
     (id: string) => deviceIndex.get(id)?.label ?? null,
@@ -581,15 +568,12 @@ export default function ActivityPage() {
       download(name, toCsv(records), "text/csv");
     }
 
-    toast.success(
-      `Exported ${filtered.length} ${filtered.length === 1 ? "event" : "events"}`,
-      {
-        description:
-          unresolved > 0
-            ? `${unresolved} ${unresolved === 1 ? "row keeps" : "rows keep"} an unresolved host reference, exactly as stored.`
-            : "Host labels were resolved in this tab. The copy on the server holds references only.",
-      },
-    );
+    toast.success(`Exported ${filtered.length} ${filtered.length === 1 ? "event" : "events"}`, {
+      description:
+        unresolved > 0
+          ? `${unresolved} ${unresolved === 1 ? "row keeps" : "rows keep"} an unresolved host reference, exactly as stored.`
+          : "Host labels were resolved in this tab. The copy on the server holds references only.",
+    });
   }
 
   return (
@@ -619,13 +603,14 @@ export default function ActivityPage() {
       />
 
       <p className="text-muted-foreground mt-4 text-xs leading-relaxed">
-        Hosts are stored as blinded references and resolved to names here, on
-        this device. Rows marked <span className="text-foreground">client</span>{" "}
-        are self-reported by a browser;{" "}
+        Hosts are stored as blinded references and resolved to names here, on this device. Rows
+        marked <span className="text-foreground">client</span> are self-reported by a browser;{" "}
         <span className="text-foreground">server</span> and{" "}
-        <span className="text-foreground">relay</span> rows are written outside
-        it.{" "}
-        <Link href="/security#threat-model" className="underline underline-offset-4 hover:text-foreground">
+        <span className="text-foreground">relay</span> rows are written outside it.{" "}
+        <Link
+          href="/security#threat-model"
+          className="underline underline-offset-4 hover:text-foreground"
+        >
           How this works
         </Link>
       </p>
@@ -641,9 +626,9 @@ export default function ActivityPage() {
           <AlertTitle>Device names are unavailable</AlertTitle>
           <AlertDescription>
             <p>
-              The device list could not be read, so the device column shows the
-              shortened id each row was written with. The log itself is
-              unaffected — device names are only a lookup performed here.
+              The device list could not be read, so the device column shows the shortened id each
+              row was written with. The log itself is unaffected — device names are only a lookup
+              performed here.
             </p>
           </AlertDescription>
         </Alert>
@@ -736,10 +721,9 @@ export default function ActivityPage() {
       <p className="mt-2 flex items-start gap-1.5 text-xs/relaxed text-muted-foreground">
         <FunnelIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
         <span className="min-w-0">
-          Filtering runs in this tab, over the rows loaded so far — the time
-          range narrows what is shown, it does not fetch further back. Searching
-          by host name server-side is not something we can offer: the server
-          cannot read the reference, so it cannot match it against a name.
+          Filtering runs in this tab, over the rows loaded so far — the time range narrows what is
+          shown, it does not fetch further back. Searching by host name server-side is not something
+          we can offer: the server cannot read the reference, so it cannot match it against a name.
         </span>
       </p>
 
@@ -750,9 +734,9 @@ export default function ActivityPage() {
             {range === "all"
               ? `“Everything loaded” still stops at the ${retention.label} this log is kept.`
               : `“${rangeLabel}” reaches further back than the ${retention.label} this log is kept.`}{" "}
-            Nothing before {day(retention.since.getTime())} can appear here,
-            whatever the filters say — those events are deleted, not hidden. An
-            empty stretch at that end is the retention window, not a quiet month.
+            Nothing before {day(retention.since.getTime())} can appear here, whatever the filters
+            say — those events are deleted, not hidden. An empty stretch at that end is the
+            retention window, not a quiet month.
           </span>
         </p>
       )}
@@ -767,10 +751,7 @@ export default function ActivityPage() {
       ) : rows.length === 0 ? (
         <NoEvents retention={retention} />
       ) : filtered.length === 0 ? (
-        <NoMatches
-          onClear={clearFilters}
-          retention={rangeExceedsWindow ? retention : null}
-        />
+        <NoMatches onClear={clearFilters} retention={rangeExceedsWindow ? retention : null} />
       ) : (
         <Card className="mt-4">
           <CardContent className="px-0">
@@ -786,12 +767,7 @@ export default function ActivityPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((item) => (
-                  <EventRow
-                    key={item.row.id}
-                    item={item}
-                    now={readAt}
-                    hostIndex={hostIndex}
-                  />
+                  <EventRow key={item.row.id} item={item} now={readAt} hostIndex={hostIndex} />
                 ))}
               </TableBody>
             </Table>
@@ -849,70 +825,59 @@ export default function ActivityPage() {
               {retention ? (
                 <>
                   <span className="text-foreground">
-                    Retention: {retention.label}, currently back to{" "}
-                    {day(retention.since.getTime())}.
+                    Retention: {retention.label}, currently back to {day(retention.since.getTime())}
+                    .
                   </span>{" "}
                   {retention.label === AUDIT_RETENTION_LABEL.pro ? (
                     <>
-                      That is the Pro window. If the subscription lapses, the
-                      window becomes {AUDIT_RETENTION_LABEL.free} and everything
-                      older than that is deleted — not archived, and not held
-                      back pending a renewal.
+                      That is the Pro window. If the subscription lapses, the window becomes{" "}
+                      {AUDIT_RETENTION_LABEL.free} and everything older than that is deleted — not
+                      archived, and not held back pending a renewal.
                     </>
                   ) : (
                     <>
-                      That is the Free window. Pro keeps{" "}
-                      {AUDIT_RETENTION_LABEL.pro}; see{" "}
+                      That is the Free window. Pro keeps {AUDIT_RETENTION_LABEL.pro}; see{" "}
                       <Link href="/pricing" className="text-primary hover:underline">
                         pricing
                       </Link>
                       .
                     </>
                   )}{" "}
-                  This window is the one the server applied to this page rather
-                  than one worked out in your browser, which cannot know what
-                  your account is on.
+                  This window is the one the server applied to this page rather than one worked out
+                  in your browser, which cannot know what your account is on.
                 </>
               ) : (
                 <span className="text-foreground">
-                  Retention: not read yet. The server states the window with the
-                  events, and this page shows nothing until it has — a browser
-                  cannot tell which window your account is on, and a guess here
-                  would be a promise nothing enforces.
+                  Retention: not read yet. The server states the window with the events, and this
+                  page shows nothing until it has — a browser cannot tell which window your account
+                  is on, and a guess here would be a promise nothing enforces.
                 </span>
               )}{" "}
-              Older events are deleted, not hidden — there is no archive, no
-              soft-delete flag and no support request that brings one back. The
-              query that feeds this page refuses to return anything past the
-              window, so the boundary holds even between runs of the job that
-              does the deleting.
+              Older events are deleted, not hidden — there is no archive, no soft-delete flag and no
+              support request that brings one back. The query that feeds this page refuses to return
+              anything past the window, so the boundary holds even between runs of the job that does
+              the deleting.
             </span>
           </p>
           <p className="flex items-start gap-2.5">
             <DatabaseIcon className="mt-0.5 size-4 shrink-0 text-warning" />
             <span className="min-w-0">
-              <span className="text-foreground">
-                What that leaves undone on this deployment:
-              </span>{" "}
-              the deleting is a script (
-              <code className="text-foreground">bun run audit:prune</code>) and
-              nothing schedules it. If the operator has not put it on a timer,
-              rows past the window are still sitting in the database — unreadable
-              through this page, and still on disk. That is the honest state of
-              it: the window you are shown is enforced, the erasure behind it
-              happens when somebody runs the job.
+              <span className="text-foreground">What that leaves undone on this deployment:</span>{" "}
+              the deleting is a script (<code className="text-foreground">bun run audit:prune</code>
+              ) and nothing schedules it. If the operator has not put it on a timer, rows past the
+              window are still sitting in the database — unreadable through this page, and still on
+              disk. That is the honest state of it: the window you are shown is enforced, the
+              erasure behind it happens when somebody runs the job.
             </span>
           </p>
           <p className="flex items-start gap-2.5">
             <MonitorIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0">
-              <span className="text-foreground">Addresses:</span> truncated to a
-              network on write, for every event type — including the sign-in and
-              device registration events the catalogue marks as keeping a full
-              address, which no writer honours today. An address is recorded only
-              when a trusted proxy is configured in front of the app; otherwise
-              the field is left empty rather than filled from a header the caller
-              controls.
+              <span className="text-foreground">Addresses:</span> truncated to a network on write,
+              for every event type — including the sign-in and device registration events the
+              catalogue marks as keeping a full address, which no writer honours today. An address
+              is recorded only when a trusted proxy is configured in front of the app; otherwise the
+              field is left empty rather than filled from a header the caller controls.
             </span>
           </p>
           <p className="flex items-start gap-2.5">
@@ -921,13 +886,12 @@ export default function ActivityPage() {
               <span className="text-foreground">
                 Not recorded yet, so absence here means nothing:
               </span>{" "}
-              {UNEMITTED_EVENTS.map((t) => EVENT_LABELS[t].toLowerCase()).join(", ")}.
-              These types exist in the catalogue and the API would accept them,
-              but nothing in this build writes one — sign-in and sign-out need a
-              hook on the auth layer, vault syncs need one in the vault route,
-              and the connection events are the relay&rsquo;s to write and it has
-              no database. They are left out of the filters above rather than
-              offered as searches that can only ever come back empty.
+              {UNEMITTED_EVENTS.map((t) => EVENT_LABELS[t].toLowerCase()).join(", ")}. These types
+              exist in the catalogue and the API would accept them, but nothing in this build writes
+              one — sign-in and sign-out need a hook on the auth layer, vault syncs need one in the
+              vault route, and the connection events are the relay&rsquo;s to write and it has no
+              database. They are left out of the filters above rather than offered as searches that
+              can only ever come back empty.
             </span>
           </p>
         </CardContent>
@@ -1044,8 +1008,8 @@ function HostIndexNotice({ state }: { state: HostIndexState }) {
         <AlertTitle>Host names could not be resolved</AlertTitle>
         <AlertDescription>
           <p>
-            The local host list could not be read, so every host reference below
-            stays opaque. The log is complete; only the names are missing.
+            The local host list could not be read, so every host reference below stays opaque. The
+            log is complete; only the names are missing.
           </p>
         </AlertDescription>
       </Alert>
@@ -1059,9 +1023,9 @@ function HostIndexNotice({ state }: { state: HostIndexState }) {
         <AlertTitle>No audit key in this tab</AlertTitle>
         <AlertDescription>
           <p>
-            The vault is open here but the audit branch of the key was not
-            derived, so host references cannot be matched. Reload the page and
-            unlock again to derive both. Everything else below is unaffected.
+            The vault is open here but the audit branch of the key was not derived, so host
+            references cannot be matched. Reload the page and unlock again to derive both.
+            Everything else below is unaffected.
           </p>
         </AlertDescription>
       </Alert>
@@ -1074,10 +1038,9 @@ function HostIndexNotice({ state }: { state: HostIndexState }) {
       <AlertTitle>The vault is locked, so hosts stay as references</AlertTitle>
       <AlertDescription>
         <p>
-          Host names are recovered by hashing your saved hosts with the audit key
-          and matching the results against the references in the log. That key is
-          held in memory only, so a page reload leaves it behind. Every other
-          column below is real and complete.
+          Host names are recovered by hashing your saved hosts with the audit key and matching the
+          results against the references in the log. That key is held in memory only, so a page
+          reload leaves it behind. Every other column below is real and complete.
         </p>
         <Button variant="outline" size="sm" className="mt-1" onClick={requestUnlock}>
           Unlock to resolve hosts
@@ -1116,9 +1079,8 @@ function SignedOutState() {
         </span>
         <p className="font-heading text-sm font-medium">This browser is signed out</p>
         <p className="max-w-lg text-muted-foreground">
-          The log is per account, so it cannot be read without a session. Signing
-          in again will also let you unlock the vault, which is what turns host
-          references back into names.
+          The log is per account, so it cannot be read without a session. Signing in again will also
+          let you unlock the vault, which is what turns host references back into names.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
           <Link href="/sign-in">Sign in</Link>
@@ -1140,8 +1102,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
         </span>
         <p className="font-heading text-sm font-medium">The activity log could not be read</p>
         <p className="max-w-lg text-muted-foreground">
-          {message} Nothing is shown rather than a partial log, because a log
-          missing rows without saying so is worse than no log at all.
+          {message} Nothing is shown rather than a partial log, because a log missing rows without
+          saying so is worse than no log at all.
         </p>
         <Button variant="outline" size="sm" className="mt-1" onClick={onRetry}>
           <ArrowClockwiseIcon data-icon="inline-start" />
@@ -1170,18 +1132,16 @@ function NoEvents({ retention }: { retention: RetentionView | null }) {
         </span>
         <p className="font-heading text-sm font-medium">No events recorded yet</p>
         <p className="max-w-lg text-muted-foreground">
-          Registering or revoking a device, generating or using a recovery
-          code, pinning a host key and installing a key on a host each write a
-          row here. The log starts the first time one of those happens — and
-          note what is missing from that list: sign-ins, vault syncs and
-          connections are catalogued but nothing writes them yet, so an empty
-          log is not evidence that nobody signed in.
+          Registering or revoking a device, generating or using a recovery code, pinning a host key
+          and installing a key on a host each write a row here. The log starts the first time one of
+          those happens — and note what is missing from that list: sign-ins, vault syncs and
+          connections are catalogued but nothing writes them yet, so an empty log is not evidence
+          that nobody signed in.
           {retention ? (
             <>
               {" "}
-              It also ends — the log keeps {retention.label} — so an account that
-              has been quiet for longer than that reads exactly like an account
-              that has never done anything.
+              It also ends — the log keeps {retention.label} — so an account that has been quiet for
+              longer than that reads exactly like an account that has never done anything.
             </>
           ) : null}
         </p>
@@ -1218,20 +1178,15 @@ function NoMatches({
         <p className="max-w-lg text-muted-foreground">
           {retention ? (
             <>
-              The time range is already as wide as the log goes — it keeps{" "}
-              {retention.label} and older events are deleted, so widening it
-              further cannot bring anything back. Clear the other filters
-              instead.{" "}
+              The time range is already as wide as the log goes — it keeps {retention.label} and
+              older events are deleted, so widening it further cannot bring anything back. Clear the
+              other filters instead.{" "}
             </>
           ) : (
-            <>
-              Widen the time range, or clear the filters to see everything
-              loaded so far.{" "}
-            </>
+            <>Widen the time range, or clear the filters to see everything loaded so far. </>
           )}
-          Events referencing hosts that are not in this device&apos;s vault will
-          not match a host name search, because there is no name here to match
-          against.
+          Events referencing hosts that are not in this device&apos;s vault will not match a host
+          name search, because there is no name here to match against.
         </p>
         <Button variant="outline" size="sm" className="mt-1" onClick={onClear}>
           Clear filters
@@ -1258,9 +1213,7 @@ function describeDevice(
   if (known) return known.label;
   // Two different unknowns: the registry says this id is not one of yours, or
   // the registry could not be asked. They deserve different words.
-  return listUnavailable
-    ? `Device ${shortId(deviceId)}`
-    : `Unknown device ${shortId(deviceId)}`;
+  return listUnavailable ? `Device ${shortId(deviceId)}` : `Unknown device ${shortId(deviceId)}`;
 }
 
 function message(error: unknown): string {

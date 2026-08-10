@@ -93,8 +93,8 @@ export default function TerminalPage() {
         <div className="max-w-sm text-center">
           <h2 className="font-heading text-sm font-medium">No active session</h2>
           <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-            Connect to a host and its shell opens here. You can hold several
-            sessions at once, including more than one to the same host.
+            Connect to a host and its shell opens here. You can hold several sessions at once,
+            including more than one to the same host.
           </p>
           <Button asChild className="mt-4" size="sm">
             <Link href="/dashboard/connect">
@@ -138,7 +138,9 @@ export default function TerminalPage() {
                 size="icon"
                 className="size-7"
                 aria-label={
-                  splitDirection === "horizontal" ? "Stack panes vertically" : "Place panes side by side"
+                  splitDirection === "horizontal"
+                    ? "Stack panes vertically"
+                    : "Place panes side by side"
                 }
                 onClick={() =>
                   setSplitDirection(splitDirection === "horizontal" ? "vertical" : "horizontal")
@@ -232,9 +234,7 @@ export default function TerminalPage() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {keyBar
-              ? "Hide Ctrl, Esc and the arrow keys"
-              : "Show Ctrl, Esc and the arrow keys"}
+            {keyBar ? "Hide Ctrl, Esc and the arrow keys" : "Show Ctrl, Esc and the arrow keys"}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -242,7 +242,9 @@ export default function TerminalPage() {
       <div
         className={cn(
           "grid min-h-0 flex-1 gap-px",
-          splitDirection === "horizontal" ? "grid-flow-col auto-cols-fr" : "grid-flow-row auto-rows-fr",
+          splitDirection === "horizontal"
+            ? "grid-flow-col auto-cols-fr"
+            : "grid-flow-row auto-rows-fr",
         )}
       >
         {panes.map((sessionId, index) =>
@@ -439,7 +441,9 @@ function EmptyPane({
   });
 
   useEffect(() => {
-    void listHosts().then(setHosts).catch(() => setHosts([]));
+    void listHosts()
+      .then(setHosts)
+      .catch(() => setHosts([]));
   }, []);
 
   return (
@@ -515,11 +519,7 @@ function EmptyPane({
         </div>
       </div>
 
-      <CredentialPrompt
-        pending={prompt.pending}
-        keys={usableKeys}
-        onSettle={prompt.settle}
-      />
+      <CredentialPrompt pending={prompt.pending} keys={usableKeys} onSettle={prompt.settle} />
     </div>
   );
 }

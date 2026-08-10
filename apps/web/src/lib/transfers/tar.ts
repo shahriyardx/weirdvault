@@ -35,10 +35,7 @@ export function buildTar(
   };
 }
 
-async function* tarChunks(
-  items: UploadItem[],
-  opts: TarOptions,
-): AsyncGenerator<Uint8Array> {
+async function* tarChunks(items: UploadItem[], opts: TarOptions): AsyncGenerator<Uint8Array> {
   for (const item of items) {
     if (opts.signal?.aborted) throw new Error("cancelled");
     opts.onFile?.(item.path);
@@ -114,7 +111,10 @@ function header(name: string, size: number, mtimeMs: number, type = "0"): Uint8A
     buf.set(b.subarray(0, len), offset);
   };
   const octal = (n: number, len: number) =>
-    n.toString(8).padStart(len - 1, "0").slice(-(len - 1)) + "\0";
+    n
+      .toString(8)
+      .padStart(len - 1, "0")
+      .slice(-(len - 1)) + "\0";
 
   put(0, 100, name);
   put(100, 8, octal(0o644, 8)); // mode

@@ -157,7 +157,12 @@ describe("signRequest", () => {
 
   test("always signs the payload hash, because S3 requires it", () => {
     const headers = signRequest(
-      { method: "GET", path: "/bucket/key", headers: { host: "s3.example.com" }, body: Buffer.alloc(0) },
+      {
+        method: "GET",
+        path: "/bucket/key",
+        headers: { host: "s3.example.com" },
+        body: Buffer.alloc(0),
+      },
       { ...SUITE, service: "s3" },
       now,
     );

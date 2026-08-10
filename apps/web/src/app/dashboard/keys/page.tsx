@@ -206,11 +206,7 @@ export default function KeysPage() {
 
     setGenerating(true);
     try {
-      const created = await generateKey(
-        label.trim() || "webxterm",
-        mode,
-        vaultKey ?? undefined,
-      );
+      const created = await generateKey(label.trim() || "webxterm", mode, vaultKey ?? undefined);
       setDialogOpen(false);
       await afterCreated(created, "Generated");
     } catch (error) {
@@ -263,10 +259,9 @@ export default function KeysPage() {
             <AlertTitle>The vault is locked in this tab</AlertTitle>
             <AlertDescription>
               <p>
-                Portable keys are stored wrapped with your vault key, which lives
-                only in memory and is cleared on reload. They are listed below,
-                but they cannot sign until you sign in again. Device-bound keys
-                are unaffected.
+                Portable keys are stored wrapped with your vault key, which lives only in memory and
+                is cleared on reload. They are listed below, but they cannot sign until you sign in
+                again. Device-bound keys are unaffected.
               </p>
               <p>
                 <Link href="/sign-in">Sign in to unlock</Link>
@@ -311,8 +306,8 @@ export default function KeysPage() {
           <DialogHeader>
             <DialogTitle>Generate key</DialogTitle>
             <DialogDescription>
-              An Ed25519 pair is created in WebCrypto. The private key is
-              non-extractable in use; only the public half ever leaves this page.
+              An Ed25519 pair is created in WebCrypto. The private key is non-extractable in use;
+              only the public half ever leaves this page.
             </DialogDescription>
           </DialogHeader>
 
@@ -329,8 +324,8 @@ export default function KeysPage() {
                 spellCheck={false}
               />
               <p className="text-xs text-muted-foreground">
-                Becomes the comment at the end of the authorized_keys line, so
-                you can tell your keys apart in the file.
+                Becomes the comment at the end of the authorized_keys line, so you can tell your
+                keys apart in the file.
               </p>
             </div>
 
@@ -365,10 +360,10 @@ export default function KeysPage() {
                 <AlertTitle>Portable needs the vault unlocked</AlertTitle>
                 <AlertDescription>
                   <p>
-                    Wrapping happens with the vault key, which is derived from
-                    your password in the browser and never persisted. This tab
-                    does not have it, so portable is unavailable until you sign
-                    in again. A device-bound key can be generated right now.
+                    Wrapping happens with the vault key, which is derived from your password in the
+                    browser and never persisted. This tab does not have it, so portable is
+                    unavailable until you sign in again. A device-bound key can be generated right
+                    now.
                   </p>
                   <p>
                     <Link href="/sign-in">Sign in to unlock the vault</Link>
@@ -382,10 +377,9 @@ export default function KeysPage() {
                 <WarningIcon className="text-warning" />
                 <AlertTitle>This key cannot be recovered</AlertTitle>
                 <AlertDescription>
-                  There is no wrapped copy and no export, so clearing site data,
-                  using a private window, or reinstalling this browser destroys
-                  it permanently. Recovering means generating a new key and
-                  adding its line to every server again.
+                  There is no wrapped copy and no export, so clearing site data, using a private
+                  window, or reinstalling this browser destroys it permanently. Recovering means
+                  generating a new key and adding its line to every server again.
                 </AlertDescription>
               </Alert>
             )}
@@ -620,9 +614,8 @@ function ImportKeyDialog({
         <DialogHeader>
           <DialogTitle>Import a key</DialogTitle>
           <DialogDescription>
-            Reads an existing OpenSSH private key and takes custody of it: from
-            here on it is a non-extractable handle, exactly like a key generated
-            in this page.
+            Reads an existing OpenSSH private key and takes custody of it: from here on it is a
+            non-extractable handle, exactly like a key generated in this page.
           </DialogDescription>
         </DialogHeader>
 
@@ -643,8 +636,8 @@ function ImportKeyDialog({
                   className="w-full resize-y rounded-none border border-input bg-transparent px-2.5 py-2 font-mono text-[11px] leading-relaxed break-all transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
                 />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  The file without the .pub extension — ~/.ssh/id_ed25519 rather
-                  than ~/.ssh/id_ed25519.pub.
+                  The file without the .pub extension — ~/.ssh/id_ed25519 rather than
+                  ~/.ssh/id_ed25519.pub.
                 </p>
               </div>
 
@@ -654,9 +647,7 @@ function ImportKeyDialog({
                     and every filter that catches id_ed25519 also greys it out
                     somewhere. The content is validated instead. */}
                 <Input id="import-file" type="file" onChange={handleFile} />
-                {fileName && (
-                  <p className="text-xs text-muted-foreground">Read from {fileName}.</p>
-                )}
+                {fileName && <p className="text-xs text-muted-foreground">Read from {fileName}.</p>}
               </div>
 
               {askPassphrase && (
@@ -675,9 +666,8 @@ function ImportKeyDialog({
                     {...noAutofillSecret}
                   />
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Used once, here, to decrypt the file. It is not stored, and
-                    the key does not keep it — webxterm has nowhere to type a
-                    passphrase at connect time.
+                    Used once, here, to decrypt the file. It is not stored, and the key does not
+                    keep it — webxterm has nowhere to type a passphrase at connect time.
                   </p>
                 </div>
               )}
@@ -704,10 +694,9 @@ function ImportKeyDialog({
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Check that fingerprint against{" "}
-                <code className="text-foreground">ssh-keygen -lf ~/.ssh/id_ed25519</code> on
-                the machine the key came from. It is derived from the private
-                half, not copied out of the file, so it is what your servers will
-                actually see.
+                <code className="text-foreground">ssh-keygen -lf ~/.ssh/id_ed25519</code> on the
+                machine the key came from. It is derived from the private half, not copied out of
+                the file, so it is what your servers will actually see.
               </p>
 
               <div className="grid gap-1.5">
@@ -753,20 +742,16 @@ function ImportKeyDialog({
                 <AlertTitle>What happens to the key text</AlertTitle>
                 <AlertDescription>
                   <p>
-                    It is parsed, imported into WebCrypto as a non-extractable
-                    handle, and the plaintext copy is zeroed immediately after.
-                    What survives is that handle
-                    {mode === "portable"
-                      ? ", plus a copy encrypted with your vault key"
-                      : ""}
-                    ; neither can be read back out.
+                    It is parsed, imported into WebCrypto as a non-extractable handle, and the
+                    plaintext copy is zeroed immediately after. What survives is that handle
+                    {mode === "portable" ? ", plus a copy encrypted with your vault key" : ""};
+                    neither can be read back out.
                   </p>
                   <p>
-                    Worth being straight about the limit. A key generated here
-                    has never existed as a file. This one has, on another
-                    machine, and probably still does — in backups, in a
-                    dotfiles repo, wherever it has been. Non-extractable custody
-                    starts now; it does not reach backwards.
+                    Worth being straight about the limit. A key generated here has never existed as
+                    a file. This one has, on another machine, and probably still does — in backups,
+                    in a dotfiles repo, wherever it has been. Non-extractable custody starts now; it
+                    does not reach backwards.
                   </p>
                 </AlertDescription>
               </Alert>
@@ -777,9 +762,9 @@ function ImportKeyDialog({
                   <AlertTitle>Portable needs the vault unlocked</AlertTitle>
                   <AlertDescription>
                     <p>
-                      This tab does not hold the vault key, so there is nothing
-                      to wrap the key with. Importing it device-bound works now,
-                      and the original file is still yours to import again later.
+                      This tab does not hold the vault key, so there is nothing to wrap the key
+                      with. Importing it device-bound works now, and the original file is still
+                      yours to import again later.
                     </p>
                     <p>
                       <Link href="/sign-in">Sign in to unlock the vault</Link>
@@ -799,8 +784,8 @@ function ImportKeyDialog({
                 {percent === null
                   ? `Loading the SSH core — ${megabytes(core.loaded)} so far`
                   : `Loading the SSH core — ${megabytes(core.loaded)} of about ${megabytes(core.total)}`}
-                . Parsing runs in the same WebAssembly module that speaks SSH,
-                so it has to be here first.
+                . Parsing runs in the same WebAssembly module that speaks SSH, so it has to be here
+                first.
               </p>
             </div>
           )}
@@ -812,9 +797,8 @@ function ImportKeyDialog({
               <AlertDescription>
                 <p>{coreError}</p>
                 <p>
-                  Key parsing happens inside that module, so there is nothing
-                  here to read a key with until it arrives. It is a static file
-                  and a retry is usually all it takes.
+                  Key parsing happens inside that module, so there is nothing here to read a key
+                  with until it arrives. It is a static file and a retry is usually all it takes.
                 </p>
                 <p>
                   <Button
@@ -836,7 +820,9 @@ function ImportKeyDialog({
           {error && (
             <Alert className="border-destructive/40">
               <WarningIcon className="text-destructive" />
-              <AlertTitle>{askPassphrase && !preview ? "Passphrase" : "Could not read that key"}</AlertTitle>
+              <AlertTitle>
+                {askPassphrase && !preview ? "Passphrase" : "Could not read that key"}
+              </AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -925,9 +911,7 @@ function KeyCard({
 
         <div className="rounded-sm border border-border">
           <div className="flex items-center justify-between gap-2 border-b border-border px-2.5 py-1.5">
-            <span className="truncate text-muted-foreground">
-              ~/.ssh/authorized_keys line
-            </span>
+            <span className="truncate text-muted-foreground">~/.ssh/authorized_keys line</span>
             <CopyButton value={installCommand(line)} />
           </div>
           {/* break-all rather than a scroller: the line must never push the
@@ -942,8 +926,7 @@ function KeyCard({
           <code className="text-foreground">
             echo &apos;…&apos; &gt;&gt; ~/.ssh/authorized_keys
           </code>
-          , ready to paste into a shell on the server. Stock sshd, no agent, no
-          daemon.
+          , ready to paste into a shell on the server. Stock sshd, no agent, no daemon.
         </p>
 
         {deviceBound && (
@@ -951,10 +934,9 @@ function KeyCard({
             <WarningIcon className="text-warning" />
             <AlertTitle>Bound to this browser</AlertTitle>
             <AlertDescription>
-              Clearing site data for this origin destroys this key
-              irrecoverably; there is no wrapped copy anywhere to restore from.
-              It also does not sync, so any other device needs its own key and
-              its own line on this server.
+              Clearing site data for this origin destroys this key irrecoverably; there is no
+              wrapped copy anywhere to restore from. It also does not sync, so any other device
+              needs its own key and its own line on this server.
             </AlertDescription>
           </Alert>
         )}
@@ -962,8 +944,8 @@ function KeyCard({
         {!deviceBound && !vaultUnlocked && (
           <p className="text-muted-foreground">
             <LockKeyIcon className="mr-1.5 inline size-3.5 align-[-2px]" />
-            Wrapped with the vault key, which this tab does not currently hold.
-            Sign in again before connecting with it.
+            Wrapped with the vault key, which this tab does not currently hold. Sign in again before
+            connecting with it.
           </p>
         )}
 
@@ -973,18 +955,17 @@ function KeyCard({
             <AlertTitle>This key cannot be opened and will not sign</AlertTitle>
             <AlertDescription>
               <p>
-                Its wrapping was made with a vault key your current password no
-                longer derives — almost always a password change that happened
-                while this browser was offline, so the re-key never saw this key
-                and could not move it to the new key. Nothing here can undo that:
-                the only thing that opens the wrapping is the old vault key,
-                which no longer exists.
+                Its wrapping was made with a vault key your current password no longer derives —
+                almost always a password change that happened while this browser was offline, so the
+                re-key never saw this key and could not move it to the new key. Nothing here can
+                undo that: the only thing that opens the wrapping is the old vault key, which no
+                longer exists.
               </p>
               <p>
-                It is not uploaded to your other devices, so the damage stops at
-                this browser. Delete it here, remove its line from{" "}
-                <code className="text-foreground">~/.ssh/authorized_keys</code>{" "}
-                on every server you added it to, and generate a replacement.
+                It is not uploaded to your other devices, so the damage stops at this browser.
+                Delete it here, remove its line from{" "}
+                <code className="text-foreground">~/.ssh/authorized_keys</code> on every server you
+                added it to, and generate a replacement.
               </p>
             </AlertDescription>
           </Alert>
@@ -1075,9 +1056,7 @@ function ModeOption({
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="font-heading block text-sm font-medium text-foreground">
-          {title}
-        </span>
+        <span className="font-heading block text-sm font-medium text-foreground">{title}</span>
         <span className="mt-1 block leading-relaxed text-muted-foreground">{body}</span>
       </span>
     </label>
@@ -1086,13 +1065,7 @@ function ModeOption({
 
 /* ------------------------------------------------------- empty and loading */
 
-function EmptyState({
-  onGenerate,
-  onImport,
-}: {
-  onGenerate: () => void;
-  onImport: () => void;
-}) {
+function EmptyState({ onGenerate, onImport }: { onGenerate: () => void; onImport: () => void }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-4 py-6 sm:px-8">
@@ -1102,19 +1075,18 @@ function EmptyState({
         <div className="max-w-xl">
           <h2 className="font-heading text-sm font-medium">No keys yet</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            A key is generated here, in the page, and the private half is a
-            WebCrypto handle marked non-extractable. It can sign the SSH
-            handshake and nothing else; there is no file to leak and no
-            passphrase to forget.
+            A key is generated here, in the page, and the private half is a WebCrypto handle marked
+            non-extractable. It can sign the SSH handshake and nothing else; there is no file to
+            leak and no passphrase to forget.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Setting up a server is one line appended to ~/.ssh/authorized_keys
-            on stock sshd. If you would rather not paste it, connect once with a
-            password and webxterm installs the line for you.
+            Setting up a server is one line appended to ~/.ssh/authorized_keys on stock sshd. If you
+            would rather not paste it, connect once with a password and webxterm installs the line
+            for you.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            If your servers already know an Ed25519 key of yours, import it
-            instead and every one of them keeps working untouched.
+            If your servers already know an Ed25519 key of yours, import it instead and every one of
+            them keeps working untouched.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

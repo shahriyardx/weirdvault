@@ -346,9 +346,8 @@ export default function SnippetsPage() {
             <AlertTitle>No sessions are open</AlertTitle>
             <AlertDescription>
               <p>
-                Snippets are sent to a running shell, so there has to be one.
-                Everything else here — editing, copying, searching — works
-                without a connection.
+                Snippets are sent to a running shell, so there has to be one. Everything else here —
+                editing, copying, searching — works without a connection.
               </p>
               <p>
                 <Link href="/dashboard/connect">Connect to a host</Link>
@@ -409,9 +408,8 @@ export default function SnippetsPage() {
           <DialogHeader>
             <DialogTitle>{form?.id ? "Edit snippet" : "New snippet"}</DialogTitle>
             <DialogDescription>
-              Saved to this browser and to the encrypted vault. The body is sent
-              to the shell exactly as written — nothing here is interpreted,
-              substituted or escaped on the way.
+              Saved to this browser and to the encrypted vault. The body is sent to the shell
+              exactly as written — nothing here is interpreted, substituted or escaped on the way.
             </DialogDescription>
           </DialogHeader>
 
@@ -444,11 +442,10 @@ export default function SnippetsPage() {
                   className="w-full resize-y rounded-none border border-input bg-transparent px-2.5 py-2 font-mono text-xs leading-relaxed transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
                 />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Several lines are fine. Each line break is sent as an Enter
-                  press, so a multi-line snippet runs line by line in the shell
-                  it goes to. Trailing blank lines are dropped when saving:
-                  whether the last line runs is decided by Insert or Run, not by
-                  whitespace you cannot see.
+                  Several lines are fine. Each line break is sent as an Enter press, so a multi-line
+                  snippet runs line by line in the shell it goes to. Trailing blank lines are
+                  dropped when saving: whether the last line runs is decided by Insert or Run, not
+                  by whitespace you cannot see.
                 </p>
               </div>
 
@@ -516,9 +513,9 @@ export default function SnippetsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {pendingDelete?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The deletion is recorded and travels with the next vault sync, so
-              the snippet goes from your other devices too rather than coming
-              back from one of them. Anything it has already run stays run.
+              The deletion is recorded and travels with the next vault sync, so the snippet goes
+              from your other devices too rather than coming back from one of them. Anything it has
+              already run stays run.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -567,8 +564,7 @@ function SendDialog({
         <DialogHeader>
           <DialogTitle>Send {snippet?.name}</DialogTitle>
           <DialogDescription>
-            The text below goes to the session exactly as it is, as if you had
-            typed it.
+            The text below goes to the session exactly as it is, as if you had typed it.
           </DialogDescription>
         </DialogHeader>
 
@@ -584,12 +580,12 @@ function SendDialog({
                 <AlertTitle>Nothing to send it to</AlertTitle>
                 <AlertDescription>
                   <p>
-                    A snippet is typed into a running shell, and there is no
-                    shell open in this tab right now.
+                    A snippet is typed into a running shell, and there is no shell open in this tab
+                    right now.
                   </p>
                   <p>
-                    <Link href="/dashboard/connect">Connect to a host</Link>, then
-                    come back and send it.
+                    <Link href="/dashboard/connect">Connect to a host</Link>, then come back and
+                    send it.
                   </p>
                 </AlertDescription>
               </Alert>
@@ -612,17 +608,15 @@ function SendDialog({
                 </div>
 
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  <span className="text-foreground">Insert</span> types the
-                  snippet and stops, leaving the cursor at the end of the last
-                  line so you can read it, change it, or press Enter yourself.{" "}
-                  <span className="text-foreground">Run</span> presses Enter for
-                  you and the shell executes it immediately.
+                  <span className="text-foreground">Insert</span> types the snippet and stops,
+                  leaving the cursor at the end of the last line so you can read it, change it, or
+                  press Enter yourself. <span className="text-foreground">Run</span> presses Enter
+                  for you and the shell executes it immediately.
                   {multiline && (
                     <>
                       {" "}
-                      This snippet has more than one line, and the line breaks
-                      inside it are Enter presses too: every line except the last
-                      runs either way.
+                      This snippet has more than one line, and the line breaks inside it are Enter
+                      presses too: every line except the last runs either way.
                     </>
                   )}
                 </p>
@@ -647,7 +641,11 @@ function SendDialog({
               >
                 <CursorTextIcon /> Insert
               </Button>
-              <Button type="button" disabled={!target} onClick={() => onSend(snippet, target, true)}>
+              <Button
+                type="button"
+                disabled={!target}
+                onClick={() => onSend(snippet, target, true)}
+              >
                 <ArrowElbowDownLeftIcon /> Run
               </Button>
             </>
@@ -750,16 +748,15 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         <div className="max-w-xl">
           <h2 className="font-heading text-sm font-medium">No snippets yet</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            A snippet is a name and some shell text — the log tail with the flags
-            you can never remember, the health check, the one-line rollback. Save
-            it once and send it to any open session instead of typing it again.
+            A snippet is a name and some shell text — the log tail with the flags you can never
+            remember, the health check, the one-line rollback. Save it once and send it to any open
+            session instead of typing it again.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Snippets are encrypted in this browser before they are stored, and
-            the ciphertext is what syncs. That means the server cannot read them,
-            cannot search them, and cannot tell you that one of them looks
-            dangerous. Sending one types it into the shell as though it came from
-            your keyboard, with the same consequences.
+            Snippets are encrypted in this browser before they are stored, and the ciphertext is
+            what syncs. That means the server cannot read them, cannot search them, and cannot tell
+            you that one of them looks dangerous. Sending one types it into the shell as though it
+            came from your keyboard, with the same consequences.
           </p>
         </div>
         <Button onClick={onCreate}>
@@ -774,12 +771,10 @@ function NoMatches({ query, onClear }: { query: string; onClear: () => void }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-3 py-10">
-        <h2 className="font-heading text-sm font-medium">
-          Nothing matches &ldquo;{query}&rdquo;
-        </h2>
+        <h2 className="font-heading text-sm font-medium">Nothing matches &ldquo;{query}&rdquo;</h2>
         <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          The filter looks at names, descriptions, tags and the bodies of the
-          snippets this tab has decrypted.
+          The filter looks at names, descriptions, tags and the bodies of the snippets this tab has
+          decrypted.
         </p>
         <Button variant="outline" onClick={onClear}>
           Clear search

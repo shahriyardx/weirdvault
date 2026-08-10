@@ -299,7 +299,8 @@ export default function RecordingsPage() {
     if (!vaultKey) {
       requestUnlock();
       toast.error("The vault is locked", {
-        description: "The recording is on the server as ciphertext; opening it needs the key that is only in memory.",
+        description:
+          "The recording is on the server as ciphertext; opening it needs the key that is only in memory.",
       });
       return;
     }
@@ -394,18 +395,15 @@ export default function RecordingsPage() {
         <AlertTitle>A recording is as sensitive as the session it captures</AlertTitle>
         <AlertDescription>
           <p>
-            It is the terminal&rsquo;s output stream, which includes the shell
-            echoing back everything you type. If it appeared on the screen it is
-            in the file: tokens pasted into a command line, keys a command
-            printed, the contents of every file you opened, the environment you
-            dumped while debugging. A password typed at a prompt that hides it
-            is not echoed and so is not captured — a password typed anywhere that
-            shows it is.
+            It is the terminal&rsquo;s output stream, which includes the shell echoing back
+            everything you type. If it appeared on the screen it is in the file: tokens pasted into
+            a command line, keys a command printed, the contents of every file you opened, the
+            environment you dumped while debugging. A password typed at a prompt that hides it is
+            not echoed and so is not captured — a password typed anywhere that shows it is.
           </p>
           <p>
-            Read one before you keep it, and delete the ones you do not need.
-            Encryption stops us reading it; it does not stop you sharing it with
-            someone by accident later.
+            Read one before you keep it, and delete the ones you do not need. Encryption stops us
+            reading it; it does not stop you sharing it with someone by accident later.
           </p>
         </AlertDescription>
       </Alert>
@@ -416,10 +414,9 @@ export default function RecordingsPage() {
           <AlertTitle>The vault is locked in this tab</AlertTitle>
           <AlertDescription>
             <p>
-              Recording cannot start, and existing recordings cannot be opened,
-              because both need the vault key — which is held in memory only and
-              does not survive a page load. The list below is real; it is only
-              the contents that are out of reach.
+              Recording cannot start, and existing recordings cannot be opened, because both need
+              the vault key — which is held in memory only and does not survive a page load. The
+              list below is real; it is only the contents that are out of reach.
             </p>
             <Button variant="outline" size="sm" className="mt-1" onClick={requestUnlock}>
               Unlock the vault
@@ -443,18 +440,20 @@ export default function RecordingsPage() {
           <AlertTitle>Recording new sessions is a Pro feature</AlertTitle>
           <AlertDescription>
             <p>
-              This account is on {billing.label}, so a new recording cannot be
-              saved and the Record buttons below are disabled. Everything already
-              on this page is unaffected and always will be: play it, download it
-              as a cast file, revoke a share link you have out, delete it. We have
-              never been able to read any of it and nothing here is held back
-              pending a payment.
+              This account is on {billing.label}, so a new recording cannot be saved and the Record
+              buttons below are disabled. Everything already on this page is unaffected and always
+              will be: play it, download it as a cast file, revoke a share link you have out, delete
+              it. We have never been able to read any of it and nothing here is held back pending a
+              payment.
             </p>
             <p>
               {billing.billingConfigured ? (
                 <>
                   Pro is {billing.price.label} {billing.price.unit} — see{" "}
-                  <Link href="/dashboard/settings?tab=account" className="underline underline-offset-2">
+                  <Link
+                    href="/dashboard/settings?tab=account"
+                    className="underline underline-offset-2"
+                  >
                     Settings
                   </Link>{" "}
                   to subscribe, or{" "}
@@ -465,9 +464,8 @@ export default function RecordingsPage() {
                 </>
               ) : (
                 <>
-                  No payment provider is configured on this deployment, so there
-                  is no way to change this from here. That is a property of this
-                  install rather than of your account.
+                  No payment provider is configured on this deployment, so there is no way to change
+                  this from here. That is a property of this install rather than of your account.
                 </>
               )}
             </p>
@@ -487,16 +485,15 @@ export default function RecordingsPage() {
           <Alert className="mt-4">
             <WarningCircleIcon className="text-warning" />
             <AlertTitle>
-              Your recordings are close to the {formatBytes(storageLimit)} this account can
-              store
+              Your recordings are close to the {formatBytes(storageLimit)} this account can store
             </AlertTitle>
             <AlertDescription>
               <span>
                 {formatBytes(storedBytes)} is stored, and a full-length recording needs up to{" "}
-                {formatBytes(MAX_BLOB_BYTES)} once encrypted. A save that does not fit is
-                refused — nothing older is deleted to make room — and the transcript stays in
-                this tab until you delete something and retry, or discard it. Deleting
-                recordings below frees the space immediately.
+                {formatBytes(MAX_BLOB_BYTES)} once encrypted. A save that does not fit is refused —
+                nothing older is deleted to make room — and the transcript stays in this tab until
+                you delete something and retry, or discard it. Deleting recordings below frees the
+                space immediately.
               </span>
             </AlertDescription>
           </Alert>
@@ -505,9 +502,9 @@ export default function RecordingsPage() {
       {/* ------------------------------------------------------ live sessions */}
       <h2 className="mt-8 font-heading text-sm font-medium">Open sessions</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        Recording runs in this tab. Navigating around the dashboard is fine —
-        this page does not have to stay open — but closing the tab, or reloading
-        it, ends the capture and loses anything not yet saved.
+        Recording runs in this tab. Navigating around the dashboard is fine — this page does not
+        have to stay open — but closing the tab, or reloading it, ends the capture and loses
+        anything not yet saved.
       </p>
 
       <Card className="mt-3">
@@ -556,10 +553,9 @@ export default function RecordingsPage() {
       {/* ------------------------------------------------------------- list */}
       <h2 className="mt-8 font-heading text-sm font-medium">Stored recordings</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        Hosts are resolved here, on this device, from the blinded reference each
-        row was stored with — the same mechanism the activity log uses. The name
-        you gave a recording lives inside the ciphertext, so it appears when you
-        open one and not before.
+        Hosts are resolved here, on this device, from the blinded reference each row was stored with
+        — the same mechanism the activity log uses. The name you gave a recording lives inside the
+        ciphertext, so it appears when you open one and not before.
       </p>
 
       {state.phase === "loading" ? (
@@ -663,8 +659,8 @@ export default function RecordingsPage() {
             {storedBytes !== null && storageLimit !== null ? (
               <>
                 They hold {formatBytes(storedBytes)} of ciphertext of the{" "}
-                {formatBytes(storageLimit)} this account can store; at the ceiling a save is
-                refused and nothing older is deleted to make room.{" "}
+                {formatBytes(storageLimit)} this account can store; at the ceiling a save is refused
+                and nothing older is deleted to make room.{" "}
               </>
             ) : (
               <>
@@ -722,15 +718,13 @@ export default function RecordingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this recording?</AlertDialogTitle>
             <AlertDialogDescription>
-              Every share link made from this recording goes with it, live ones
-              included, so any link already sent stops opening anything — and the
-              revoked rows that were the only record a link existed go too. The
-              row itself is deleted rather than flagged, and we have never been
-              able to read it. What we cannot promise is that no copy of the
-              ciphertext exists anywhere: a database backup or replica taken
-              before now may still hold it until it rotates, unreadable, the same
-              caveat the activity log&rsquo;s pruner states. Any file you have
-              already downloaded is unaffected.
+              Every share link made from this recording goes with it, live ones included, so any
+              link already sent stops opening anything — and the revoked rows that were the only
+              record a link existed go too. The row itself is deleted rather than flagged, and we
+              have never been able to read it. What we cannot promise is that no copy of the
+              ciphertext exists anywhere: a database backup or replica taken before now may still
+              hold it until it rotates, unreadable, the same caveat the activity log&rsquo;s pruner
+              states. Any file you have already downloaded is unaffected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -873,23 +867,20 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
         <AlertTitle>The link is the key</AlertTitle>
         <AlertDescription>
           <p>
-            A share is a second copy of this transcript, encrypted here under a
-            key generated for that link alone — never your vault key, which opens
-            everything else you have. That key travels in the part of the link
-            after the <code className="text-foreground">#</code>, which browsers
-            never send to a server, so we store a blob we cannot read.
+            A share is a second copy of this transcript, encrypted here under a key generated for
+            that link alone — never your vault key, which opens everything else you have. That key
+            travels in the part of the link after the <code className="text-foreground">#</code>,
+            which browsers never send to a server, so we store a blob we cannot read.
           </p>
           <p>
-            Which means anyone holding the link can watch this recording. No
-            account, no sign-in, no way for us to tell who did. Forwarding the
-            link forwards the access. And the recording is everything the
-            terminal printed, including the echo of what was typed at the prompt
-            — read it before you send it.
+            Which means anyone holding the link can watch this recording. No account, no sign-in, no
+            way for us to tell who did. Forwarding the link forwards the access. And the recording
+            is everything the terminal printed, including the echo of what was typed at the prompt —
+            read it before you send it.
           </p>
           <p>
-            An expiry and a view limit are the only controls that keep working
-            once a link has left your hands, which is why they are set here
-            rather than offered as extras.
+            An expiry and a view limit are the only controls that keep working once a link has left
+            your hands, which is why they are set here rather than offered as extras.
           </p>
         </AlertDescription>
       </Alert>
@@ -900,12 +891,11 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
           <AlertTitle>New share links need Pro</AlertTitle>
           <AlertDescription>
             <span>
-              A share is a second encrypted copy of this transcript stored on our
-              server, so it is part of session recording rather than a separate
-              thing. Links you already have are listed below and can still be
-              revoked — that must never depend on a subscription. The recording
-              itself still plays and still downloads, and a downloaded cast file
-              can be sent to anyone.
+              A share is a second encrypted copy of this transcript stored on our server, so it is
+              part of session recording rather than a separate thing. Links you already have are
+              listed below and can still be revoked — that must never depend on a subscription. The
+              recording itself still plays and still downloads, and a downloaded cast file can be
+              sent to anyone.
             </span>
           </AlertDescription>
         </Alert>
@@ -951,11 +941,10 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
           </div>
 
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Every load of the viewer counts as a view, a reload included. A share
-            is a second encrypted copy of the recording, so it takes the same
-            storage again — the figure on this page counts recordings only, so
-            share copies are not in it. Revoking a link deletes its copy and gives
-            that storage back.
+            Every load of the viewer counts as a view, a reload included. A share is a second
+            encrypted copy of the recording, so it takes the same storage again — the figure on this
+            page counts recordings only, so share copies are not in it. Revoking a link deletes its
+            copy and gives that storage back.
           </p>
 
           <div>
@@ -973,14 +962,14 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
           <Skeleton className="h-8 w-full" />
         ) : listState === "failed" ? (
           <p className="text-xs text-muted-foreground">
-            The existing links could not be listed. Creating a new one still works; this is only
-            the list.
+            The existing links could not be listed. Creating a new one still works; this is only the
+            list.
           </p>
         ) : shares.length === 0 ? (
           <p className="text-xs leading-relaxed text-muted-foreground">
             No links exist for this recording, which means none has ever been made — from this
-            browser or any other. Revoking a link leaves its row here, so an empty list is the
-            whole answer rather than half of one.
+            browser or any other. Revoking a link leaves its row here, so an empty list is the whole
+            answer rather than half of one.
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-border border border-border">
@@ -997,9 +986,9 @@ function SharePanel({ summary, cast }: { summary: RecordingSummary; cast: Cast }
         )}
         <p className="text-xs leading-relaxed text-muted-foreground">
           The links themselves are not listed, and cannot be: each one&rsquo;s key existed only in
-          the tab that made it, so what is kept here is the row, not the address. Revoking stops
-          the next fetch and nothing more — it does not reach a copy already watched or downloaded,
-          and whoever has the link still has a key.
+          the tab that made it, so what is kept here is the row, not the address. Revoking stops the
+          next fetch and nothing more — it does not reach a copy already watched or downloaded, and
+          whoever has the link still has a key.
         </p>
       </div>
     </div>
@@ -1024,11 +1013,10 @@ function NewLink({ link, onDone }: { link: string; onDone: () => void }) {
       </div>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
-        We cannot show this again — the key after the{" "}
-        <code className="text-foreground">#</code> was generated in this tab, put
-        into this link, and dropped. The server has the encrypted copy and no way
-        to open it, so if this link is lost the only way forward is to revoke it
-        and make a new one.
+        We cannot show this again — the key after the <code className="text-foreground">#</code> was
+        generated in this tab, put into this link, and dropped. The server has the encrypted copy
+        and no way to open it, so if this link is lost the only way forward is to revoke it and make
+        a new one.
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -1093,13 +1081,7 @@ function ShareRow({
       </span>
 
       {share.revokedAt === null && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ml-auto"
-          disabled={busy}
-          onClick={onRevoke}
-        >
+        <Button size="sm" variant="ghost" className="ml-auto" disabled={busy} onClick={onRevoke}>
           {busy ? <SpinnerGapIcon className="animate-spin" /> : <ProhibitIcon />}
           Revoke
         </Button>
@@ -1196,8 +1178,7 @@ function SessionRow({
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              Recording new sessions needs Pro. Recordings already saved still
-              play and download.
+              Recording new sessions needs Pro. Recordings already saved still play and download.
             </TooltipContent>
           </Tooltip>
         )}
@@ -1295,11 +1276,7 @@ function SaveState({
           <ArrowClockwiseIcon /> Save
         </Button>
       )}
-      <Button
-        size="sm"
-        variant={recorder.retryable ? "ghost" : "secondary"}
-        onClick={onDownload}
-      >
+      <Button size="sm" variant={recorder.retryable ? "ghost" : "secondary"} onClick={onDownload}>
         <DownloadSimpleIcon /> Download
       </Button>
       <Button size="sm" variant="ghost" onClick={onDiscard}>
@@ -1314,7 +1291,8 @@ function SaveState({
 const OPAQUE_COPY: Record<HostIndexState, string> = {
   ready:
     "No host saved in this vault produces this reference — a one-off connection, or one saved on a device that has not synced here. The server cannot resolve it either: it has never held the name.",
-  resolving: "This device is still hashing your saved hosts to see which reference each one produces.",
+  resolving:
+    "This device is still hashing your saved hosts to see which reference each one produces.",
   locked:
     "This is HMAC(audit key, host and port). Unlock the vault and this device can match it against your saved hosts. The server can never match it.",
   "no-audit-key":
@@ -1339,9 +1317,9 @@ function HostCell({
           <span className="cursor-help text-muted-foreground">no reference</span>
         </TooltipTrigger>
         <TooltipContent className="block max-w-sm">
-          This recording was stored without a host reference, which happens when
-          the tab had no audit key at the time. Which host it was is still inside
-          the ciphertext — open it and the header says.
+          This recording was stored without a host reference, which happens when the tab had no
+          audit key at the time. Which host it was is still inside the ciphertext — open it and the
+          header says.
         </TooltipContent>
       </Tooltip>
     );
@@ -1386,16 +1364,16 @@ function EmptyState() {
         <div className="max-w-xl">
           <h3 className="font-heading text-sm font-medium">Nothing recorded yet</h3>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Start a recording from an open session above and everything the shell
-            prints from that moment is captured with its timing, so it can be
-            replayed at the size it ran at. It is a transcript for a runbook, an
-            incident write-up, or showing someone what actually happened.
+            Start a recording from an open session above and everything the shell prints from that
+            moment is captured with its timing, so it can be replayed at the size it ran at. It is a
+            transcript for a runbook, an incident write-up, or showing someone what actually
+            happened.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Nothing is captured until you ask for it, and the capture is encrypted
-            in this browser before it is stored. What we hold is a blob, its size,
-            its length and a blinded reference to the host — we cannot play your
-            recordings back, search them, or tell you what is in one.
+            Nothing is captured until you ask for it, and the capture is encrypted in this browser
+            before it is stored. What we hold is a blob, its size, its length and a blinded
+            reference to the host — we cannot play your recordings back, search them, or tell you
+            what is in one.
           </p>
         </div>
       </CardContent>
@@ -1431,9 +1409,8 @@ function SignedOutState() {
         </span>
         <p className="font-heading text-sm font-medium">This browser is signed out</p>
         <p className="max-w-lg text-muted-foreground">
-          Recordings are per account, so the list cannot be read without a
-          session. Signing in again also lets you unlock the vault, which is what
-          makes a recording playable.
+          Recordings are per account, so the list cannot be read without a session. Signing in again
+          also lets you unlock the vault, which is what makes a recording playable.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-1">
           <Link href="/sign-in">Sign in</Link>
@@ -1455,9 +1432,8 @@ function ErrorState({ message: text, onRetry }: { message: string; onRetry: () =
         </span>
         <p className="font-heading text-sm font-medium">The recordings could not be listed</p>
         <p className="max-w-lg text-muted-foreground">
-          {text} Recording itself does not depend on this list — a session can
-          still be captured while the list is unavailable, and it will be stored
-          when you stop.
+          {text} Recording itself does not depend on this list — a session can still be captured
+          while the list is unavailable, and it will be stored when you stop.
         </p>
         <Button variant="outline" size="sm" className="mt-1" onClick={onRetry}>
           <ArrowClockwiseIcon data-icon="inline-start" />

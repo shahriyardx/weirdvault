@@ -125,9 +125,8 @@ export function VaultUnlock() {
             Unlock your vault
           </DialogTitle>
           <DialogDescription>
-            Your vault key is derived on this device and never stored, so
-            reloading the page locks it again. Enter your password to unlock
-            portable keys and sync.
+            Your vault key is derived on this device and never stored, so reloading the page locks
+            it again. Enter your password to unlock portable keys and sync.
           </DialogDescription>
         </DialogHeader>
 

@@ -1,9 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowRightIcon,
-  BroadcastIcon,
-  ShieldCheckIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, BroadcastIcon, ShieldCheckIcon } from "@phosphor-icons/react/dist/ssr";
 
 import { ArchitectureDiagram } from "@/components/diagrams/architecture";
 import { FeatureBento } from "@/components/marketing/bento";
@@ -69,10 +65,9 @@ export default function Home() {
               </h1>
 
               <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground">
-                Open a tab, generate a key, add one line to your server. You get
-                a real terminal, a file explorer, drag-and-drop uploads and a
-                remote editor — with an SSH client that runs inside the page,
-                not on our servers.
+                Open a tab, generate a key, add one line to your server. You get a real terminal, a
+                file explorer, drag-and-drop uploads and a remote editor — with an SSH client that
+                runs inside the page, not on our servers.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -131,8 +126,8 @@ export default function Home() {
             A dashboard, not a web terminal
           </h2>
           <p className="mt-4 text-base leading-relaxed text-muted-foreground text-pretty">
-            Everything rides one SSH connection, so the file explorer costs no
-            second login and the editor opens instantly.
+            Everything rides one SSH connection, so the file explorer costs no second login and the
+            editor opens instantly.
           </p>
         </Reveal>
 
@@ -158,17 +153,15 @@ export default function Home() {
                 The relay cannot read your session
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                A browser can&apos;t open a TCP socket, so something has to
-                bridge to your server. Ours forwards bytes that were already
-                encrypted inside your tab — the SSH handshake terminates in the
-                page, not in our infrastructure. Host keys are pinned on first
-                use and verified on every reconnect, which is what keeps the
-                relay honest.
+                A browser can&apos;t open a TCP socket, so something has to bridge to your server.
+                Ours forwards bytes that were already encrypted inside your tab — the SSH handshake
+                terminates in the page, not in our infrastructure. Host keys are pinned on first use
+                and verified on every reconnect, which is what keeps the relay honest.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                What the relay does see is metadata: which host, when, and how
-                much. We publish that rather than gloss it, and the whole thing
-                is self-hostable if you&apos;d rather it saw nothing at all.
+                What the relay does see is metadata: which host, when, and how much. We publish that
+                rather than gloss it, and the whole thing is self-hostable if you&apos;d rather it
+                saw nothing at all.
               </p>
               <Button asChild variant="outline" className="mt-6">
                 <Link href="/security">Read the threat model</Link>
@@ -196,13 +189,11 @@ export default function Home() {
               Sync is free. Forever.
             </h2>
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Unlimited hosts, unlimited devices, SFTP, snippets, recordings and
-              encrypted sync — all of it free, because there is no paid tier
-              holding anything back. Two limits, and neither is a paywall: our
-              relay carries {FREE_TRANSFER} a month for you, and activity
-              history keeps {FREE_HISTORY}. A relay you host yourself carries as
-              much as you like. The pricing page says which parts are unfinished
-              rather than leaving you to find out.
+              Unlimited hosts, unlimited devices, SFTP, snippets, recordings and encrypted sync —
+              all of it free, because there is no paid tier holding anything back. Two limits, and
+              neither is a paywall: our relay carries {FREE_TRANSFER} a month for you, and activity
+              history keeps {FREE_HISTORY}. A relay you host yourself carries as much as you like.
+              The pricing page says which parts are unfinished rather than leaving you to find out.
             </p>
           </div>
           <div className="flex gap-3 md:ml-auto md:shrink-0">
@@ -242,9 +233,7 @@ function Stat({ value, label }: { value: string; label: string }) {
       <p className="font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
         {value}
       </p>
-      <p className="mt-2 text-xs leading-relaxed text-pretty text-muted-foreground">
-        {label}
-      </p>
+      <p className="mt-2 text-xs leading-relaxed text-pretty text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -259,9 +248,7 @@ function CommandPreview() {
           <span className="size-2.5 rounded-full bg-warning/60" />
           <span className="size-2.5 rounded-full bg-success/60" />
         </span>
-        <span className="text-xs text-muted-foreground">
-          your server — setup, in full
-        </span>
+        <span className="text-xs text-muted-foreground">your server — setup, in full</span>
       </div>
       <pre className="overflow-x-auto bg-terminal px-4 py-3 text-xs leading-relaxed">
         <span className="text-muted-foreground">$ </span>

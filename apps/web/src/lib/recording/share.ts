@@ -282,10 +282,7 @@ export async function openShared(key: CryptoKey, blob: string): Promise<Cast> {
   try {
     payload = await decryptVault<SharePayload>(key, envelope);
   } catch {
-    throw new ShareError(
-      "wrong-key",
-      "the key in this link does not open this recording",
-    );
+    throw new ShareError("wrong-key", "the key in this link does not open this recording");
   }
 
   if (payload.v !== 1) {

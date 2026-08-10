@@ -419,9 +419,7 @@ async function rekey(
     // second read: it is a single fast request, and moving the bar backwards to
     // announce it would read as a fault.
     pulled = await pullVault();
-    document = pulled.envelope
-      ? await tryDecrypt(oldSecrets.vaultKey, pulled.envelope)
-      : null;
+    document = pulled.envelope ? await tryDecrypt(oldSecrets.vaultKey, pulled.envelope) : null;
     if (pulled.envelope && !document) throw new WrongCurrentPasswordError(via);
   }
 
@@ -441,10 +439,7 @@ async function rekey(
     document = { ...document, keys: rewrapped };
 
     report("pushing");
-    version = await pushVault(
-      await encryptVault(newSecrets.vaultKey, document),
-      pulled.version,
-    );
+    version = await pushVault(await encryptVault(newSecrets.vaultKey, document), pulled.version);
   }
 
   // Everything above this line is reversible: the account still opens with the
@@ -540,10 +535,7 @@ async function pushVault(envelope: VaultEnvelope, baseVersion: number): Promise<
  * restore.ts both do the same thing at the same boundary; this was the third
  * reader of a stored blob and the only one that trusted it.
  */
-async function tryDecrypt(
-  key: CryptoKey,
-  envelope: VaultEnvelope,
-): Promise<VaultDocument | null> {
+async function tryDecrypt(key: CryptoKey, envelope: VaultEnvelope): Promise<VaultDocument | null> {
   try {
     const doc = await decryptVault<Partial<VaultDocument>>(key, envelope);
     return {

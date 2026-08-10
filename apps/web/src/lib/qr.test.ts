@@ -153,7 +153,8 @@ function functionMap(version: number, size: number): boolean[][] {
         (i === 0 && j === centres.length - 1) ||
         (i === centres.length - 1 && j === 0);
       if (corner) continue;
-      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) mark(centres[i] + dr, centres[j] + dc);
+      for (let dr = -2; dr <= 2; dr++)
+        for (let dc = -2; dc <= 2; dc++) mark(centres[i] + dr, centres[j] + dc);
     }
   }
   // Format areas, both copies, and the always-dark module.

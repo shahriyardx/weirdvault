@@ -202,7 +202,8 @@ function finite(value: unknown, what: string): number {
 
 function positiveInt(value: unknown, what: string): number {
   const n = finite(value, what);
-  if (!Number.isInteger(n) || n <= 0) throw new CastFormatError(`${what} is not a positive integer`);
+  if (!Number.isInteger(n) || n <= 0)
+    throw new CastFormatError(`${what} is not a positive integer`);
   return n;
 }
 

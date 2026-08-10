@@ -175,10 +175,7 @@ const GRANTS_WHILE_RETRYING = new Set(["past_due", "unpaid"]);
  * (a paying customer sees Free) is one a support message fixes, where the
  * invisible one (a lapsed account keeps Pro forever) is not.
  */
-export function tierForSubscription(
-  sub: SubscriptionAccess | null,
-  now: Date = new Date(),
-): Tier {
+export function tierForSubscription(sub: SubscriptionAccess | null, now: Date = new Date()): Tier {
   if (!sub) return "free";
 
   if (GRANTS_OUTRIGHT.has(sub.status)) return "pro";

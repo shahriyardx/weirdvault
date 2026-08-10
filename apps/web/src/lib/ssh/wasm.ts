@@ -2,12 +2,7 @@
 
 import { relayQuotaError } from "@/lib/usage";
 
-import type {
-  ConnectConfig,
-  ImportedKey,
-  ParsedConfigHost,
-  SshSession,
-} from "./types";
+import type { ConnectConfig, ImportedKey, ParsedConfigHost, SshSession } from "./types";
 
 /**
  * Loads the Go SSH core.

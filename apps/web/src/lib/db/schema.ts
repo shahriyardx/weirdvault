@@ -535,7 +535,6 @@ export const recordingShare = pgTable(
   ],
 );
 
-
 /**
  * Stripe subscriptions.
  *

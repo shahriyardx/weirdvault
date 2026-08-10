@@ -280,18 +280,8 @@ export async function restoreVault(
   const result: RestoreResult = {
     hosts: countAgainst(local.hosts, imported.hosts, merged.hosts, hostStamp),
     keys: countAgainst(local.keys, imported.keys, merged.keys, (k) => k.createdAt),
-    hostKeys: countAgainst(
-      local.hostKeys,
-      imported.hostKeys,
-      merged.hostKeys,
-      (k) => k.pinnedAt,
-    ),
-    snippets: countAgainst(
-      local.snippets,
-      imported.snippets,
-      merged.snippets,
-      (s) => s.updatedAt,
-    ),
+    hostKeys: countAgainst(local.hostKeys, imported.hostKeys, merged.hostKeys, (k) => k.pinnedAt),
+    snippets: countAgainst(local.snippets, imported.snippets, merged.snippets, (s) => s.updatedAt),
     sync: null,
   };
 

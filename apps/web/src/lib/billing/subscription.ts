@@ -311,7 +311,8 @@ export function periodEndOf(subscription: Stripe.Subscription): Date | null {
   let latest: number | null = null;
   for (const item of subscription.items.data) {
     if (typeof item.current_period_end === "number") {
-      latest = latest === null ? item.current_period_end : Math.max(latest, item.current_period_end);
+      latest =
+        latest === null ? item.current_period_end : Math.max(latest, item.current_period_end);
     }
   }
   return latest === null ? null : new Date(latest * 1000);
@@ -492,11 +493,7 @@ async function stillGranting(subscriptionId: string): Promise<boolean> {
       }) === "pro"
     );
   } catch (e) {
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      (e as { statusCode?: number }).statusCode === 404
-    ) {
+    if (typeof e === "object" && e !== null && (e as { statusCode?: number }).statusCode === 404) {
       return false;
     }
     console.warn(

@@ -19,10 +19,7 @@ async function requireUser() {
   return session?.user ?? null;
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
@@ -37,7 +34,10 @@ export async function PATCH(
 
   const label =
     typeof body.label === "string"
-      ? body.label.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim().slice(0, MAX_LABEL)
+      ? body.label
+          .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+          .trim()
+          .slice(0, MAX_LABEL)
       : "";
   if (!label) {
     return Response.json({ error: "label (non-empty string) required" }, { status: 400 });
@@ -75,10 +75,7 @@ export async function PATCH(
  * the coupling the whole token design exists to avoid. The window is one live
  * control connection carrying no new sessions.
  */
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
@@ -111,10 +108,7 @@ export async function DELETE(
       .returning({ id: schema.agent.id });
 
     if (forgotten.length === 0) {
-      return Response.json(
-        { error: "not found, or not revoked yet" },
-        { status: 404 },
-      );
+      return Response.json({ error: "not found, or not revoked yet" }, { status: 404 });
     }
     return Response.json({ ok: true, forgotten: true });
   }

@@ -93,9 +93,7 @@ export function HeroTerminal() {
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary">
               <div className="h-full w-2/3 rounded-full bg-primary/70" />
             </div>
-            <p className="mt-1 font-mono text-[9px] text-muted-foreground">
-              build.tar · 62%
-            </p>
+            <p className="mt-1 font-mono text-[9px] text-muted-foreground">build.tar · 62%</p>
           </div>
         </div>
       </div>

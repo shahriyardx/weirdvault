@@ -267,9 +267,7 @@ function newCode(): string {
 export async function recoveryCodeId(code: string): Promise<string> {
   const material = new TextEncoder().encode(ID_INFO + normaliseRecoveryCode(code));
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", material));
-  return [...digest.slice(0, ID_BYTES)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return [...digest.slice(0, ID_BYTES)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function wrappingKeyFor(code: string, salt: Uint8Array): Promise<CryptoKey> {
@@ -458,10 +456,7 @@ export async function enrolRecoveryCodes(
  * second factor, which this token does not answer for. See the consequences list
  * in the file header and the refusal in signInWithRecoveredToken.
  */
-export async function redeemRecoveryCode(
-  email: string,
-  code: string,
-): Promise<DerivedSecrets> {
+export async function redeemRecoveryCode(email: string, code: string): Promise<DerivedSecrets> {
   const codeId = await recoveryCodeId(code);
 
   const res = await fetch("/api/recovery", {

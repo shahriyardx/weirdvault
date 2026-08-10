@@ -71,9 +71,7 @@ export async function openSession(opts: ConnectOptions): Promise<SshSession> {
   let seen: HostKeyInfo | null = null;
 
   const session = await rawConnect({
-    relay: opts.agentId
-      ? await agentRelayUrl(opts.agentId, port)
-      : await relayUrl(hostname, port),
+    relay: opts.agentId ? await agentRelayUrl(opts.agentId, port) : await relayUrl(hostname, port),
     host: hostname,
     port,
     user: username,

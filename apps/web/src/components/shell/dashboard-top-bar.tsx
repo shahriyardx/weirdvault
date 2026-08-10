@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  LockKeyIcon,
-  LockKeyOpenIcon,
-  SignOutIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { LockKeyIcon, LockKeyOpenIcon, SignOutIcon } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";

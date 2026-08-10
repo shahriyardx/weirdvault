@@ -60,10 +60,7 @@ async function requireUser() {
  */
 async function bindSessionToDevice(sessionId: string, deviceId: string): Promise<void> {
   try {
-    await db
-      .update(schema.session)
-      .set({ deviceId })
-      .where(eq(schema.session.id, sessionId));
+    await db.update(schema.session).set({ deviceId }).where(eq(schema.session.id, sessionId));
   } catch {
     /* see above */
   }
@@ -178,11 +175,13 @@ export async function DELETE(request: Request) {
   const result = await db
     .update(schema.device)
     .set({ revokedAt: new Date() })
-    .where(and(
-      eq(schema.device.id, id),
-      eq(schema.device.userId, user.id),
-      isNull(schema.device.revokedAt),
-    ))
+    .where(
+      and(
+        eq(schema.device.id, id),
+        eq(schema.device.userId, user.id),
+        isNull(schema.device.revokedAt),
+      ),
+    )
     .returning({ id: schema.device.id });
 
   if (result.length === 0) {
@@ -199,9 +198,9 @@ export async function DELETE(request: Request) {
   // minute maxAge, so a browser holding a fresh cache cookie is served from it
   // without a database read and keeps working for up to that long after the row
   // is gone. The UI says so rather than promising an instant cut-off.
-  await db.delete(schema.session).where(
-    and(eq(schema.session.userId, user.id), eq(schema.session.deviceId, id)),
-  );
+  await db
+    .delete(schema.session)
+    .where(and(eq(schema.session.userId, user.id), eq(schema.session.deviceId, id)));
 
   await db.insert(schema.auditEvent).values({
     id: crypto.randomUUID(),

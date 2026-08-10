@@ -24,11 +24,7 @@ export interface VaultEnvelope {
 export async function encryptVault(key: CryptoKey, data: unknown): Promise<VaultEnvelope> {
   const plaintext = new TextEncoder().encode(JSON.stringify(data));
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    plaintext as BufferSource,
-  );
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext as BufferSource);
   plaintext.fill(0);
   return { v: 1, iv: toB64(iv), ct: toB64(new Uint8Array(ct)) };
 }

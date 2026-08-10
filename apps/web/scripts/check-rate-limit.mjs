@@ -72,8 +72,11 @@ async function consume(key, max, windowSeconds, now = Date.now()) {
     decisions.map((d) => d.allowed).join(",") === "true,true,true,false,false",
     decisions.map((d) => `${d.count}:${d.allowed}`).join(" "),
   );
-  check("a refusal says when to come back", decisions[4].retryAfter > 0 && decisions[4].retryAfter <= 60,
-    String(decisions[4].retryAfter));
+  check(
+    "a refusal says when to come back",
+    decisions[4].retryAfter > 0 && decisions[4].retryAfter <= 60,
+    String(decisions[4].retryAfter),
+  );
 }
 
 {
@@ -85,8 +88,11 @@ async function consume(key, max, windowSeconds, now = Date.now()) {
   const blocked = await consume(key, 2, 10);
   const afterWindow = await consume(key, 2, 10, Date.now() + 11_000);
   check("blocked inside the window", !blocked.allowed);
-  check("allowed once the window elapses, with the count reset", afterWindow.allowed && afterWindow.count === 1,
-    `count=${afterWindow.count}`);
+  check(
+    "allowed once the window elapses, with the count reset",
+    afterWindow.allowed && afterWindow.count === 1,
+    `count=${afterWindow.count}`,
+  );
 }
 
 {
@@ -129,8 +135,11 @@ async function consume(key, max, windowSeconds, now = Date.now()) {
   };
   const allowed = (await Promise.all(Array.from({ length: 10 }, one))).filter(Boolean).length;
   await pool.end();
-  check("ten concurrent requests against a limit of three allow exactly three", allowed === 3,
-    `${allowed} allowed`);
+  check(
+    "ten concurrent requests against a limit of three allow exactly three",
+    allowed === 3,
+    `${allowed} allowed`,
+  );
 }
 
 await client.query(`DELETE FROM "rate_limit" WHERE "key" LIKE $1`, [`${KEY}%`]);
@@ -150,10 +159,17 @@ async function app(path, init = {}) {
   });
   const set = res.headers.getSetCookie?.() ?? [];
   if (set.length) cookie = set.map((c) => c.split(";")[0]).join("; ");
-  return { status: res.status, retryAfter: res.headers.get("retry-after"), body: await res.json().catch(() => ({})) };
+  return {
+    status: res.status,
+    retryAfter: res.headers.get("retry-after"),
+    body: await res.json().catch(() => ({})),
+  };
 }
 
-const reachable = await fetch(`${APP}/api/recordings`).then(() => true, () => false);
+const reachable = await fetch(`${APP}/api/recordings`).then(
+  () => true,
+  () => false,
+);
 if (!reachable) {
   console.log(`\ncheck-rate-limit: ${APP} is not answering; skipping the route checks`);
 } else {
@@ -204,7 +220,9 @@ if (!reachable) {
     );
 
     await client.query(`DELETE FROM "user" WHERE id = $1`, [userId]);
-    await client.query(`DELETE FROM "rate_limit" WHERE "key" LIKE 'share:%' OR "key" LIKE '%sign-in%'`);
+    await client.query(
+      `DELETE FROM "rate_limit" WHERE "key" LIKE 'share:%' OR "key" LIKE '%sign-in%'`,
+    );
   }
 }
 

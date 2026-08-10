@@ -27,10 +27,7 @@ export interface SftpHandle {
     onChunk: (chunk: Uint8Array) => void | Promise<void>,
   ): Promise<TransferResult>;
   /** Pull-based: return null to end the stream. */
-  upload(
-    path: string,
-    next: () => Promise<Uint8Array | null>,
-  ): Promise<TransferResult>;
+  upload(path: string, next: () => Promise<Uint8Array | null>): Promise<TransferResult>;
 }
 
 export interface SshSession {

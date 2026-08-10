@@ -71,11 +71,7 @@ import {
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shell/page-shell";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -324,9 +320,7 @@ function AccountSection({
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="truncate font-heading text-sm font-medium">
-                    {display}
-                  </p>
+                  <p className="truncate font-heading text-sm font-medium">{display}</p>
                   <p className="truncate text-muted-foreground">
                     {email ?? "No session on this device"}
                   </p>
@@ -364,8 +358,8 @@ function AccountSection({
         <AlertTitle>Your email cannot be changed</AlertTitle>
         <AlertDescription>
           <span>
-            It is the salt your vault key is derived from. Changing it would mean
-            re-encrypting the whole vault.
+            It is the salt your vault key is derived from. Changing it would mean re-encrypting the
+            whole vault.
           </span>
         </AlertDescription>
       </Alert>
@@ -460,9 +454,7 @@ function BillingSection() {
           <CreditCardIcon className="size-4 text-primary" />
           Plan and billing
         </CardTitle>
-        <CardDescription>
-          Cards, invoices and cancellation are handled by Stripe.
-        </CardDescription>
+        <CardDescription>Cards, invoices and cancellation are handled by Stripe.</CardDescription>
         <CardAction className="flex items-center gap-2">
           {billing ? (
             <Badge variant="outline" className={pro ? "text-success" : undefined}>
@@ -508,8 +500,8 @@ function BillingSection() {
                 <AlertTitle>This is an assumption, not a lookup</AlertTitle>
                 <AlertDescription>
                   <span>
-                    Your plan could not be read, so Pro was granted rather than
-                    refused. It will correct itself shortly.
+                    Your plan could not be read, so Pro was granted rather than refused. It will
+                    correct itself shortly.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -519,13 +511,12 @@ function BillingSection() {
               <Alert>
                 <InfoIcon className="text-primary" />
                 <AlertTitle>
-                  You came back from checkout; this account still shows{" "}
-                  {billing.label}
+                  You came back from checkout; this account still shows {billing.label}
                 </AlertTitle>
                 <AlertDescription>
                   <span>
-                    Stripe confirms payments to us separately, usually within
-                    seconds. Refresh above in a moment.
+                    Stripe confirms payments to us separately, usually within seconds. Refresh above
+                    in a moment.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -559,9 +550,8 @@ function BillingSection() {
             <p className="flex items-start gap-2 text-muted-foreground">
               <InfoIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />
               <span className="min-w-0">
-                {formatBytes(billing.limits.relayAllowanceBytes)} relay transfer a
-                month · {billing.limits.auditRetentionLabel} of activity history ·
-                session recording{" "}
+                {formatBytes(billing.limits.relayAllowanceBytes)} relay transfer a month ·{" "}
+                {billing.limits.auditRetentionLabel} of activity history · session recording{" "}
                 {billing.limits.sessionRecording ? "on" : "off"} ·{" "}
                 <Link href="/pricing" className="underline underline-offset-2">
                   compare plans
@@ -575,10 +565,9 @@ function BillingSection() {
                 <AlertTitle>This subscription is set to end</AlertTitle>
                 <AlertDescription>
                   <span>
-                    Pro stops on {formatDate(billing.currentPeriodEnd)}. New
-                    recordings stop and activity history shortens to the Free
-                    window, deleting older events; recordings you already have
-                    stay. Undo it in the billing portal.
+                    Pro stops on {formatDate(billing.currentPeriodEnd)}. New recordings stop and
+                    activity history shortens to the Free window, deleting older events; recordings
+                    you already have stay. Undo it in the billing portal.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -594,8 +583,7 @@ function BillingSection() {
                   <span>
                     No payment provider is configured. The operator sets{" "}
                     <code className="font-mono">STRIPE_SECRET_KEY</code> and{" "}
-                    <code className="font-mono">STRIPE_PRICE_PRO</code>; see
-                    apps/web/README.md.
+                    <code className="font-mono">STRIPE_PRICE_PRO</code>; see apps/web/README.md.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -748,9 +736,8 @@ function RelayTransferSection() {
           Relay transfer this month
         </CardTitle>
         <CardDescription>
-          Everything the relay carries for you, in both directions. Recordings
-          have a separate {formatBytes(MAX_ACCOUNT_RECORDING_BYTES)} ceiling,
-          shown on the{" "}
+          Everything the relay carries for you, in both directions. Recordings have a separate{" "}
+          {formatBytes(MAX_ACCOUNT_RECORDING_BYTES)} ceiling, shown on the{" "}
           <Link href="/dashboard/recordings" className="underline underline-offset-2">
             Recordings page
           </Link>
@@ -802,8 +789,7 @@ function RelayTransferSection() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-heading text-sm font-medium tabular-nums">
-                  {formatBytes(usage.bytesTotal)} of{" "}
-                  {formatBytes(usage.allowanceBytes)}
+                  {formatBytes(usage.bytesTotal)} of {formatBytes(usage.allowanceBytes)}
                 </p>
                 <p
                   className={
@@ -823,10 +809,7 @@ function RelayTransferSection() {
               <dl className="grid gap-3 pt-1 sm:grid-cols-3">
                 <Field label="Sent" value={formatBytes(usage.bytesUp)} />
                 <Field label="Received" value={formatBytes(usage.bytesDown)} />
-                <Field
-                  label="Resets"
-                  value={`${formatUtcDate(usage.resetsAt)}, 00:00 UTC`}
-                />
+                <Field label="Resets" value={`${formatUtcDate(usage.resetsAt)}, 00:00 UTC`} />
               </dl>
             </div>
 
@@ -836,9 +819,8 @@ function RelayTransferSection() {
                 <AlertTitle>New connections through the relay are refused</AlertTitle>
                 <AlertDescription>
                   <span>
-                    Open sessions keep running. New ones fail until{" "}
-                    {formatUtcDate(usage.resetsAt)}. Running your own relay
-                    removes the limit.
+                    Open sessions keep running. New ones fail until {formatUtcDate(usage.resetsAt)}.
+                    Running your own relay removes the limit.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -852,8 +834,7 @@ function RelayTransferSection() {
                 </AlertTitle>
                 <AlertDescription>
                   <span>
-                    At the limit, new connections are refused until{" "}
-                    {formatUtcDate(usage.resetsAt)}.
+                    At the limit, new connections are refused until {formatUtcDate(usage.resetsAt)}.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -868,11 +849,9 @@ function RelayTransferSection() {
                       rather than genuinely small, and that difference has to be
                       visible or the meter lies quietly. */}
                   <span>
-                    Usage reporting is not configured, so the figures above are
-                    always zero. Set{" "}
+                    Usage reporting is not configured, so the figures above are always zero. Set{" "}
                     <code className="font-mono">RELAY_USAGE_SECRET</code> and{" "}
-                    <code className="font-mono">RELAY_USAGE_URL</code>; see
-                    apps/relay/README.md.
+                    <code className="font-mono">RELAY_USAGE_URL</code>; see apps/relay/README.md.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -883,11 +862,9 @@ function RelayTransferSection() {
                   {usage.updatedAt
                     ? `Last reported ${formatDateTime(usage.updatedAt)}, `
                     : "No relay has reported traffic for this account this month, "}
-                  {readAt === null
-                    ? "read just now. "
-                    : `read at ${formatClock(readAt)}. `}
-                  Counts arrive about once a minute, so a session in progress may
-                  not be included yet.
+                  {readAt === null ? "read just now. " : `read at ${formatClock(readAt)}. `}
+                  Counts arrive about once a minute, so a session in progress may not be included
+                  yet.
                 </span>
               </p>
             )}
@@ -1082,12 +1059,10 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
           <AlertTitle>Two things it does not cover</AlertTitle>
           <AlertDescription>
             <ul className="list-disc space-y-1 pl-4">
+              <li>Passkey and GitHub sign-ins are never asked for a code.</li>
               <li>
-                Passkey and GitHub sign-ins are never asked for a code.
-              </li>
-              <li>
-                Recovery codes stop working while this is on. Keep the backup
-                codes below somewhere safe.
+                Recovery codes stop working while this is on. Keep the backup codes below somewhere
+                safe.
               </li>
             </ul>
           </AlertDescription>
@@ -1095,13 +1070,12 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
 
         {blocked ? (
           <NotImplemented>
-            Enrolment is turned off on this deployment. The <code>two_factor</code>{" "}
-            table is missing{" "}
+            Enrolment is turned off on this deployment. The <code>two_factor</code> table is missing{" "}
             {availability.missing.length > 0
               ? `the ${availability.missing.join(", ")} ${availability.missing.length === 1 ? "column" : "columns"}`
               : "columns"}{" "}
-            that the installed version of Better Auth writes. This needs a
-            migration from whoever runs the database.
+            that the installed version of Better Auth writes. This needs a migration from whoever
+            runs the database.
           </NotImplemented>
         ) : codes ? (
           <GeneratedCodes
@@ -1167,8 +1141,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
                   <AlertDialogHeader>
                     <AlertDialogTitle>Turn off the authenticator app?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Your password alone will sign you in again. Backup codes are
-                      deleted and setting this up again means scanning a new code.
+                      Your password alone will sign you in again. Backup codes are deleted and
+                      setting this up again means scanning a new code.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -1200,8 +1174,7 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
                 disabled={busy !== null || !email}
               />
               <p className="text-muted-foreground">
-                Nothing is switched on until you have entered a code from your
-                app.
+                Nothing is switched on until you have entered a code from your app.
               </p>
             </div>
 
@@ -1251,8 +1224,8 @@ function TotpEnrolmentPanel({
 
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-muted-foreground">
-            Scan this with your authenticator app, or type the secret in by hand
-            if the app is on this machine.
+            Scan this with your authenticator app, or type the secret in by hand if the app is on
+            this machine.
           </p>
           <div>
             <p className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
@@ -1296,10 +1269,9 @@ function TotpEnrolmentPanel({
             disabled={busy}
           />
           <p className="text-muted-foreground">
-            Nothing is enabled until this is accepted. If it is refused twice,
-            check that the clock on the device generating the code is right —
-            that is the usual cause, and enabling on a wrong clock would lock you
-            out of an account nobody can let you back into.
+            Nothing is enabled until this is accepted. If it is refused twice, check that the clock
+            on the device generating the code is right — that is the usual cause, and enabling on a
+            wrong clock would lock you out of an account nobody can let you back into.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1345,8 +1317,8 @@ function TotpQrCode({ value }: { value: string }) {
     return (
       <div className="w-full max-w-[200px] shrink-0 border border-warning/40 p-3">
         <p className="text-warning">
-          The QR code could not be generated for this enrolment. Type the secret
-          in by hand instead — it is the same factor.
+          The QR code could not be generated for this enrolment. Type the secret in by hand instead
+          — it is the same factor.
         </p>
       </div>
     );
@@ -1420,7 +1392,8 @@ function PasskeysSection() {
       setName("");
       await refresh();
       toast.success("Passkey registered", {
-        description: "It signs you in. It does not unlock your vault — your password still does that.",
+        description:
+          "It signs you in. It does not unlock your vault — your password still does that.",
       });
     } catch (err) {
       // Closing the browser prompt is a decision, not a failure.
@@ -1438,7 +1411,8 @@ function PasskeysSection() {
       await removePasskey(id);
       await refresh();
       toast.success("Passkey removed", {
-        description: "It will no longer sign you in. Whatever is stored on the device itself is the device's to delete.",
+        description:
+          "It will no longer sign you in. Whatever is stored on the device itself is the device's to delete.",
       });
     } catch (err) {
       toast.error("The passkey was not removed", { description: message(err) });
@@ -1470,9 +1444,9 @@ function PasskeysSection() {
           Passkeys
         </CardTitle>
         <CardDescription>
-          A key held by your device or password manager, used instead of typing
-          your email and password at sign-in. It never leaves the authenticator
-          that holds it, and we only ever store its public half.
+          A key held by your device or password manager, used instead of typing your email and
+          password at sign-in. It never leaves the authenticator that holds it, and we only ever
+          store its public half.
         </CardDescription>
         <CardAction>
           {passkeys === null ? (
@@ -1490,8 +1464,8 @@ function PasskeysSection() {
             passkey does not replace the vault password, and it skips the
             two-factor challenge — but they are facts, not essays. */}
         <p className="text-muted-foreground">
-          A passkey signs you in. You still enter your vault password afterwards,
-          and a passkey sign-in is not asked for a two-factor code.
+          A passkey signs you in. You still enter your vault password afterwards, and a passkey
+          sign-in is not asked for a two-factor code.
         </p>
 
         {loadError ? (
@@ -1511,104 +1485,108 @@ function PasskeysSection() {
               // property of state that may have changed by the time a handler runs.
               const editing = renaming?.id === p.id ? renaming : null;
               return (
-              <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  {editing ? (
-                    <form className="flex flex-wrap gap-2" onSubmit={(e) => void rename(e)}>
-                      <Input
-                        aria-label="Passkey name"
-                        className="h-8 max-w-56"
-                        autoFocus
-                        value={editing.name}
-                        onChange={(e) => setRenaming({ id: p.id, name: e.target.value })}
-                        disabled={busy === p.id}
-                      />
-                      <Button type="submit" size="sm" disabled={busy === p.id || !editing.name.trim()}>
-                        Save
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy === p.id}
-                        onClick={() => setRenaming(null)}
-                      >
-                        Cancel
-                      </Button>
-                    </form>
-                  ) : (
-                    <>
-                      <p className="truncate text-foreground">
-                        {p.name?.trim() || "Unnamed passkey"}
-                      </p>
-                      <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
-                        <span>Added {formatDate(p.createdAt)}</span>
-                        <span aria-hidden>·</span>
-                        {p.backedUp ? (
-                          <span className="inline-flex items-center gap-1">
-                            <CloudCheckIcon className="size-3.5 text-primary" />
-                            Synced
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1">
-                            <DeviceMobileIcon className="size-3.5" />
-                            This device only
-                          </span>
-                        )}
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                {!editing && (
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy !== null}
-                      onClick={() => setRenaming({ id: p.id, name: p.name ?? "" })}
-                    >
-                      <PencilSimpleIcon data-icon="inline-start" />
-                      Rename
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" disabled={busy !== null}>
-                          {busy === p.id ? (
-                            <SpinnerGapIcon data-icon="inline-start" className="animate-spin" />
-                          ) : (
-                            <TrashIcon data-icon="inline-start" />
-                          )}
-                          Remove
+                <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
+                  <div className="min-w-0 flex-1">
+                    {editing ? (
+                      <form className="flex flex-wrap gap-2" onSubmit={(e) => void rename(e)}>
+                        <Input
+                          aria-label="Passkey name"
+                          className="h-8 max-w-56"
+                          autoFocus
+                          value={editing.name}
+                          onChange={(e) => setRenaming({ id: p.id, name: e.target.value })}
+                          disabled={busy === p.id}
+                        />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={busy === p.id || !editing.name.trim()}
+                        >
+                          Save
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Remove “{p.name?.trim() || "Unnamed passkey"}”?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            It stops signing you in immediately. Your email and
-                            password still work.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Keep it</AlertDialogCancel>
-                          <AlertDialogAction
-                            variant="destructive"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              void remove(p.id);
-                            }}
-                          >
-                            Remove it
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy === p.id}
+                          onClick={() => setRenaming(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="truncate text-foreground">
+                          {p.name?.trim() || "Unnamed passkey"}
+                        </p>
+                        <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
+                          <span>Added {formatDate(p.createdAt)}</span>
+                          <span aria-hidden>·</span>
+                          {p.backedUp ? (
+                            <span className="inline-flex items-center gap-1">
+                              <CloudCheckIcon className="size-3.5 text-primary" />
+                              Synced
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <DeviceMobileIcon className="size-3.5" />
+                              This device only
+                            </span>
+                          )}
+                        </p>
+                      </>
+                    )}
                   </div>
-                )}
-              </li>
+
+                  {!editing && (
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() => setRenaming({ id: p.id, name: p.name ?? "" })}
+                      >
+                        <PencilSimpleIcon data-icon="inline-start" />
+                        Rename
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" disabled={busy !== null}>
+                            {busy === p.id ? (
+                              <SpinnerGapIcon data-icon="inline-start" className="animate-spin" />
+                            ) : (
+                              <TrashIcon data-icon="inline-start" />
+                            )}
+                            Remove
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Remove “{p.name?.trim() || "Unnamed passkey"}”?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              It stops signing you in immediately. Your email and password still
+                              work.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Keep it</AlertDialogCancel>
+                            <AlertDialogAction
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void remove(p.id);
+                              }}
+                            >
+                              Remove it
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
+                </li>
               );
             })}
           </ul>
@@ -1639,8 +1617,7 @@ function PasskeysSection() {
         {/* Said before it happens, because SESSION_NOT_FRESH reads like a bug
             and is not one. */}
         <p className="text-muted-foreground">
-          Needs a session less than a day old. If it is refused, sign out and
-          back in.
+          Needs a session less than a day old. If it is refused, sign out and back in.
         </p>
       </CardContent>
     </Card>
@@ -1763,8 +1740,7 @@ function ChangePasswordSection({
           Change password
         </CardTitle>
         <CardDescription>
-          Re-encrypts your whole vault. It takes a few seconds and cannot be
-          interrupted.
+          Re-encrypts your whole vault. It takes a few seconds and cannot be interrupted.
         </CardDescription>
       </CardHeader>
 
@@ -1775,8 +1751,8 @@ function ChangePasswordSection({
             <AlertTitle>You signed in with a recovery code</AlertTitle>
             <AlertDescription>
               <span>
-                Set a new password here. Your remaining codes are retired by it,
-                so generate a fresh set afterwards.
+                Set a new password here. Your remaining codes are retired by it, so generate a fresh
+                set afterwards.
               </span>
             </AlertDescription>
           </Alert>
@@ -1788,8 +1764,7 @@ function ChangePasswordSection({
             <AlertTitle>This tab can no longer finish the recovery</AlertTitle>
             <AlertDescription>
               <span>
-                The keys from your recovery code were dropped on reload. Redeem
-                another code from{" "}
+                The keys from your recovery code were dropped on reload. Redeem another code from{" "}
                 <Link href="/recover" className="text-foreground underline underline-offset-4">
                   the recovery page
                 </Link>{" "}
@@ -1851,9 +1826,7 @@ function ChangePasswordSection({
               aria-invalid={mismatch || undefined}
               disabled={busy}
             />
-            {mismatch && (
-              <p className="text-destructive">The two entries do not match.</p>
-            )}
+            {mismatch && <p className="text-destructive">The two entries do not match.</p>}
           </div>
 
           <Button type="submit" className="w-fit" disabled={!ready}>
@@ -1933,16 +1906,14 @@ function RekeySummary({ result }: { result: RekeyResult }) {
           <li>The re-encrypted vault was stored as version {result.version}.</li>
         )}
         <li>
-          {result.keysRewrapped} portable SSH{" "}
-          {result.keysRewrapped === 1 ? "key was" : "keys were"} unwrapped and
-          re-wrapped under the new vault key.
+          {result.keysRewrapped} portable SSH {result.keysRewrapped === 1 ? "key was" : "keys were"}{" "}
+          unwrapped and re-wrapped under the new vault key.
         </li>
         {result.keysUnreadable > 0 && (
           <li className="text-warning">
-            {result.keysUnreadable}{" "}
-            {result.keysUnreadable === 1 ? "key" : "keys"} would not open with
-            your old password and {result.keysUnreadable === 1 ? "was" : "were"}{" "}
-            left untouched. They were already unusable before this ran.
+            {result.keysUnreadable} {result.keysUnreadable === 1 ? "key" : "keys"} would not open
+            with your old password and {result.keysUnreadable === 1 ? "was" : "were"} left
+            untouched. They were already unusable before this ran.
           </li>
         )}
         <li>Every other session was signed out.</li>
@@ -1997,8 +1968,7 @@ function SessionsSection() {
           Sessions
         </CardTitle>
         <CardDescription>
-          Signing out locks the vault. Data stored in this browser stays until
-          you clear it.
+          Signing out locks the vault. Data stored in this browser stays until you clear it.
         </CardDescription>
       </CardHeader>
 
@@ -2027,16 +1997,13 @@ function SessionsSection() {
             <AlertDialogHeader>
               <AlertDialogTitle>Revoke every session?</AlertDialogTitle>
               <AlertDialogDescription>
-                Every browser signed in to this account is signed out, including
-                this one. Nothing is deleted.
+                Every browser signed in to this account is signed out, including this one. Nothing
+                is deleted.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                onClick={() => void signOutEverywhere()}
-              >
+              <AlertDialogAction variant="destructive" onClick={() => void signOutEverywhere()}>
                 Revoke all sessions
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -2144,8 +2111,8 @@ function RecoveryCodesSection({
           Recovery codes
         </CardTitle>
         <CardDescription>
-          The only way back in if you forget your password. Each code signs you
-          in and unlocks the vault, once.
+          The only way back in if you forget your password. Each code signs you in and unlocks the
+          vault, once.
         </CardDescription>
         <CardAction>
           {status === null ? (
@@ -2168,8 +2135,8 @@ function RecoveryCodesSection({
           <AlertTitle>A recovery code is your password, in text form</AlertTitle>
           <AlertDescription>
             <span>
-              Anyone holding one can sign in as you and read your whole vault.
-              Print them or keep them in a password manager.
+              Anyone holding one can sign in as you and read your whole vault. Print them or keep
+              them in a password manager.
             </span>
           </AlertDescription>
         </Alert>
@@ -2194,8 +2161,7 @@ function RecoveryCodesSection({
               <Alert>
                 <InfoIcon className="text-primary" />
                 <AlertTitle>
-                  {status.remaining} unused{" "}
-                  {status.remaining === 1 ? "code" : "codes"} remain
+                  {status.remaining} unused {status.remaining === 1 ? "code" : "codes"} remain
                 </AlertTitle>
                 <AlertDescription>
                   <span>
@@ -2213,8 +2179,7 @@ function RecoveryCodesSection({
                 <AlertTitle>Nothing can open your vault but your password</AlertTitle>
                 <AlertDescription>
                   <span>
-                    Forget it and the vault is gone — we cannot reset it.
-                    Generate a set below.{" "}
+                    Forget it and the vault is gone — we cannot reset it. Generate a set below.{" "}
                     <Link href="/security" className="text-primary hover:underline">
                       Why
                     </Link>
@@ -2236,8 +2201,8 @@ function RecoveryCodesSection({
                   disabled={busy !== null || !email}
                 />
                 <p className="text-muted-foreground">
-                  Checked before any code is generated, so a typo cannot produce
-                  codes that open nothing.
+                  Checked before any code is generated, so a typo cannot produce codes that open
+                  nothing.
                 </p>
               </div>
 
@@ -2267,8 +2232,8 @@ function RecoveryCodesSection({
                       <AlertDialogHeader>
                         <AlertDialogTitle>Delete every recovery code?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          The codes you wrote down stop working, and your password
-                          becomes the only way in. Generate a new set afterwards.
+                          The codes you wrote down stop working, and your password becomes the only
+                          way in. Generate a new set afterwards.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -2292,8 +2257,7 @@ function RecoveryCodesSection({
                 <div className="space-y-2">
                   <Progress value={Math.round((progress.done / progress.total) * 100)} />
                   <p className="text-muted-foreground">
-                    Sealing code {Math.min(progress.done + 1, progress.total)} of{" "}
-                    {progress.total}.
+                    Sealing code {Math.min(progress.done + 1, progress.total)} of {progress.total}.
                   </p>
                 </div>
               )}
@@ -2306,9 +2270,7 @@ function RecoveryCodesSection({
         <CardFooter>
           <p className="flex items-start gap-2 text-muted-foreground">
             <CheckCircleIcon className="mt-0.5 size-3.5 shrink-0 text-success" />
-            <span className="min-w-0">
-              The codes cannot be shown again.
-            </span>
+            <span className="min-w-0">The codes cannot be shown again.</span>
           </p>
         </CardFooter>
       )}
@@ -2400,8 +2362,7 @@ function GeneratedCodes({
           Download as a file
         </Button>
         <Button onClick={onAcknowledge}>
-          <CheckCircleIcon data-icon="inline-start" />
-          I have saved them
+          <CheckCircleIcon data-icon="inline-start" />I have saved them
         </Button>
       </div>
     </div>
@@ -2455,8 +2416,7 @@ function ExportSection() {
           Export the vault
         </CardTitle>
         <CardDescription>
-          Your hosts, keys and snippets, still encrypted. Only your password can
-          open the file.
+          Your hosts, keys and snippets, still encrypted. Only your password can open the file.
         </CardDescription>
       </CardHeader>
 
@@ -2575,10 +2535,7 @@ function ImportSection() {
       const outcome = await restoreVault(inspected.envelope, vaultKey);
       setResult(outcome);
       const added =
-        outcome.hosts.added +
-        outcome.keys.added +
-        outcome.hostKeys.added +
-        outcome.snippets.added;
+        outcome.hosts.added + outcome.keys.added + outcome.hostKeys.added + outcome.snippets.added;
       const updated =
         outcome.hosts.updated +
         outcome.keys.updated +
@@ -2611,9 +2568,8 @@ function ImportSection() {
           Import a vault
         </CardTitle>
         <CardDescription>
-          <span className="text-foreground">Merges</span> into what this device
-          already holds, newest wins. Nothing is overwritten wholesale and
-          nothing is uploaded.
+          <span className="text-foreground">Merges</span> into what this device already holds,
+          newest wins. Nothing is overwritten wholesale and nothing is uploaded.
         </CardDescription>
       </CardHeader>
 
@@ -2634,10 +2590,7 @@ function ImportSection() {
             <UploadSimpleIcon data-icon="inline-start" />
             Choose a vault file
           </Button>
-          <Button
-            onClick={() => void restore()}
-            disabled={!inspected?.ok || busy}
-          >
+          <Button onClick={() => void restore()} disabled={!inspected?.ok || busy}>
             {busy ? (
               <SpinnerGapIcon data-icon="inline-start" className="animate-spin" />
             ) : (
@@ -2654,15 +2607,9 @@ function ImportSection() {
 
         {inspected && (
           <Alert variant={inspected.ok ? "default" : "destructive"}>
-            {inspected.ok ? (
-              <CheckCircleIcon className="text-success" />
-            ) : (
-              <WarningCircleIcon />
-            )}
+            {inspected.ok ? <CheckCircleIcon className="text-success" /> : <WarningCircleIcon />}
             <AlertTitle>
-              {inspected.ok
-                ? "Valid vault envelope"
-                : "That file was not accepted"}
+              {inspected.ok ? "Valid vault envelope" : "That file was not accepted"}
             </AlertTitle>
             <AlertDescription>
               {inspected.ok
@@ -2736,9 +2683,8 @@ function RestoreSummary({ result }: { result: RestoreResult }) {
 
       {blocked > 0 && (
         <p className="text-muted-foreground">
-          {blocked} record{blocked === 1 ? "" : "s"} in the file stayed deleted:
-          they were removed on a device after this export was taken, and a
-          deletion outranks an older copy.
+          {blocked} record{blocked === 1 ? "" : "s"} in the file stayed deleted: they were removed
+          on a device after this export was taken, and a deletion outranks an older copy.
         </p>
       )}
 
@@ -2755,10 +2701,9 @@ function RestoreSummary({ result }: { result: RestoreResult }) {
       {result.sync !== null && result.sync.keysWithheld > 0 && (
         <p className="text-warning">
           {result.sync.keysWithheld} portable{" "}
-          {result.sync.keysWithheld === 1 ? "key was" : "keys were"} kept out of
-          the push: the current vault key does not open{" "}
-          {result.sync.keysWithheld === 1 ? "its" : "their"} wrapping, so
-          uploading {result.sync.keysWithheld === 1 ? "it" : "them"} would copy
+          {result.sync.keysWithheld === 1 ? "key was" : "keys were"} kept out of the push: the
+          current vault key does not open {result.sync.keysWithheld === 1 ? "its" : "their"}{" "}
+          wrapping, so uploading {result.sync.keysWithheld === 1 ? "it" : "them"} would copy
           ciphertext nothing can open to every device. See the Keys page.
         </p>
       )}
@@ -2844,9 +2789,8 @@ function DeleteAccountSection({ email }: { email: string | null }) {
           Delete account
         </CardTitle>
         <CardDescription>
-          Deletes your vault, devices, recordings and recovery codes. Any
-          subscription is cancelled immediately, with no refund for the rest of
-          the period.
+          Deletes your vault, devices, recordings and recovery codes. Any subscription is cancelled
+          immediately, with no refund for the rest of the period.
         </CardDescription>
       </CardHeader>
 
@@ -2873,8 +2817,8 @@ function DeleteAccountSection({ email }: { email: string | null }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {target || "this account"}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This cannot be undone and we hold no copy to restore. Export your
-                vault first if you want to keep it.
+                This cannot be undone and we hold no copy to restore. Export your vault first if you
+                want to keep it.
               </AlertDialogDescription>
             </AlertDialogHeader>
 
@@ -2912,9 +2856,8 @@ function DeleteAccountSection({ email }: { email: string | null }) {
                 <AlertTitle>This browser is cleaned up, other devices are not</AlertTitle>
                 <AlertDescription>
                   <span>
-                    Local data here is cleared, device-bound keys included. Other
-                    browsers keep their copies until you clear the site data
-                    there.
+                    Local data here is cleared, device-bound keys included. Other browsers keep
+                    their copies until you clear the site data there.
                   </span>
                 </AlertDescription>
               </Alert>
@@ -2973,9 +2916,7 @@ function isEnvelope(value: unknown): value is VaultEnvelope {
 function looksLikeEnvelope(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const env = value as Record<string, unknown>;
-  return (
-    typeof env.v === "number" && typeof env.iv === "string" && typeof env.ct === "string"
-  );
+  return typeof env.v === "number" && typeof env.iv === "string" && typeof env.ct === "string";
 }
 
 function download(filename: string, contents: string, type: string) {

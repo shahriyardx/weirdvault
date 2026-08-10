@@ -247,7 +247,10 @@ export async function POST(request: Request) {
     durationMs < 0 ||
     durationMs > MAX_DURATION_MS
   ) {
-    return Response.json({ error: "durationMs must be a duration in milliseconds" }, { status: 400 });
+    return Response.json(
+      { error: "durationMs must be a duration in milliseconds" },
+      { status: 400 },
+    );
   }
 
   const started = typeof startedAt === "string" ? new Date(startedAt) : null;

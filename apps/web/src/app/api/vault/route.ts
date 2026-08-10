@@ -53,7 +53,10 @@ export async function PUT(request: Request) {
 
   const { blob, baseVersion } = body;
   if (typeof blob !== "string" || typeof baseVersion !== "number") {
-    return Response.json({ error: "blob (string) and baseVersion (number) required" }, { status: 400 });
+    return Response.json(
+      { error: "blob (string) and baseVersion (number) required" },
+      { status: 400 },
+    );
   }
   if (Buffer.byteLength(blob, "utf8") > MAX_BLOB_BYTES) {
     return Response.json({ error: "vault too large" }, { status: 413 });

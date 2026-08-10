@@ -174,8 +174,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const oauthErrorCode = useSyncExternalStore(subscribeToNothing, readOAuthError, () => null);
   const [dismissedOAuthError, setDismissedOAuthError] = useState(false);
   const shownError =
-    error ??
-    (oauthErrorCode && !dismissedOAuthError ? oauthErrorMessage(oauthErrorCode) : null);
+    error ?? (oauthErrorCode && !dismissedOAuthError ? oauthErrorMessage(oauthErrorCode) : null);
 
   /**
    * A sign-in that stopped at a second factor, and the keys it already derived.
@@ -187,9 +186,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
    * unmount either way — it is never persisted, and abandoning the page drops it
    * like everything else.
    */
-  const [challenge, setChallenge] = useState<
-    Extract<SignInOutcome, { status: "two-factor-required" }> | null
-  >(null);
+  const [challenge, setChallenge] = useState<Extract<
+    SignInOutcome,
+    { status: "two-factor-required" }
+  > | null>(null);
   const [code, setCode] = useState("");
   const [factor, setFactor] = useState<"totp" | "backup-code">("totp");
 
@@ -306,9 +306,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-base">
-          {signUp ? "Create your account" : "Sign in"}
-        </CardTitle>
+        <CardTitle className="text-base">{signUp ? "Create your account" : "Sign in"}</CardTitle>
         <CardDescription>
           {signUp
             ? "Your password derives the vault key here. It is never sent."
@@ -436,8 +434,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             />
             {signUp && (
               <p id="password-hint" className="text-xs/relaxed text-muted-foreground">
-                Ten characters or more. It is never stored, so it cannot be
-                reset.
+                Ten characters or more. It is never stored, so it cannot be reset.
               </p>
             )}
           </div>
@@ -565,10 +562,7 @@ function TwoFactorChallenge({
         <CardDescription>
           Password accepted. Enter the code from your authenticator app.
           {methods.length > 0 && !methods.includes("totp") && (
-            <>
-              {" "}
-              The server offered: {methods.join(", ")}.
-            </>
+            <> The server offered: {methods.join(", ")}.</>
           )}
         </CardDescription>
       </CardHeader>
@@ -576,9 +570,7 @@ function TwoFactorChallenge({
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="two-factor-code">
-              {backup ? "Backup code" : "Six-digit code"}
-            </Label>
+            <Label htmlFor="two-factor-code">{backup ? "Backup code" : "Six-digit code"}</Label>
             <Input
               id="two-factor-code"
               name="code"
@@ -596,9 +588,7 @@ function TwoFactorChallenge({
               required
             />
             {backup && (
-              <p className="text-xs/relaxed text-muted-foreground">
-                Each backup code works once.
-              </p>
+              <p className="text-xs/relaxed text-muted-foreground">Each backup code works once.</p>
             )}
           </div>
 
@@ -636,10 +626,9 @@ function TwoFactorChallenge({
 
       <CardFooter className="text-xs/relaxed text-muted-foreground">
         <p>
-          This step protects the session, not the vault. Your vault key was
-          derived from the password you have just typed and never leaves this
-          device, so two-factor authentication does not change who could decrypt
-          a stolen copy of your data — only who can sign in.
+          This step protects the session, not the vault. Your vault key was derived from the
+          password you have just typed and never leaves this device, so two-factor authentication
+          does not change who could decrypt a stolen copy of your data — only who can sign in.
         </p>
       </CardFooter>
     </Card>

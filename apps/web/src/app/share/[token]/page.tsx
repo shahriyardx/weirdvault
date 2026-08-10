@@ -124,7 +124,11 @@ export default function SharedRecordingPage() {
 
       <PageHeader
         eyebrow="Shared recording"
-        title={view.phase === "ready" ? (view.shared.cast.header.label ?? "A shared recording") : "A shared recording"}
+        title={
+          view.phase === "ready"
+            ? (view.shared.cast.header.label ?? "A shared recording")
+            : "A shared recording"
+        }
         description="A recorded terminal session. It was encrypted in the browser of the person who shared it, under a key that travels in the fragment of this link and is never sent to our server — so this page decrypts it here, and we have never seen what is in it."
       />
 
@@ -139,18 +143,16 @@ export default function SharedRecordingPage() {
             What this link is
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            The link is the key. The part after the <code className="text-foreground">#</code>{" "}
-            is the only thing that can decrypt this recording, browsers never
-            send it to a server, and we do not have a copy. That also means
-            anyone who has this link can watch this recording without an account
-            and without signing in — forwarding it forwards the access. The
-            person who shared it can revoke it or let it expire, and neither of
-            those reaches a copy somebody has already watched or saved.
+            The link is the key. The part after the <code className="text-foreground">#</code> is
+            the only thing that can decrypt this recording, browsers never send it to a server, and
+            we do not have a copy. That also means anyone who has this link can watch this recording
+            without an account and without signing in — forwarding it forwards the access. The
+            person who shared it can revoke it or let it expire, and neither of those reaches a copy
+            somebody has already watched or saved.
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            A recording is the terminal&rsquo;s output stream, which includes the
-            shell echoing back what was typed. If it was on the screen it is in
-            here.
+            A recording is the terminal&rsquo;s output stream, which includes the shell echoing back
+            what was typed. If it was on the screen it is in here.
           </p>
         </CardContent>
       </Card>
@@ -161,8 +163,7 @@ export default function SharedRecordingPage() {
 /* ------------------------------------------------------------------ ready */
 
 function ReadyState({ shared }: { shared: SharedRecording }) {
-  const remaining =
-    shared.maxViews === null ? null : Math.max(0, shared.maxViews - shared.views);
+  const remaining = shared.maxViews === null ? null : Math.max(0, shared.maxViews - shared.views);
 
   return (
     <div className="mt-6 flex flex-col gap-4">
@@ -200,16 +201,15 @@ function ReadyState({ shared }: { shared: SharedRecording }) {
             )}
           </p>
           <p>
-            Reloading this page counts as another view. The recording is held in
-            this tab only — closing it is enough to be rid of it, and nothing was
-            written to this browser&rsquo;s storage.
+            Reloading this page counts as another view. The recording is held in this tab only —
+            closing it is enough to be rid of it, and nothing was written to this browser&rsquo;s
+            storage.
           </p>
           {shared.cast.header.host && (
             <p>
-              Recorded against{" "}
-              <code className="text-foreground">{shared.cast.header.host}</code>, which is a name
-              that was inside the ciphertext. Our server holds a blinded reference to it and has
-              never held the name.
+              Recorded against <code className="text-foreground">{shared.cast.header.host}</code>,
+              which is a name that was inside the ciphertext. Our server holds a blinded reference
+              to it and has never held the name.
             </p>
           )}
         </CardContent>
@@ -252,15 +252,15 @@ const FAILURES: Record<ShareFailure, { title: string; body: React.ReactNode }> =
     body: (
       <>
         <p>
-          There is nothing after the <code className="text-foreground">#</code> in the address
-          bar, and that fragment is where the decryption key lives. Without it this recording
-          cannot be opened by anyone — including us, which is the point of storing it this way.
+          There is nothing after the <code className="text-foreground">#</code> in the address bar,
+          and that fragment is where the decryption key lives. Without it this recording cannot be
+          opened by anyone — including us, which is the point of storing it this way.
         </p>
         <p>
           The usual cause is a paste that stopped early, or a chat client or ticket system that
           rewrote the URL and dropped the fragment. Ask whoever sent it for the whole link, and
-          check that the copy you have ends with{" "}
-          <code className="text-foreground">#k=</code> followed by a long string.
+          check that the copy you have ends with <code className="text-foreground">#k=</code>{" "}
+          followed by a long string.
         </p>
       </>
     ),
@@ -287,19 +287,19 @@ const FAILURES: Record<ShareFailure, { title: string; body: React.ReactNode }> =
       <>
         <p>
           The link is intact and the server did serve the recording, but the key in the fragment
-          does not decrypt it. That is what happens when two links get mixed up — the address of
-          one share with the fragment of another.
+          does not decrypt it. That is what happens when two links get mixed up — the address of one
+          share with the fragment of another.
         </p>
         <p>
           There is no way to recover from this end. Each share has its own key, generated for that
-          share and never stored anywhere, so the only copy of the right one is in the link that
-          was sent to you.
+          share and never stored anywhere, so the only copy of the right one is in the link that was
+          sent to you.
         </p>
         <p>
           The recording was served before the key was tried, so this attempt counted as one of the
-          views the link allows and cannot be given back. Trying the same address again with
-          another fragment spends another one, and enough attempts will use the link up — ask for
-          the whole link before retrying.
+          views the link allows and cannot be given back. Trying the same address again with another
+          fragment spends another one, and enough attempts will use the link up — ask for the whole
+          link before retrying.
         </p>
       </>
     ),
@@ -310,14 +310,14 @@ const FAILURES: Record<ShareFailure, { title: string; body: React.ReactNode }> =
       <>
         <p>
           It may have expired, it may have been revoked by the person who shared it, it may have
-          been opened as many times as they allowed, or it may never have been a link at all. We
-          do not say which: the endpoint answers the same way to all four so that it cannot be
-          used to work out which links exist.
+          been opened as many times as they allowed, or it may never have been a link at all. We do
+          not say which: the endpoint answers the same way to all four so that it cannot be used to
+          work out which links exist.
         </p>
         <p>
-          If you were expecting this to work, ask for a new link. A share cannot be reissued —
-          the key was generated in the sharer&rsquo;s browser and not kept — so what you would get
-          is a fresh one.
+          If you were expecting this to work, ask for a new link. A share cannot be reissued — the
+          key was generated in the sharer&rsquo;s browser and not kept — so what you would get is a
+          fresh one.
         </p>
       </>
     ),
@@ -337,8 +337,8 @@ const FAILURES: Record<ShareFailure, { title: string; body: React.ReactNode }> =
     body: (
       <p>
         The server refused the request. A share link should not need an account, so this is
-        unexpected rather than a rule being applied — try again, and if it keeps happening the
-        link is worth reporting to whoever sent it.
+        unexpected rather than a rule being applied — try again, and if it keeps happening the link
+        is worth reporting to whoever sent it.
       </p>
     ),
   },
@@ -346,8 +346,8 @@ const FAILURES: Record<ShareFailure, { title: string; body: React.ReactNode }> =
     title: "The recording could not be opened",
     body: (
       <p>
-        The server answered, but not with something this page could use. That is a fault on our
-        side rather than a problem with your link.
+        The server answered, but not with something this page could use. That is a fault on our side
+        rather than a problem with your link.
       </p>
     ),
   },
@@ -360,7 +360,13 @@ function FailureState({ kind, detail }: { kind: ShareFailure; detail: string }) 
   return (
     <>
       <Alert variant="destructive" className="mt-6">
-        {keyProblem ? <LinkBreakIcon /> : kind === "gone" ? <ShieldWarningIcon /> : <WarningOctagonIcon />}
+        {keyProblem ? (
+          <LinkBreakIcon />
+        ) : kind === "gone" ? (
+          <ShieldWarningIcon />
+        ) : (
+          <WarningOctagonIcon />
+        )}
         <AlertTitle>{copy.title}</AlertTitle>
         <AlertDescription>{copy.body}</AlertDescription>
       </Alert>
@@ -379,10 +385,9 @@ function FailureState({ kind, detail }: { kind: ShareFailure; detail: string }) 
         <CardContent className="flex flex-col items-start gap-2">
           <p className="font-heading text-sm font-medium">What webxterm is</p>
           <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
-            An SSH client that runs in a browser tab, with a vault the server
-            cannot read. Session recordings are encrypted before they are stored,
-            and a share link carries its own key so that sharing one does not
-            mean handing over the account it came from.
+            An SSH client that runs in a browser tab, with a vault the server cannot read. Session
+            recordings are encrypted before they are stored, and a share link carries its own key so
+            that sharing one does not mean handing over the account it came from.
           </p>
           <Button asChild variant="outline" size="sm" className="mt-1">
             <Link href="/">

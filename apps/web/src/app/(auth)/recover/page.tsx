@@ -97,9 +97,7 @@ export default function RecoverPage() {
       setFailure({
         step: "code",
         message:
-          err instanceof RecoveryCodeError
-            ? err.message
-            : String((err as Error).message ?? err),
+          err instanceof RecoveryCodeError ? err.message : String((err as Error).message ?? err),
       });
       setBusy(false);
       return;
@@ -124,10 +122,9 @@ export default function RecoverPage() {
           Use a recovery code
         </CardTitle>
         <CardDescription>
-          A recovery code carries a sealed copy of your keys. It is opened in this
-          tab, which both signs you in and unlocks the vault. The code itself is
-          never sent to us — only a one-way hash of it, so we can find the right
-          sealed copy and retire it.
+          A recovery code carries a sealed copy of your keys. It is opened in this tab, which both
+          signs you in and unlocks the vault. The code itself is never sent to us — only a one-way
+          hash of it, so we can find the right sealed copy and retire it.
         </CardDescription>
       </CardHeader>
 
@@ -169,8 +166,8 @@ export default function RecoverPage() {
               required
             />
             <p className="text-xs/relaxed text-muted-foreground">
-              Twenty-four characters. Each code works once; your others stay
-              valid until you change your password.
+              Twenty-four characters. Each code works once; your others stay valid until you change
+              your password.
             </p>
           </div>
 
@@ -187,10 +184,9 @@ export default function RecoverPage() {
                   failure.message
                 ) : (
                   <span>
-                    {failure.message} That code has been spent — it was a real
-                    code, and codes are retired the moment the sealed copy is
-                    handed out, so re-entering it will not work. Try again with a
-                    different code from your set.
+                    {failure.message} That code has been spent — it was a real code, and codes are
+                    retired the moment the sealed copy is handed out, so re-entering it will not
+                    work. Try again with a different code from your set.
                   </span>
                 )}
               </AlertDescription>
@@ -212,8 +208,8 @@ export default function RecoverPage() {
           </Button>
 
           <p className="text-xs/relaxed text-muted-foreground">
-            The pause is a key derivation running on this device, the same one
-            that makes signing in take a second.
+            The pause is a key derivation running on this device, the same one that makes signing in
+            take a second.
           </p>
         </form>
       </CardContent>
@@ -229,8 +225,8 @@ export default function RecoverPage() {
           </Link>
         </p>
         <p>
-          Without a code there is no way back in. We never held anything that
-          could open your vault, so there is nothing for us to reset.{" "}
+          Without a code there is no way back in. We never held anything that could open your vault,
+          so there is nothing for us to reset.{" "}
           <Link href="/security" className="underline underline-offset-4 hover:text-foreground">
             Why
           </Link>

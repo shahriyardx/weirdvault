@@ -144,11 +144,7 @@ export async function itemsFromDataTransfer(dt: DataTransfer): Promise<UploadIte
   return out;
 }
 
-async function walkEntry(
-  entry: FileSystemEntry,
-  prefix: string,
-  out: UploadItem[],
-): Promise<void> {
+async function walkEntry(entry: FileSystemEntry, prefix: string, out: UploadItem[]): Promise<void> {
   const path = prefix ? `${prefix}/${entry.name}` : entry.name;
 
   if (entry.isFile) {

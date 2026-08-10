@@ -534,7 +534,8 @@ export const auth = betterAuth({
       beforeDelete: async (user) => {
         try {
           const cancelled = await cancelSubscriptionForDeletion(user.id);
-          if (cancelled) console.info(`subscription ${cancelled} cancelled before account deletion`);
+          if (cancelled)
+            console.info(`subscription ${cancelled} cancelled before account deletion`);
         } catch (e) {
           // Summarised rather than logged whole: this path reads the database
           // before it calls Stripe, and a drizzle failure's message is the SQL
@@ -735,9 +736,7 @@ export async function accountGate(requestHeaders: Headers): Promise<AccountGate>
   if (!session) return "signed-out";
 
   const accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
-  return accounts.some((a) => a.providerId === CREDENTIAL_PROVIDER)
-    ? "ready"
-    : "no-vault-password";
+  return accounts.some((a) => a.providerId === CREDENTIAL_PROVIDER) ? "ready" : "no-vault-password";
 }
 
 /**

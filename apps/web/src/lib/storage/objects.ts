@@ -189,7 +189,11 @@ export class ObjectStoreError extends Error {
  * everything else, and the bucket name is not a secret that benefits from being
  * anywhere in particular.
  */
-function urlFor(store: ObjectStore, key: string, query?: Record<string, string>): { url: string; path: string } {
+function urlFor(
+  store: ObjectStore,
+  key: string,
+  query?: Record<string, string>,
+): { url: string; path: string } {
   const path = `/${store.bucket}${encodePath(key)}`;
   const search = query
     ? `?${Object.entries(query)

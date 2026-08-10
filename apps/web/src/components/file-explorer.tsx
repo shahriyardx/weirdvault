@@ -151,9 +151,7 @@ type Ask =
  * contents — only its type names — and the indicator has to say which of the two
  * very different things is about to happen.
  */
-type DropIntent =
-  | { kind: "upload" }
-  | { kind: "remote"; from: string; entries: SftpEntry[] };
+type DropIntent = { kind: "upload" } | { kind: "remote"; from: string; entries: SftpEntry[] };
 
 /**
  * Whether this pane should offer to accept the drag, and as what.
@@ -402,10 +400,7 @@ export function FileExplorer({
       return;
     }
 
-    const label =
-      drag.entries.length === 1
-        ? drag.entries[0].name
-        : `${drag.entries.length} items`;
+    const label = drag.entries.length === 1 ? drag.entries[0].name : `${drag.entries.length} items`;
     // The denominator is only honest for files; a directory's size is not known
     // until tar has finished producing it.
     const known = drag.entries.every((e) => !e.isDir)
@@ -525,14 +520,10 @@ export function FileExplorer({
 
     switch (current.kind) {
       case "rename":
-        void mutate(() =>
-          sftp.rename(join(cwd, current.entry.name), join(cwd, trimmedAnswer)),
-        );
+        void mutate(() => sftp.rename(join(cwd, current.entry.name), join(cwd, trimmedAnswer)));
         return;
       case "chmod":
-        void mutate(() =>
-          sftp.chmod(join(cwd, current.entry.name), parseInt(trimmedAnswer, 8)),
-        );
+        void mutate(() => sftp.chmod(join(cwd, current.entry.name), parseInt(trimmedAnswer, 8)));
         return;
       case "mkdir":
         void mutate(() => sftp.mkdir(join(cwd, trimmedAnswer)));
@@ -887,16 +878,12 @@ export function FileExplorer({
               to be rid of either, and the listing above lost height to them. */}
           {finished.length > 0 && (
             <div className="border-border flex shrink-0 items-center gap-2 border-b px-2 py-1">
-              <span className="text-muted-foreground text-[10px]">
-                {finished.length} finished
-              </span>
+              <span className="text-muted-foreground text-[10px]">{finished.length} finished</span>
               <Button
                 variant="ghost"
                 size="xs"
                 className="text-muted-foreground ml-auto font-normal"
-                onClick={() =>
-                  setTransfers((prev) => prev.filter((t) => t.state === "running"))
-                }
+                onClick={() => setTransfers((prev) => prev.filter((t) => t.state === "running"))}
               >
                 Clear finished
               </Button>
@@ -907,9 +894,7 @@ export function FileExplorer({
             {transfers.map((t) => (
               <div key={t.id} className="px-2 py-1.5 text-[11px]">
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">
-                    {t.kind === "upload" ? "↑" : "↓"}
-                  </span>
+                  <span className="text-muted-foreground">{t.kind === "upload" ? "↑" : "↓"}</span>
                   <span className="min-w-0 flex-1 truncate">{t.label}</span>
                   {t.state !== "running" && (
                     <span
@@ -931,11 +916,7 @@ export function FileExplorer({
                     variant="ghost"
                     size="icon"
                     className="hover:text-destructive size-5 shrink-0"
-                    aria-label={
-                      t.state === "running"
-                        ? `Cancel ${t.label}`
-                        : `Dismiss ${t.label}`
-                    }
+                    aria-label={t.state === "running" ? `Cancel ${t.label}` : `Dismiss ${t.label}`}
                     onClick={() => {
                       if (t.state === "running") {
                         t.controller.abort();
@@ -955,9 +936,7 @@ export function FileExplorer({
                   />
                 )}
                 {t.detail && (
-                  <p className="text-muted-foreground mt-0.5 truncate text-[10px]">
-                    {t.detail}
-                  </p>
+                  <p className="text-muted-foreground mt-0.5 truncate text-[10px]">{t.detail}</p>
                 )}
               </div>
             ))}
@@ -1007,9 +986,7 @@ export function FileExplorer({
                   onChange={(e) => setAnswer(e.target.value)}
                 />
                 {ASK_FIELDS[ask.kind].hint && (
-                  <p className="text-muted-foreground text-[11px]">
-                    {ASK_FIELDS[ask.kind].hint}
-                  </p>
+                  <p className="text-muted-foreground text-[11px]">{ASK_FIELDS[ask.kind].hint}</p>
                 )}
               </div>
 
@@ -1026,10 +1003,7 @@ export function FileExplorer({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={ask?.kind === "delete"}
-        onOpenChange={(open) => !open && setAsk(null)}
-      >
+      <AlertDialog open={ask?.kind === "delete"} onOpenChange={(open) => !open && setAsk(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>

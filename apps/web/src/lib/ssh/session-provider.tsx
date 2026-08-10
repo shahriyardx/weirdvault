@@ -40,10 +40,7 @@ const OUTPUT_BUFFER_BYTES = 512 * 1024;
  * person. Rendering it raw put "Vault conflict-resolved" in front of users whose
  * one device had just synced with nothing to resolve.
  */
-const SYNC_WORDING: Record<
-  Awaited<ReturnType<typeof syncVault>>["status"],
-  string
-> = {
+const SYNC_WORDING: Record<Awaited<ReturnType<typeof syncVault>>["status"], string> = {
   synced: "synced",
   "up-to-date": "already up to date",
   "conflict-resolved": "merged with a change from another device",
@@ -246,9 +243,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [refreshKeys, refreshHosts]);
 
   const syncEntries = useCallback(() => {
-    setSessions(
-      [...live.current.values()].filter((l) => l.session).map((l) => l.entry),
-    );
+    setSessions([...live.current.values()].filter((l) => l.session).map((l) => l.entry));
   }, []);
 
   /** "web", then "web #2" — so two shells on one host stay distinguishable. */
@@ -256,8 +251,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const base = `${target.username}@${target.hostname}`;
     const existing = [...live.current.values()].filter(
       (l) =>
-        l.entry.id !== selfId &&
-        `${l.entry.target.username}@${l.entry.target.hostname}` === base,
+        l.entry.id !== selfId && `${l.entry.target.username}@${l.entry.target.hostname}` === base,
     ).length;
     return existing === 0 ? base : `${base} #${existing + 1}`;
   }, []);
@@ -518,9 +512,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       sessionFor: (id) => live.current.get(id)?.session ?? null,
     }),
     [
-      phase, sessions, activeId, keys, hosts, activeKey, refreshKeys,
-      refreshHosts, connect, disconnect, renameSession, error, note, pinned, mismatch, subscribe,
-      tapSession, sizeFor, resize, panes, splitDirection, focusedPane,
+      phase,
+      sessions,
+      activeId,
+      keys,
+      hosts,
+      activeKey,
+      refreshKeys,
+      refreshHosts,
+      connect,
+      disconnect,
+      renameSession,
+      error,
+      note,
+      pinned,
+      mismatch,
+      subscribe,
+      tapSession,
+      sizeFor,
+      resize,
+      panes,
+      splitDirection,
+      focusedPane,
     ],
   );
 

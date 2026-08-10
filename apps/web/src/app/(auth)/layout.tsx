@@ -26,8 +26,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             SSH from any browser tab.
           </h2>
           <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            A terminal, a file browser and an editor for your servers, with
-            nothing to install — on your machine or theirs.
+            A terminal, a file browser and an editor for your servers, with nothing to install — on
+            your machine or theirs.
           </p>
 
           <ul className="mt-8 space-y-3 border-t border-border pt-6 text-sm text-muted-foreground">
@@ -37,10 +37,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </ul>
 
           <p className="mt-8 text-xs/relaxed text-muted-foreground">
-            <Link
-              href="/security"
-              className="underline underline-offset-4 hover:text-foreground"
-            >
+            <Link href="/security" className="underline underline-offset-4 hover:text-foreground">
               How it keeps your keys and hosts private
             </Link>
           </p>

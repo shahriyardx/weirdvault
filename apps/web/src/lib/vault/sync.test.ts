@@ -27,15 +27,14 @@ const host = (id: string, at: number) => ({
   lastUsedAt: at,
 });
 
-const key = (id: string, at: number) =>
-  ({
-    id,
-    label: id,
-    mode: "portable" as const,
-    publicKeyRaw: "AAAA",
-    wrapped: { iv: "aXY=", ciphertext: "Y3Q=" },
-    createdAt: at,
-  });
+const key = (id: string, at: number) => ({
+  id,
+  label: id,
+  mode: "portable" as const,
+  publicKeyRaw: "AAAA",
+  wrapped: { iv: "aXY=", ciphertext: "Y3Q=" },
+  createdAt: at,
+});
 
 const snippet = (id: string, body: string, updatedAt: number) => ({
   id,
@@ -56,10 +55,7 @@ const pin = (id: string, keyB64: string, pinnedAt: number) => ({
 
 describe("mergeVault", () => {
   test("unions records that exist on only one side", () => {
-    const merged = mergeVault(
-      doc({ hosts: [host("a", 100)] }),
-      doc({ hosts: [host("b", 100)] }),
-    );
+    const merged = mergeVault(doc({ hosts: [host("a", 100)] }), doc({ hosts: [host("b", 100)] }));
     expect(merged.hosts.map((h) => h.id).sort()).toEqual(["a", "b"]);
   });
 
@@ -98,19 +94,13 @@ describe("mergeVault", () => {
   });
 
   test("a deletion beats an older edit", () => {
-    const merged = mergeVault(
-      doc({ tombstones: { a: 300 } }),
-      doc({ hosts: [host("a", 100)] }),
-    );
+    const merged = mergeVault(doc({ tombstones: { a: 300 } }), doc({ hosts: [host("a", 100)] }));
     expect(merged.hosts).toHaveLength(0);
   });
 
   test("an edit newer than the deletion survives", () => {
     // Otherwise re-creating a host on another device would be undone forever.
-    const merged = mergeVault(
-      doc({ hosts: [host("a", 400)] }),
-      doc({ tombstones: { a: 300 } }),
-    );
+    const merged = mergeVault(doc({ hosts: [host("a", 400)] }), doc({ tombstones: { a: 300 } }));
     expect(merged.hosts).toHaveLength(1);
   });
 

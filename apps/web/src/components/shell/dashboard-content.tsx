@@ -19,15 +19,8 @@ export function DashboardContent({ children }: { children: React.ReactNode }) {
   const bleed = FULL_BLEED.some((p) => pathname.startsWith(p));
 
   return (
-    <div
-      className={cn(
-        "min-h-0 flex-1",
-        bleed ? "overflow-hidden" : "overflow-auto",
-      )}
-    >
-      <div className={cn(bleed ? "h-full" : "mx-auto w-full max-w-4xl px-6 py-6")}>
-        {children}
-      </div>
+    <div className={cn("min-h-0 flex-1", bleed ? "overflow-hidden" : "overflow-auto")}>
+      <div className={cn(bleed ? "h-full" : "mx-auto w-full max-w-4xl px-6 py-6")}>{children}</div>
     </div>
   );
 }

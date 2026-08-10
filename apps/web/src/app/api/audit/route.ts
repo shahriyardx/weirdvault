@@ -166,10 +166,7 @@ export async function POST(request: Request) {
   // post connection.opened would let a compromised tab fabricate relay-grade
   // evidence, which is precisely what the source column exists to prevent.
   if (!CLIENT_REPORTABLE.includes(eventType as AuditEventType)) {
-    return Response.json(
-      { error: `${eventType} is not client-reportable` },
-      { status: 403 },
-    );
+    return Response.json({ error: `${eventType} is not client-reportable` }, { status: 403 });
   }
 
   const meta = validateMetadata(eventType, metadata);

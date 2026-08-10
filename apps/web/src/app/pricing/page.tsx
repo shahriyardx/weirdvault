@@ -36,10 +36,7 @@ import {
   RELAY_ALLOWANCE_BYTES,
   SESSION_RECORDING,
 } from "@/lib/billing/tiers";
-import {
-  MAX_ACCOUNT_RECORDING_BYTES,
-  MAX_CAPTURE_BYTES,
-} from "@/lib/recording/limits";
+import { MAX_ACCOUNT_RECORDING_BYTES, MAX_CAPTURE_BYTES } from "@/lib/recording/limits";
 import { MAX_SHARE_TTL_MS } from "@/lib/recording/share";
 import { formatBytes } from "@/lib/usage";
 import { cn } from "@/lib/utils";
@@ -233,8 +230,7 @@ const TIERS: Tier[] = [
     price: "$0",
     unit: "forever",
     icon: <HardDrivesIcon weight="fill" />,
-    tagline:
-      "The whole client, with sync. No host cap, no device cap, no trial clock.",
+    tagline: "The whole client, with sync. No host cap, no device cap, no trial clock.",
     features: CLIENT_FEATURES,
     limits: FREE_LIMITS,
     excluded: [
@@ -360,14 +356,12 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         They stay exactly where they are, and they keep working. The gate is on{" "}
-        <span className="text-foreground">saving a new recording</span> and on
-        creating a new share link, and on nothing else: listing, playing,
-        downloading as a cast file and revoking a link you already have out are
-        ungated in the code and always will be. A recording is your own data,
-        encrypted in your browser with a key we have never held — holding it
-        behind a payment would mean ransoming something we cannot even read. If a
-        subscription lapses, the Record button stops and every recording on the
-        page still plays.
+        <span className="text-foreground">saving a new recording</span> and on creating a new share
+        link, and on nothing else: listing, playing, downloading as a cast file and revoking a link
+        you already have out are ungated in the code and always will be. A recording is your own
+        data, encrypted in your browser with a key we have never held — holding it behind a payment
+        would mean ransoming something we cannot even read. If a subscription lapses, the Record
+        button stops and every recording on the page still plays.
       </>
     ),
   },
@@ -375,12 +369,11 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: `Is Pro really ${PRO_PRICE_LABEL} flat?`,
     a: (
       <>
-        {PRO_PRICE_LABEL} {PRO_PRICE_UNIT}, one subscription per account, and
-        there is no second number to multiply it by. Accounts here are personal:
-        no organizations, no members, no seats and no invitations. A team surface
-        was built and then withdrawn, because the shared vault it existed to
-        protect was never built and charging per seat for a roster is not a
-        product. Two tiers, one price, no quantity is the entire price list.
+        {PRO_PRICE_LABEL} {PRO_PRICE_UNIT}, one subscription per account, and there is no second
+        number to multiply it by. Accounts here are personal: no organizations, no members, no seats
+        and no invitations. A team surface was built and then withdrawn, because the shared vault it
+        existed to protect was never built and charging per seat for a roster is not a product. Two
+        tiers, one price, no quantity is the entire price list.
       </>
     ),
   },
@@ -390,14 +383,13 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
       <>
         You keep Pro while Stripe retries. A subscription that is{" "}
         <code className="text-foreground">past_due</code> or{" "}
-        <code className="text-foreground">unpaid</code> keeps its access through
-        the period you have already paid for, because cutting somebody off in the
-        middle of a retry — over a card that expired at the weekend — costs them
-        their servers for a payment that usually goes through. If you cancel, you
-        keep everything until the end of the period you have paid for; nothing is
-        cut off on the day you press the button. Cancelling, changing a card and
-        every invoice live in Stripe&rsquo;s billing portal, which is linked from
-        your Settings page. No card number ever reaches this server.
+        <code className="text-foreground">unpaid</code> keeps its access through the period you have
+        already paid for, because cutting somebody off in the middle of a retry — over a card that
+        expired at the weekend — costs them their servers for a payment that usually goes through.
+        If you cancel, you keep everything until the end of the period you have paid for; nothing is
+        cut off on the day you press the button. Cancelling, changing a card and every invoice live
+        in Stripe&rsquo;s billing portal, which is linked from your Settings page. No card number
+        ever reaches this server.
       </>
     ),
   },
@@ -405,11 +397,10 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Why is sync free when everyone else charges for it?",
     a: (
       <>
-        Because it costs us almost nothing to run. Your hosts, keys and snippets
-        are stored as one encrypted blob that the server cannot read, so there is
-        no indexing, no search and no per-host processing on our side — the cost
-        does not grow with the size of your fleet. Charging for it would mean
-        charging for the thing you need on the first day.
+        Because it costs us almost nothing to run. Your hosts, keys and snippets are stored as one
+        encrypted blob that the server cannot read, so there is no indexing, no search and no
+        per-host processing on our side — the cost does not grow with the size of your fleet.
+        Charging for it would mean charging for the thing you need on the first day.
       </>
     ),
   },
@@ -417,19 +408,17 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Is the free tier limited in any way I should know about?",
     a: (
       <>
-        Two enforced limits and one feature. Our relay carries {FREE_TRANSFER} a
-        month for you, counting both directions; past that we refuse to start new
-        connections through it, and sessions you already have open keep running
-        until you close them. The activity log keeps {FREE_HISTORY} — older
-        events are deleted rather than hidden behind an upgrade. And session
-        recording is on Pro, which is the one feature Free does not have. What
-        the question usually means, the answer is still no: no host cap, no
-        device cap, no trial period, and nothing about the client itself is held
-        back — the SSH session, the file explorer, the editor and the encrypted
-        sync are the same code on both plans. The transfer figure is on your
-        Settings page before it bites rather than after, and running your own
-        relay removes it entirely; it exists because relay bandwidth costs us
-        money, and bandwidth you pay for already is not ours to ration.
+        Two enforced limits and one feature. Our relay carries {FREE_TRANSFER} a month for you,
+        counting both directions; past that we refuse to start new connections through it, and
+        sessions you already have open keep running until you close them. The activity log keeps{" "}
+        {FREE_HISTORY} — older events are deleted rather than hidden behind an upgrade. And session
+        recording is on Pro, which is the one feature Free does not have. What the question usually
+        means, the answer is still no: no host cap, no device cap, no trial period, and nothing
+        about the client itself is held back — the SSH session, the file explorer, the editor and
+        the encrypted sync are the same code on both plans. The transfer figure is on your Settings
+        page before it bites rather than after, and running your own relay removes it entirely; it
+        exists because relay bandwidth costs us money, and bandwidth you pay for already is not ours
+        to ration.
       </>
     ),
   },
@@ -437,15 +426,13 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "What can the relay actually see?",
     a: (
       <>
-        Metadata, not content. The SSH client is WebAssembly running in your tab,
-        so the handshake terminates in the page and the relay only forwards
-        ciphertext it has no key for. It does see which host and port you asked
-        for, when, and how many bytes moved. Those byte counts are the one piece
-        of that metadata we keep in a database rather than in a log: a running
-        monthly total per account, which is what the transfer allowance is
-        measured against. It records how much, never what or where. Host keys
-        are pinned on first use and verified on reconnect, so a relay that tried
-        to sit in the middle would be refused rather than trusted.
+        Metadata, not content. The SSH client is WebAssembly running in your tab, so the handshake
+        terminates in the page and the relay only forwards ciphertext it has no key for. It does see
+        which host and port you asked for, when, and how many bytes moved. Those byte counts are the
+        one piece of that metadata we keep in a database rather than in a log: a running monthly
+        total per account, which is what the transfer allowance is measured against. It records how
+        much, never what or where. Host keys are pinned on first use and verified on reconnect, so a
+        relay that tried to sit in the middle would be refused rather than trusted.
       </>
     ),
   },
@@ -453,17 +440,15 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "What happens if I lose a key or forget my password?",
     a: (
       <>
-        A portable key is wrapped with your vault key, so signing in on another
-        device brings it back. A device-bound key never leaves the browser that
-        generated it — clear that browser&apos;s storage and the key is gone for
-        good; you would generate a new one and add a line to{" "}
-        <code className="text-foreground">~/.ssh/authorized_keys</code>, or
-        connect once with a password and let webxterm install it. The vault key
-        is derived from your password in your browser and never sent to us, so
-        there is no reset on our side that could decrypt the blob — a recovery
-        code enrolled in advance is the only way back in. It does not stand in
-        for an authenticator app: if you have enrolled one, the sign-in a code
-        attempts still stops at that challenge.
+        A portable key is wrapped with your vault key, so signing in on another device brings it
+        back. A device-bound key never leaves the browser that generated it — clear that
+        browser&apos;s storage and the key is gone for good; you would generate a new one and add a
+        line to <code className="text-foreground">~/.ssh/authorized_keys</code>, or connect once
+        with a password and let webxterm install it. The vault key is derived from your password in
+        your browser and never sent to us, so there is no reset on our side that could decrypt the
+        blob — a recovery code enrolled in advance is the only way back in. It does not stand in for
+        an authenticator app: if you have enrolled one, the sign-in a code attempts still stops at
+        that challenge.
       </>
     ),
   },
@@ -471,13 +456,12 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Do you have SOC 2?",
     a: (
       <>
-        No. No SOC 2, no ISO 27001, and no third-party audit — we would rather
-        say so plainly than imply a certification we have not earned. What exists
-        instead is a published threat model that states the largest residual risk
-        in our own words: we serve the JavaScript, so a compromise of our
-        delivery is a compromise of the client. Around that sit non-extractable
-        WebCrypto keys, a vault the server cannot decrypt, and host keys pinned
-        on first use and verified on every reconnect.
+        No. No SOC 2, no ISO 27001, and no third-party audit — we would rather say so plainly than
+        imply a certification we have not earned. What exists instead is a published threat model
+        that states the largest residual risk in our own words: we serve the JavaScript, so a
+        compromise of our delivery is a compromise of the client. Around that sit non-extractable
+        WebCrypto keys, a vault the server cannot decrypt, and host keys pinned on first use and
+        verified on every reconnect.
       </>
     ),
   },
@@ -512,40 +496,35 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-          Subscribing happens inside the app, not on this page: create an
-          account, then Settings has the plan card and the checkout button.
-          Payment is handled by Stripe — card details are entered on their pages
-          and never reach this server, which stores a customer id, a status and a
-          renewal date and nothing else. A self-hosted install with no Stripe
-          keys says so on that card and offers no button, which is the intended
-          configuration rather than a fault. Both tiers run the same client: the
-          SSH session is WebAssembly in your tab whether you pay us or not.
+          Subscribing happens inside the app, not on this page: create an account, then Settings has
+          the plan card and the checkout button. Payment is handled by Stripe — card details are
+          entered on their pages and never reach this server, which stores a customer id, a status
+          and a renewal date and nothing else. A self-hosted install with no Stripe keys says so on
+          that card and offers no button, which is the intended configuration rather than a fault.
+          Both tiers run the same client: the SSH session is WebAssembly in your tab whether you pay
+          us or not.
         </p>
       </section>
 
       {/* ------------------------------------------------------ comparison */}
       <section className="border-t border-border py-10" aria-labelledby="compare-heading">
-        <h2
-          id="compare-heading"
-          className="font-heading text-xl font-semibold tracking-tight"
-        >
+        <h2 id="compare-heading" className="font-heading text-xl font-semibold tracking-tight">
           Line by line
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          The first block is the client, and the columns are identical because it
-          is the same code on both plans. The second is session recording, which
-          is the one feature a subscription switches on — note the third row,
-          which is the promise that a lapsed plan never strands a transcript you
-          already saved. The third is what we actually enforce, and every number
-          in it is imported from the module that does the enforcing.
+          The first block is the client, and the columns are identical because it is the same code
+          on both plans. The second is session recording, which is the one feature a subscription
+          switches on — note the third row, which is the promise that a lapsed plan never strands a
+          transcript you already saved. The third is what we actually enforce, and every number in
+          it is imported from the module that does the enforcing.
         </p>
 
         <div className="mt-6 ring-1 ring-foreground/10">
           <Table>
             <TableCaption className="px-4 pb-4 text-left leading-relaxed">
-              A tick means it runs today. A dash means it does not exist for that
-              tier. A number is a limit that is enforced, not a target. Nothing
-              on this table is unbuilt — if it is listed, it runs.
+              A tick means it runs today. A dash means it does not exist for that tier. A number is
+              a limit that is enforced, not a target. Nothing on this table is unbuilt — if it is
+              listed, it runs.
             </TableCaption>
             <TableHeader>
               <TableRow className="bg-card">
@@ -566,13 +545,12 @@ export default function PricingPage() {
         </div>
 
         <p className="mt-4 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-          Two things that used to be advertised here are gone rather than
-          postponed. Mosh cannot be built into this: it needs a UDP socket, a
-          browser tab does not have one, and it also needs a{" "}
-          <code className="text-foreground">mosh-server</code> installed on the
-          target, which would break the promise that there is nothing to install
-          on your servers. A fleet dashboard needs to poll hosts you are not
-          connected to, and the client only exists while a tab is open.
+          Two things that used to be advertised here are gone rather than postponed. Mosh cannot be
+          built into this: it needs a UDP socket, a browser tab does not have one, and it also needs
+          a <code className="text-foreground">mosh-server</code> installed on the target, which
+          would break the promise that there is nothing to install on your servers. A fleet
+          dashboard needs to poll hosts you are not connected to, and the client only exists while a
+          tab is open.
         </p>
       </section>
 
@@ -585,12 +563,8 @@ export default function PricingPage() {
           {FAQ.map((item) => (
             <Card key={item.q} className="h-full">
               <CardContent className="flex flex-col gap-2">
-                <h3 className="font-heading text-sm font-medium text-foreground">
-                  {item.q}
-                </h3>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {item.a}
-                </p>
+                <h3 className="font-heading text-sm font-medium text-foreground">{item.q}</h3>
+                <p className="text-xs leading-relaxed text-muted-foreground">{item.a}</p>
               </CardContent>
             </Card>
           ))}
@@ -605,13 +579,12 @@ export default function PricingPage() {
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
             Generate a key, paste one line into{" "}
-            <code className="text-foreground">~/.ssh/authorized_keys</code>, and
-            you have a terminal, a file explorer and a remote editor. No card, no
-            trial clock. The two walls on Free are {FREE_TRANSFER} of relay
-            transfer a month — on your Settings page from the first day, and gone
-            entirely if you run your own relay — and {FREE_HISTORY} of activity
-            history. Pro is {PRO_PRICE_LABEL} {PRO_PRICE_UNIT} when one of those,
-            or session recording, turns out to matter to you.
+            <code className="text-foreground">~/.ssh/authorized_keys</code>, and you have a
+            terminal, a file explorer and a remote editor. No card, no trial clock. The two walls on
+            Free are {FREE_TRANSFER} of relay transfer a month — on your Settings page from the
+            first day, and gone entirely if you run your own relay — and {FREE_HISTORY} of activity
+            history. Pro is {PRO_PRICE_LABEL} {PRO_PRICE_UNIT} when one of those, or session
+            recording, turns out to matter to you.
           </p>
         </div>
         <div className="flex flex-wrap gap-3 md:ml-auto">
@@ -633,12 +606,7 @@ export default function PricingPage() {
 
 function TierCard({ tier }: { tier: Tier }) {
   return (
-    <Card
-      className={cn(
-        "h-full",
-        tier.recommended && "ring-2 ring-primary/60",
-      )}
-    >
+    <Card className={cn("h-full", tier.recommended && "ring-2 ring-primary/60")}>
       <CardHeader>
         <div className="mb-1 flex items-center gap-2">
           <span
@@ -654,12 +622,8 @@ function TierCard({ tier }: { tier: Tier }) {
           {tier.recommended && <Badge className="ml-auto">Start here</Badge>}
         </div>
         <div className="flex items-baseline gap-1.5 pt-2">
-          <span className="font-heading text-3xl font-semibold tracking-tight">
-            {tier.price}
-          </span>
-          {tier.unit && (
-            <span className="text-xs text-muted-foreground">{tier.unit}</span>
-          )}
+          <span className="font-heading text-3xl font-semibold tracking-tight">{tier.price}</span>
+          {tier.unit && <span className="text-xs text-muted-foreground">{tier.unit}</span>}
         </div>
         <CardDescription className="pt-2">{tier.tagline}</CardDescription>
       </CardHeader>
@@ -675,18 +639,14 @@ function TierCard({ tier }: { tier: Tier }) {
                   tier.recommended ? "text-primary" : "text-muted-foreground",
                 )}
               />
-              <span className="text-xs leading-relaxed text-muted-foreground">
-                {feature}
-              </span>
+              <span className="text-xs leading-relaxed text-muted-foreground">{feature}</span>
             </li>
           ))}
         </ul>
 
         {tier.limits && tier.limits.length > 0 && (
           <div className={cn(tier.features.length > 0 && "mt-4 border-t border-border pt-4")}>
-            <p className="mb-2 text-xs font-medium text-warning">
-              Limits we enforce
-            </p>
+            <p className="mb-2 text-xs font-medium text-warning">Limits we enforce</p>
             <ul className="flex flex-col gap-2">
               {tier.limits.map((item) => (
                 <li key={item} className="flex gap-2">
@@ -694,9 +654,7 @@ function TierCard({ tier }: { tier: Tier }) {
                     aria-hidden
                     className="mt-0.5 size-3.5 shrink-0 text-warning"
                   />
-                  <span className="text-xs leading-relaxed text-muted-foreground">
-                    {item}
-                  </span>
+                  <span className="text-xs leading-relaxed text-muted-foreground">{item}</span>
                 </li>
               ))}
             </ul>
@@ -710,9 +668,7 @@ function TierCard({ tier }: { tier: Tier }) {
                 "mt-4 border-t border-border pt-4",
             )}
           >
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Not on this plan
-            </p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Not on this plan</p>
             <ul className="flex flex-col gap-2">
               {tier.excluded.map((item) => (
                 <li key={item} className="flex gap-2">
@@ -720,9 +676,7 @@ function TierCard({ tier }: { tier: Tier }) {
                     aria-hidden
                     className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50"
                   />
-                  <span className="text-xs leading-relaxed text-muted-foreground">
-                    {item}
-                  </span>
+                  <span className="text-xs leading-relaxed text-muted-foreground">{item}</span>
                 </li>
               ))}
             </ul>
@@ -738,9 +692,7 @@ function TierCard({ tier }: { tier: Tier }) {
         ) : (
           // No button at all rather than a disabled one: a greyed-out "Start
           // with Pro" still implies a Pro exists to start.
-          <p className="w-full text-center text-xs text-muted-foreground">
-            Nothing to buy
-          </p>
+          <p className="w-full text-center text-xs text-muted-foreground">Nothing to buy</p>
         )}
       </CardFooter>
     </Card>
@@ -769,9 +721,7 @@ function ComparisonGroup({
       </TableRow>
       {section.rows.map((row) => (
         <TableRow key={row.label}>
-          <TableCell className="pl-4 font-medium text-foreground">
-            {row.label}
-          </TableCell>
+          <TableCell className="pl-4 font-medium text-foreground">{row.label}</TableCell>
           {row.cells.map((cell, i) => (
             <TableCell key={COLUMNS[i]} className="text-center last:pr-4">
               <CellValue value={cell} column={COLUMNS[i]} row={row.label} />
@@ -783,15 +733,7 @@ function ComparisonGroup({
   );
 }
 
-function CellValue({
-  value,
-  column,
-  row,
-}: {
-  value: Cell;
-  column: string;
-  row: string;
-}) {
+function CellValue({ value, column, row }: { value: Cell; column: string; row: string }) {
   if (typeof value === "string") {
     return <span className="text-muted-foreground">{value}</span>;
   }

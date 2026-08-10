@@ -88,11 +88,7 @@ export function usePasswordlessSignIn(): PasswordlessSignIn | null {
  * touches the network. Callers get the vault key back and must keep it in
  * memory only — persisting it anywhere would undo the point.
  */
-export async function signUpWithVault(
-  email: string,
-  password: string,
-  name: string,
-) {
+export async function signUpWithVault(email: string, password: string, name: string) {
   const { authToken, vaultKey, auditKey } = await deriveSecrets(email, password);
   const res = await authClient.signUp.email({
     email,
@@ -141,7 +137,9 @@ export type SignInOutcome =
       status: "signed-in";
       vaultKey: CryptoKey;
       auditKey: CryptoKey;
-      user: NonNullable<Awaited<ReturnType<typeof authClient.signIn.email>>["data"]>["user"] | undefined;
+      user:
+        | NonNullable<Awaited<ReturnType<typeof authClient.signIn.email>>["data"]>["user"]
+        | undefined;
     }
   | {
       status: "two-factor-required";
@@ -423,10 +421,7 @@ function secretFromTotpUri(uri: string): string {
   }
 }
 
-export async function beginTotpEnrolment(
-  email: string,
-  password: string,
-): Promise<TotpEnrolment> {
+export async function beginTotpEnrolment(email: string, password: string): Promise<TotpEnrolment> {
   const { authToken } = await deriveSecrets(email, password);
   const res = await authClient.twoFactor.enable({ password: authToken });
   if (res.error) throw new Error(res.error.message ?? "two-factor could not be set up");
@@ -436,9 +431,7 @@ export async function beginTotpEnrolment(
     // Neither half of the enrolment is usable without both, and a card showing a
     // QR code with no fallback secret is a control that fails for anyone who
     // cannot scan. Refusing is the honest answer.
-    throw new Error(
-      "The server did not return a usable enrolment secret, so nothing was set up.",
-    );
+    throw new Error("The server did not return a usable enrolment secret, so nothing was set up.");
   }
   return { totpURI, secret, backupCodes: res.data?.backupCodes ?? [] };
 }
@@ -464,10 +457,7 @@ export async function disableTotp(email: string, password: string): Promise<void
  * Replace the backup codes. Every code from the previous set stops working, which
  * is the point: it is the only way back if the old list leaked or was lost.
  */
-export async function reissueBackupCodes(
-  email: string,
-  password: string,
-): Promise<string[]> {
+export async function reissueBackupCodes(email: string, password: string): Promise<string[]> {
   const { authToken } = await deriveSecrets(email, password);
   const res = await authClient.twoFactor.generateBackupCodes({ password: authToken });
   if (res.error) throw new Error(res.error.message ?? "the backup codes were not replaced");

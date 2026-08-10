@@ -97,9 +97,7 @@ export async function generateKey(
     "verify",
   ])) as CryptoKeyPair;
 
-  const publicKeyRaw = new Uint8Array(
-    await crypto.subtle.exportKey("raw", pair.publicKey),
-  );
+  const publicKeyRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
 
   const record: StoredKey = {
     id: crypto.randomUUID(),
@@ -327,10 +325,7 @@ async function withParsedKey<T>(
  * of this file is arranged to avoid. The pasted text is already sitting in a
  * textarea either way, so the second parse costs milliseconds and no secrecy.
  */
-export async function inspectImportedKey(
-  pem: string,
-  passphrase = "",
-): Promise<KeyPreview> {
+export async function inspectImportedKey(pem: string, passphrase = ""): Promise<KeyPreview> {
   return withParsedKey(pem, passphrase, async (parsed) => ({
     keyType: parsed.keyType,
     bits: parsed.bits,
@@ -525,15 +520,11 @@ export function authorizedKeysLine(key: { publicKeyRaw: Uint8Array; label: strin
 /** The signing callback handed to WASM: challenge in, signature out. */
 export function makeSigner(key: SshKey) {
   return async (data: Uint8Array): Promise<Uint8Array> =>
-    new Uint8Array(
-      await crypto.subtle.sign("Ed25519", key.privateKey, data as BufferSource),
-    );
+    new Uint8Array(await crypto.subtle.sign("Ed25519", key.privateKey, data as BufferSource));
 }
 
 /** Verifies the security claim rather than asserting it. */
-export async function proveNonExtractable(
-  key: SshKey,
-): Promise<{ ok: boolean; detail: string }> {
+export async function proveNonExtractable(key: SshKey): Promise<{ ok: boolean; detail: string }> {
   if (key.privateKey.extractable) {
     return { ok: false, detail: "privateKey.extractable is true" };
   }

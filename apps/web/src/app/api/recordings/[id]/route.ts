@@ -139,10 +139,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     })
     .from(schema.recordingShare)
     .where(
-      and(
-        eq(schema.recordingShare.recordingId, id),
-        eq(schema.recordingShare.userId, user.id),
-      ),
+      and(eq(schema.recordingShare.recordingId, id), eq(schema.recordingShare.userId, user.id)),
     );
 
   // Bytes first, row second. If the bucket refuses, the row is left exactly as

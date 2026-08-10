@@ -81,8 +81,7 @@ import { useConnectHost } from "@/lib/ssh/use-connect-host";
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sessions, activeId, setActive, disconnect, renameSession, hosts, keys } =
-    useSshSession();
+  const { sessions, activeId, setActive, disconnect, renameSession, hosts, keys } = useSshSession();
 
   const recorders = useRecorders();
   const { start: startRecording, stop: stopRecording } = useSessionRecorder();
@@ -156,11 +155,7 @@ export function AppSidebar() {
                   to icons, which would leave the rail with no way to start a
                   session at all. Same menu, same position, shown only there. */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:block">
-                <NewSessionMenu
-                  hosts={recentHosts}
-                  connecting={connecting}
-                  onPick={connectToHost}
-                >
+                <NewSessionMenu hosts={recentHosts} connecting={connecting} onPick={connectToHost}>
                   <SidebarMenuButton tooltip="New session">
                     <PlusIcon />
                     <span>New session</span>
@@ -215,9 +210,7 @@ export function AppSidebar() {
                           onClick={() => openSession(s.id)}
                           tooltip={`${s.label}:${s.target.port}`}
                         >
-                          <TerminalWindowIcon
-                            className={isActive ? "text-success" : undefined}
-                          />
+                          <TerminalWindowIcon className={isActive ? "text-success" : undefined} />
                           <span className="truncate">{s.label}</span>
                           {/* A recording in progress has to be visible from
                               wherever you are, not only on the tab that started
@@ -246,9 +239,7 @@ export function AppSidebar() {
                         <TerminalWindowIcon />
                         Open
                       </ContextMenuItem>
-                      <ContextMenuItem
-                        onSelect={() => setRenaming({ id: s.id, name: s.label })}
-                      >
+                      <ContextMenuItem onSelect={() => setRenaming({ id: s.id, name: s.label })}>
                         <PencilSimpleIcon />
                         Rename
                       </ContextMenuItem>
@@ -258,9 +249,7 @@ export function AppSidebar() {
                           discard the one in flight. */}
                       <ContextMenuItem
                         disabled={recorder !== null && !capturing}
-                        onSelect={() =>
-                          void (capturing ? stopRecording(s.id) : startRecording(s))
-                        }
+                        onSelect={() => void (capturing ? stopRecording(s.id) : startRecording(s))}
                       >
                         {capturing ? (
                           <StopIcon weight="fill" />
@@ -293,7 +282,6 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -2,11 +2,7 @@ import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import { db, schema } from "@/lib/db";
-import {
-  BillingNotConfiguredError,
-  stripeClient,
-  webhookSecret,
-} from "@/lib/billing/stripe";
+import { BillingNotConfiguredError, stripeClient, webhookSecret } from "@/lib/billing/stripe";
 import { mirrorSubscription } from "@/lib/billing/subscription";
 
 /**
@@ -164,10 +160,7 @@ export async function POST(request: Request) {
             "the subscription mirror may be stale for that account",
         );
       });
-    console.error(
-      `webhook ${event.id} (${event.type}) failed`,
-      e instanceof Error ? e.message : e,
-    );
+    console.error(`webhook ${event.id} (${event.type}) failed`, e instanceof Error ? e.message : e);
     return Response.json({ error: "processing failed" }, { status: 500 });
   }
 

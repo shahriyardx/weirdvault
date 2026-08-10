@@ -95,7 +95,10 @@ function isStoredEnvelope(value: unknown): value is StoredEnvelope {
     // Exact lengths, not maxima. A ciphertext of an unexpected size would be
     // storage this route cannot account for, and would make the decoy above
     // distinguishable from the real thing by length alone.
-    if (buf.length !== bytes || buf.toString("base64").replace(/=+$/, "") !== v.replace(/=+$/, "")) {
+    if (
+      buf.length !== bytes ||
+      buf.toString("base64").replace(/=+$/, "") !== v.replace(/=+$/, "")
+    ) {
       return false;
     }
   }
@@ -119,8 +122,7 @@ function envelopesOf(row: { envelopes: unknown }): StoredEnvelope[] {
  * degrades rather than breaks, and it degrades on a deployment that is already
  * misconfigured.
  */
-const DECOY_SECRET =
-  process.env.BETTER_AUTH_SECRET ?? randomBytes(32).toString("hex");
+const DECOY_SECRET = process.env.BETTER_AUTH_SECRET ?? randomBytes(32).toString("hex");
 
 function decoyBytes(label: string, length: number): Buffer {
   const out = Buffer.alloc(length);
@@ -233,10 +235,7 @@ export async function POST(request: Request) {
   // none.
   if (body.action === "redeem") return redeem(request, body);
   if (body.action === "enrol") return enrol(body);
-  return Response.json(
-    { error: 'action must be "enrol" or "redeem"' },
-    { status: 400 },
-  );
+  return Response.json({ error: 'action must be "enrol" or "redeem"' }, { status: 400 });
 }
 
 async function enrol(body: Record<string, unknown>) {

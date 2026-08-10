@@ -31,11 +31,7 @@ function b64url(bytes: Uint8Array): string {
 /**
  * @param auditKey the HMAC branch from deriveSecrets(); never leaves the device
  */
-export async function blindHost(
-  auditKey: CryptoKey,
-  host: string,
-  port: number,
-): Promise<string> {
+export async function blindHost(auditKey: CryptoKey, host: string, port: number): Promise<string> {
   // Normalise so the same server always produces the same ref regardless of
   // how the user typed it.
   const canonical = `${DOMAIN}|${host.trim().toLowerCase()}|${port}`;

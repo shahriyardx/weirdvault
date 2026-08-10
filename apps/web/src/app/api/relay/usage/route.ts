@@ -193,12 +193,7 @@ export async function GET() {
   const [row] = await db
     .select()
     .from(schema.relayUsage)
-    .where(
-      and(
-        eq(schema.relayUsage.userId, session.user.id),
-        eq(schema.relayUsage.period, period),
-      ),
-    )
+    .where(and(eq(schema.relayUsage.userId, session.user.id), eq(schema.relayUsage.period, period)))
     .limit(1);
 
   const bytesUp = row?.bytesUp ?? 0;

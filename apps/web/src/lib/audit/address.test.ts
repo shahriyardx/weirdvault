@@ -39,9 +39,7 @@ describe("clientAddress", () => {
 
   test("two proxies read one hop further left", async () => {
     const { clientAddress } = await load("2", 4);
-    expect(clientAddress(headers("10.0.0.1, 203.0.113.42, 172.16.0.1"))).toBe(
-      "203.0.113.42",
-    );
+    expect(clientAddress(headers("10.0.0.1, 203.0.113.42, 172.16.0.1"))).toBe("203.0.113.42");
   });
 
   test("a chain shorter than the configured hop count answers null", async () => {

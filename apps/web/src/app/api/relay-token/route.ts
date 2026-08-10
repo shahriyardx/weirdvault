@@ -91,9 +91,10 @@ async function subjectFor(): Promise<{ sub: string; ttl: number; anonymous: bool
  * enforcement at all — both failures point the same way by construction rather
  * than by coincidence.
  */
-async function allowanceCheck(userId: string): Promise<
-  | { over: false }
-  | { over: true; usedBytes: number; allowanceBytes: number; resetsAt: string }
+async function allowanceCheck(
+  userId: string,
+): Promise<
+  { over: false } | { over: true; usedBytes: number; allowanceBytes: number; resetsAt: string }
 > {
   const now = new Date();
   try {
@@ -105,10 +106,7 @@ async function allowanceCheck(userId: string): Promise<
       })
       .from(schema.relayUsage)
       .where(
-        and(
-          eq(schema.relayUsage.userId, userId),
-          eq(schema.relayUsage.period, periodFor(now)),
-        ),
+        and(eq(schema.relayUsage.userId, userId), eq(schema.relayUsage.period, periodFor(now))),
       )
       .limit(1);
 
