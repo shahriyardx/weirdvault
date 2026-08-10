@@ -46,8 +46,8 @@ GOOS=js GOARCH=wasm go vet ./...  # vet the parts that only exist in the browser
 ```
 
 Everything else — the handshake, PTY, SFTP — needs a browser and a real server.
-There is no automated coverage of it; check those by hand against the container
-`bun run sshd` starts on :2222.
+There is no automated coverage of it; check those by hand against a server you
+control, over the network, on port 22.
 
 ## Dependencies
 

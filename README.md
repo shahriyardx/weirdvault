@@ -116,7 +116,6 @@ Four programs, each with its own README covering how to run and test it.
 | [`apps/ssh/`](apps/ssh/README.md) | Go → WASM | The SSH and SFTP client that runs in the tab. Where the encryption actually happens |
 | [`apps/relay/`](apps/relay/README.md) | Rust | The WebSocket-to-TCP bridge. Forwards ciphertext, guards against SSRF |
 | [`apps/agent/`](apps/agent/README.md) | Go | The daemon on a machine that cannot be dialled. Dials out, gets paired, pipes to sshd on loopback |
-| `sshd/` | | A stock OpenSSH container to develop against, on :2222 |
 | `docs/` | | Threat model, deployment, and the spike results behind the architecture |
 
 Each app owns its own manifest — `apps/web/package.json`, `apps/ssh/go.mod`,
@@ -153,7 +152,6 @@ bun run agent                      # apps/agent → apps/web/public/agent-bin
 ## Verifying
 
 ```bash
-bun run sshd                    # a stock OpenSSH target on :2222
 cd apps/relay && cargo test     # SSRF guards, token binding, quotas, agent rendezvous
 cd apps/ssh   && go test ./...  # key and ssh_config parsing
 cd apps/web   && bun test       # audit shapes, vault merge, recovery codes, SigV4 vectors
@@ -174,8 +172,8 @@ TEST_S3_ENDPOINT=http://127.0.0.1:9000 bun test   # skipped without it
 ```
 
 There is no automated coverage of the browser path — connecting, SFTP, pinning,
-vault sync — and none of the routes against a real database. Exercise those
-against `bun run sshd` by hand.
+vault sync — and none of the routes against a real database. Exercise those by
+hand against a server you control, over the network, on port 22.
 
 ## Deploying
 
@@ -189,8 +187,12 @@ Full guide, including TLS: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Notes
 
-- `RELAY_ALLOW_PRIVATE=1` makes the local test container reachable by disabling
-  the SSRF guard. It must never be set in production.
+- Develop against a real server, on port 22, over the network. There is no
+  local sshd container and deliberately no longer one: reaching a target on
+  loopback means running the relay with `RELAY_ALLOW_PRIVATE=1`, which disables
+  the SSRF guard — its single most important control — so every local test would
+  run against a relay configured the one way it must never be configured in
+  production.
 - This machine's npm cache has root-owned files from an old npm bug, which
   breaks `npx`. The project uses Bun, so it rarely matters; fix with
   `sudo chown -R 501:20 ~/.npm`.

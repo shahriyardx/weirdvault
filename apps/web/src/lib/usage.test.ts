@@ -39,7 +39,7 @@ const RELAY_BATCH = {
   entries: [
     { subject: "u1", bytesUp: 120, bytesDown: 340 },
     {
-      subject: "anon:11111111-2222-3333-4444-555555555555",
+      subject: "anon:11111111-4a4a-3333-4444-555555555555",
       bytesUp: 1,
       bytesDown: 2,
     },

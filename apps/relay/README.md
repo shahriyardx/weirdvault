@@ -83,20 +83,28 @@ rather than quietly reporting batches that are accepted and count nothing.
 ```bash
 cd apps/relay
 RELAY_SECRET=dev-relay-secret-change-me \
-RELAY_ALLOW_PRIVATE=1 RELAY_PORTS=22,2222 RELAY_ADDR=127.0.0.1:8080 \
+RELAY_PORTS=22 RELAY_ADDR=127.0.0.1:8080 \
 cargo run --release
 ```
 
-`RELAY_ALLOW_PRIVATE=1` disables the SSRF guard so the local test container on
-`127.0.0.1:2222` is reachable. **Never set it in production** — it turns the
-relay into an open proxy into whatever network it sits on.
+Develop against a real server you control. That is not a preference — the relay
+dials the destination itself, so a target on `127.0.0.1` is one the SSRF guard
+is built to refuse, and reaching it means setting `RELAY_ALLOW_PRIVATE=1` and
+running every local test against a relay configured the one way it must never
+be configured in production. The guard is the relay's single most important
+control; developing with it off is how a difference between development and
+production becomes a difference nobody notices.
+
+`RELAY_ALLOW_PRIVATE` still exists, for the deployment that genuinely means to
+reach an internal network and is not reachable by untrusted users. It is not
+for convenience.
 
 | Variable | Meaning |
 |---|---|
 | `RELAY_SECRET` | HMAC key for connection tokens. Must match the web app exactly |
 | `RELAY_ADDR` | Listen address, e.g. `0.0.0.0:8080` |
 | `RELAY_PORTS` | Destination port allowlist. Default `22` |
-| `RELAY_ALLOW_PRIVATE` | Development only. Disables the SSRF guard |
+| `RELAY_ALLOW_PRIVATE` | Disables the SSRF guard, so private and loopback destinations are reachable. For a relay that is meant to reach an internal network *and* is not reachable by untrusted users. Not for development convenience |
 | `RELAY_USAGE_URL` | Where to POST transfer counts, e.g. `http://web:3000/api/relay/usage`. `http://` only. Unset means nothing is counted |
 | `RELAY_USAGE_SECRET` | Bearer token for that POST. Must match `RELAY_USAGE_SECRET` on the web app. Unset means nothing is counted |
 | `RELAY_USAGE_INTERVAL_SECS` | How often to flush. Default `60` |

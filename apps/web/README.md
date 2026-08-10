@@ -60,8 +60,7 @@ output, regenerated rather than edited, so linting it only produces changes the
 generator will overwrite; and `public/` holds static assets rather than source.
 
 The browser path — connecting, SFTP, pinning, vault sync — has no automated
-coverage. Start a target with `bun run sshd` from the repo root and check it by
-hand.
+coverage. Check it by hand against a server you control, over the network.
 
 GitHub sign-in has none at all. The round trip needs a real OAuth app, a browser
 and a database, so the callback, the linking refusal and the vault-password

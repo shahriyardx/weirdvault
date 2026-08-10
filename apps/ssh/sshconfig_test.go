@@ -17,7 +17,7 @@ func TestParseSSHConfigBasics(t *testing.T) {
 Host web
     HostName web.example.com
     User deploy
-    Port 2222
+    Port 2201
     IdentityFile ~/.ssh/id_ed25519
 
 Host db
@@ -32,7 +32,7 @@ Host db
 	}
 
 	web := find(hosts, "web")
-	if web.HostName != "web.example.com" || web.User != "deploy" || web.Port != 2222 {
+	if web.HostName != "web.example.com" || web.User != "deploy" || web.Port != 2201 {
 		t.Errorf("web parsed as %+v", *web)
 	}
 
@@ -99,8 +99,8 @@ Host real
 }
 
 func TestEqualsSyntaxAndQuotes(t *testing.T) {
-	hosts, _ := parseSSHConfig("Host web\n  HostName=\"web.example.com\"\n  Port=2222\n")
-	if hosts[0].HostName != "web.example.com" || hosts[0].Port != 2222 {
+	hosts, _ := parseSSHConfig("Host web\n  HostName=\"web.example.com\"\n  Port=2201\n")
+	if hosts[0].HostName != "web.example.com" || hosts[0].Port != 2201 {
 		t.Fatalf("got %+v", hosts[0])
 	}
 }

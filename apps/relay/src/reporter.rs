@@ -229,13 +229,13 @@ mod tests {
         // Neither test alone proves the two agree; together they mean a rename
         // on either side fails a build.
         let body = encode_batch(&[AccountBytes {
-            account: "anon:11111111-2222-3333-4444-555555555555".into(),
+            account: "anon:11111111-4a4a-3333-4444-555555555555".into(),
             bytes_up: 1,
             bytes_down: 2,
         }]);
         let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
         let entry = &parsed["entries"][0];
-        assert_eq!(entry["subject"], "anon:11111111-2222-3333-4444-555555555555");
+        assert_eq!(entry["subject"], "anon:11111111-4a4a-3333-4444-555555555555");
         assert_eq!(entry["bytesUp"], 1);
         assert_eq!(entry["bytesDown"], 2);
     }
