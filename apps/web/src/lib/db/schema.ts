@@ -825,7 +825,7 @@ export const agent = pgTable(
     /**
      * SHA256:… over the public key, stored rather than derived on read.
      *
-     * It is shown twice — on the enrollment page and by `weirdvault-agent status`
+     * It is shown twice — on the enrollment page and by `weirdvault status`
      * — and the whole point is that a person compares them. Computing it in two
      * places is how they end up formatted differently and stop comparing.
      */

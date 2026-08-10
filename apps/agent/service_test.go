@@ -19,12 +19,12 @@ func TestIsAgentRun(t *testing.T) {
 		argv []string
 		want bool
 	}{
-		{"installed binary", []string{"/usr/local/bin/weirdvault-agent", "run"}, true},
-		{"with a config", []string{"/usr/local/bin/weirdvault-agent", "run", "--config=/etc/x.json"}, true},
-		{"release name kept", []string{"./weirdvault-agent_linux_amd64", "run"}, true},
-		{"another subcommand", []string{"/usr/local/bin/weirdvault-agent", "status"}, false},
-		{"no subcommand", []string{"/usr/local/bin/weirdvault-agent"}, false},
-		{"an editor holding the name", []string{"/usr/bin/vim", "run", "weirdvault-agent"}, false},
+		{"installed binary", []string{"/usr/local/bin/weirdvault", "run"}, true},
+		{"with a config", []string{"/usr/local/bin/weirdvault", "run", "--config=/etc/x.json"}, true},
+		{"release name kept", []string{"./weirdvault_linux_amd64", "run"}, true},
+		{"another subcommand", []string{"/usr/local/bin/weirdvault", "status"}, false},
+		{"no subcommand", []string{"/usr/local/bin/weirdvault"}, false},
+		{"an editor holding the name", []string{"/usr/bin/vim", "run", "weirdvault"}, false},
 		{"empty", nil, false},
 	}
 
@@ -46,12 +46,12 @@ func TestConfigFromArgs(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{"default when unsaid", []string{"weirdvault-agent", "run"}, DefaultConfigPath},
-		{"long form", []string{"weirdvault-agent", "run", "--config=/etc/a.json"}, "/etc/a.json"},
-		{"single dash", []string{"weirdvault-agent", "run", "-config=/etc/b.json"}, "/etc/b.json"},
-		{"separate value", []string{"weirdvault-agent", "run", "--config", "/etc/c.json"}, "/etc/c.json"},
-		{"after another flag", []string{"weirdvault-agent", "run", "--no-update", "--config=/etc/d.json"}, "/etc/d.json"},
-		{"flag with no value", []string{"weirdvault-agent", "run", "--config"}, DefaultConfigPath},
+		{"default when unsaid", []string{"weirdvault", "run"}, DefaultConfigPath},
+		{"long form", []string{"weirdvault", "run", "--config=/etc/a.json"}, "/etc/a.json"},
+		{"single dash", []string{"weirdvault", "run", "-config=/etc/b.json"}, "/etc/b.json"},
+		{"separate value", []string{"weirdvault", "run", "--config", "/etc/c.json"}, "/etc/c.json"},
+		{"after another flag", []string{"weirdvault", "run", "--no-update", "--config=/etc/d.json"}, "/etc/d.json"},
+		{"flag with no value", []string{"weirdvault", "run", "--config"}, DefaultConfigPath},
 	}
 
 	for _, tc := range cases {
@@ -92,13 +92,13 @@ func TestParseETime(t *testing.T) {
 // make it safe rather than merely working are pinned here: the exact config it
 // was told to use, and a KeepAlive that does not undo a deliberate stop.
 func TestLaunchdPlist(t *testing.T) {
-	plist := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/weirdvault-agent/agent.json", DefaultConfigDir, false)
+	plist := launchdPlist("/usr/local/bin/weirdvault", "/etc/weirdvault/agent.json", DefaultConfigDir, false)
 
 	for _, want := range []string{
 		"<string>" + launchdLabel + "</string>",
-		"<string>/usr/local/bin/weirdvault-agent</string>",
+		"<string>/usr/local/bin/weirdvault</string>",
 		"<string>run</string>",
-		"<string>--config=/etc/weirdvault-agent/agent.json</string>",
+		"<string>--config=/etc/weirdvault/agent.json</string>",
 		"<key>RunAtLoad</key>",
 		"<key>SuccessfulExit</key>",
 	} {
@@ -110,7 +110,7 @@ func TestLaunchdPlist(t *testing.T) {
 	if strings.Contains(plist, "--no-update") {
 		t.Error("plist disabled updates without being asked to")
 	}
-	if got := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/a.json", DefaultConfigDir, true); !strings.Contains(got, "<string>--no-update</string>") {
+	if got := launchdPlist("/usr/local/bin/weirdvault", "/etc/a.json", DefaultConfigDir, true); !strings.Contains(got, "<string>--no-update</string>") {
 		t.Error("--no-update was asked for and did not reach the plist")
 	}
 }
@@ -118,8 +118,8 @@ func TestLaunchdPlist(t *testing.T) {
 // A path with an ampersand in it is legal and produces a plist launchd rejects
 // as malformed — complaining about the file, not the character.
 func TestLaunchdPlistEscapes(t *testing.T) {
-	plist := launchdPlist("/opt/a&b/weirdvault-agent", "/etc/x.json", DefaultConfigDir, false)
-	if !strings.Contains(plist, "/opt/a&amp;b/weirdvault-agent") {
+	plist := launchdPlist("/opt/a&b/weirdvault", "/etc/x.json", DefaultConfigDir, false)
+	if !strings.Contains(plist, "/opt/a&amp;b/weirdvault") {
 		t.Errorf("path was not escaped:\n%s", plist)
 	}
 }
@@ -129,13 +129,13 @@ func TestLaunchdPlistEscapes(t *testing.T) {
 // would produce a path that matches no row in `list`.
 func TestServiceConfigPathParsing(t *testing.T) {
 	// The shape systemctl show -p ExecStart --value prints.
-	systemd := `{ path=/usr/local/bin/weirdvault-agent ; argv[]=/usr/local/bin/weirdvault-agent run --config=/etc/weirdvault-agent/agent.json ; ignore_errors=no }`
-	if got := extractConfigFlag(systemd); got != "/etc/weirdvault-agent/agent.json" {
+	systemd := `{ path=/usr/local/bin/weirdvault ; argv[]=/usr/local/bin/weirdvault run --config=/etc/weirdvault/agent.json ; ignore_errors=no }`
+	if got := extractConfigFlag(systemd); got != "/etc/weirdvault/agent.json" {
 		t.Errorf("systemd ExecStart: got %q", got)
 	}
 
-	plist := launchdPlist("/usr/local/bin/weirdvault-agent", "/etc/weirdvault-agent/agent.json", DefaultConfigDir, false)
-	if got := extractConfigFlag(plist); got != "/etc/weirdvault-agent/agent.json" {
+	plist := launchdPlist("/usr/local/bin/weirdvault", "/etc/weirdvault/agent.json", DefaultConfigDir, false)
+	if got := extractConfigFlag(plist); got != "/etc/weirdvault/agent.json" {
 		t.Errorf("launchd plist: got %q", got)
 	}
 

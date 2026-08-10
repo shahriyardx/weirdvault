@@ -180,7 +180,7 @@ func runUpgrade(args []string) error {
 		if same {
 			fmt.Println("\nUp to date.")
 		} else {
-			fmt.Println("\nA different build is published. Install it: weirdvault-agent upgrade")
+			fmt.Println("\nA different build is published. Install it: weirdvault upgrade")
 		}
 		return nil
 	}
@@ -209,7 +209,7 @@ func runUpgrade(args []string) error {
 		fmt.Println("The service is not running, so nothing needed restarting.")
 	case len(agentProcesses()) > 0:
 		fmt.Println("An agent started by hand is still running the old build. Stop and start it")
-		fmt.Println("to pick this up: weirdvault-agent stop")
+		fmt.Println("to pick this up: weirdvault stop")
 	}
 	return nil
 }
@@ -276,7 +276,7 @@ func replaceSelf(ctx context.Context, base, file, wantSHA string) error {
 	// filesystem, and a cross-device rename would fall back to a copy that can
 	// be interrupted halfway — leaving a truncated binary where the agent was.
 	dir := filepath.Dir(self)
-	tmp, err := os.CreateTemp(dir, ".weirdvault-agent-*")
+	tmp, err := os.CreateTemp(dir, ".weirdvault-*")
 	if err != nil {
 		return fmt.Errorf("cannot write to %s: %w", dir, err)
 	}
@@ -300,7 +300,7 @@ func replaceSelf(ctx context.Context, base, file, wantSHA string) error {
 	// The replacement inherits the ownership of what it replaces.
 	//
 	// Both accounts write this file. The service runs unprivileged and updates
-	// itself at startup; a person runs `weirdvault-agent upgrade` with sudo. Left
+	// itself at startup; a person runs `weirdvault upgrade` with sudo. Left
 	// alone, the second leaves a root-owned binary in a directory the service
 	// account owns — and the next automatic update fails on a file it can no
 	// longer replace, one release later, with nobody connecting the two events.

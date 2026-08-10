@@ -50,7 +50,7 @@ const capture = (cmd, args) => {
   }
 };
 
-// Stamped into the binary so `weirdvault-agent version` and the agent row in the
+// Stamped into the binary so `weirdvault version` and the agent row in the
 // dashboard say something more useful than "dev".
 const version = capture("git", ["describe", "--tags", "--always", "--dirty"]) || "dev";
 
@@ -63,7 +63,7 @@ mkdirSync(OUT_DIR, { recursive: true });
 console.log(`building ${SRC_DIR} ${version} → ${OUT_DIR}`);
 
 for (const [goos, goarch] of TARGETS) {
-  const name = `weirdvault-agent_${goos}_${goarch}`;
+  const name = `weirdvault_${goos}_${goarch}`;
   execFileSync(
     "go",
     ["build", "-trimpath", `-ldflags=-s -w -X main.version=${version}`, "-o", resolve(OUT_DIR, name), "."],
@@ -79,7 +79,7 @@ for (const [goos, goarch] of TARGETS) {
 // The same two-column format sha256sum produces, because that is what the
 // install script parses and what an operator will regenerate by hand.
 const lines = readdirSync(OUT_DIR)
-  .filter((f) => f.startsWith("weirdvault-agent_"))
+  .filter((f) => f.startsWith("weirdvault_"))
   .sort()
   .map((f) => `${createHash("sha256").update(readFileSync(join(OUT_DIR, f))).digest("hex")}  ${f}`);
 
@@ -96,7 +96,7 @@ const manifest = {
   binaries: Object.fromEntries(
     lines.map((line) => {
       const [sha256, file] = line.split(/\s+/);
-      return [file.replace("weirdvault-agent_", ""), { file, sha256 }];
+      return [file.replace("weirdvault_", ""), { file, sha256 }];
     }),
   ),
 };

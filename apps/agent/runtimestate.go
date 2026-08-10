@@ -4,13 +4,13 @@ package main
 What the running daemon is doing, in a file the CLI can read.
 
 Before this, every question the CLI answered was inferred from the process
-table: is a `weirdvault-agent run` running, since when, with which --config.
+table: is a `weirdvault run` running, since when, with which --config.
 That worked while a process meant an identity. It stopped working the moment one
 process serves four of them — `list` could see the daemon and nothing inside it.
 
 So the daemon writes what it knows. Not a socket: a file survives the reader
 arriving at any moment, needs no protocol, and cannot fail in a way that hangs
-`weirdvault-agent status`. It is regenerated from live state on every change, so
+`weirdvault status`. It is regenerated from live state on every change, so
 a stale file is impossible while the daemon runs, and it is removed on a clean
 shutdown. A file left behind by a killed process is detected by its pid no
 longer existing rather than by trusting its contents.
@@ -33,14 +33,14 @@ import (
 /*
 Where the state file goes.
 
-`RuntimeDirectory=weirdvault-agent` in the unit creates /run/weirdvault-agent
+`RuntimeDirectory=weirdvault` in the unit creates /run/weirdvault
 owned by the service account, so the daemon can write it without being able to
 write anywhere else in /run. An agent run by hand as an ordinary user cannot,
 which is not an error — the CLI falls back to the process table, exactly as it
 did before this file existed.
 */
 const (
-	defaultStateDir = "/run/weirdvault-agent"
+	defaultStateDir = "/run/weirdvault"
 
 	// Overrides it, for an agent running as somebody who cannot write to /run.
 	// Read by the daemon and the CLI alike, so a hand-run pair sees one view —
@@ -150,7 +150,7 @@ func (s *supervisor) writeState() {
 	if err := tmp.Close(); err != nil {
 		return
 	}
-	// World readable on purpose: `weirdvault-agent list` is useful to whoever
+	// World readable on purpose: `weirdvault list` is useful to whoever
 	// administers the machine, and nothing here is a secret — ids and states,
 	// no keys. The config files remain 0600.
 	if err := os.Chmod(tmpName, 0o644); err != nil {

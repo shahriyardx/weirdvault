@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const base = agentReleaseUrl(origin)
 
   const script = `#!/bin/sh
-# weirdvault-agent installer
+# weirdvault installer
 #
 # Makes this machine reachable from ${origin} without opening a port.
 # The agent dials out; nothing dials in.
@@ -38,11 +38,13 @@ export async function GET(request: Request) {
 #   curl -fsSL ${origin}/install.sh | sh -s -- --token=ENROLL_...
 #
 # It installs a binary to /usr/local/bin, writes an identity to
-# /etc/weirdvault-agent, and registers a systemd service. It does not touch your
+# /etc/weirdvault, and registers a systemd service. It does not touch your
 # SSH configuration, and the agent it installs holds no SSH credentials.
 #
-# To remove all of that again:
+# To remove all of that again — though once it is installed, the binary itself
+# does this and does not need the script:
 #
+#   sudo weirdvault uninstall
 #   curl -fsSL ${origin}/install.sh | sh -s -- --uninstall
 #
 # To reinstall the binary and the service for a machine that is already enrolled,
@@ -60,10 +62,10 @@ set -eu
 APP_URL="${origin}"
 RELEASE_BASE="${base}"
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="/etc/weirdvault-agent"
-SERVICE_USER="weirdvault-agent"
-LAUNCHD_LABEL="com.weirdvault.agent"
-LAUNCHD_PLIST="/Library/LaunchDaemons/com.weirdvault.agent.plist"
+CONFIG_DIR="/etc/weirdvault"
+SERVICE_USER="weirdvault"
+LAUNCHD_LABEL="com.weirdvault"
+LAUNCHD_PLIST="/Library/LaunchDaemons/com.weirdvault.plist"
 
 # Where the binary the service runs actually lives, on Linux.
 #
@@ -76,10 +78,10 @@ LAUNCHD_PLIST="/Library/LaunchDaemons/com.weirdvault.agent.plist"
 # the write failed with "permission denied" while every unit directive looked
 # correct.
 #
-# /usr/local/bin/weirdvault-agent becomes a symlink to here, so the command
+# /usr/local/bin/weirdvault becomes a symlink to here, so the command
 # people type is unchanged, and \`upgrade\` resolves the link before replacing
 # the target.
-STATE_DIR="/var/lib/weirdvault-agent"
+STATE_DIR="/var/lib/weirdvault"
 BIN_DIR="\${STATE_DIR}/bin"
 
 SSH_PORT="22"
@@ -121,17 +123,25 @@ fi
 # reason somebody runs this is that something did not work.
 
 if [ "$MODE" = "uninstall" ]; then
+  # The binary knows how to remove itself, and knowing it in two places is how
+  # the two drift. This script keeps its own copy for the case that made it
+  # necessary: an install too broken to run, or one from before the command
+  # existed.
+  if [ -x "\${INSTALL_DIR}/weirdvault" ]; then
+    exec "\${INSTALL_DIR}/weirdvault" uninstall --yes
+  fi
+
   removed=""
 
   if command -v systemctl >/dev/null 2>&1; then
-    if systemctl list-unit-files weirdvault-agent.service >/dev/null 2>&1; then
-      systemctl disable --now weirdvault-agent 2>/dev/null || true
+    if systemctl list-unit-files weirdvault.service >/dev/null 2>&1; then
+      systemctl disable --now weirdvault 2>/dev/null || true
       removed="\${removed}  the systemd service (stopped and disabled)\\n"
     fi
-    if [ -f /etc/systemd/system/weirdvault-agent.service ]; then
-      rm -f /etc/systemd/system/weirdvault-agent.service
+    if [ -f /etc/systemd/system/weirdvault.service ]; then
+      rm -f /etc/systemd/system/weirdvault.service
       systemctl daemon-reload 2>/dev/null || true
-      removed="\${removed}  /etc/systemd/system/weirdvault-agent.service\\n"
+      removed="\${removed}  /etc/systemd/system/weirdvault.service\\n"
     fi
   elif [ -f "$LAUNCHD_PLIST" ]; then
     # macOS. Booted out and removed from the disabled database as well as
@@ -145,18 +155,18 @@ if [ "$MODE" = "uninstall" ]; then
     # No service manager we wrote to: whatever is running was started by hand or
     # by a supervisor this script did not write, so it says so rather than
     # guessing.
-    if pgrep -f "weirdvault-agent run" >/dev/null 2>&1; then
+    if pgrep -f "weirdvault run" >/dev/null 2>&1; then
       echo "note: an agent process is running and this machine has no service," >&2
-      echo "      so stop it however you started it (or: pkill -f 'weirdvault-agent run')." >&2
+      echo "      so stop it however you started it (or: pkill -f 'weirdvault run')." >&2
       echo >&2
     fi
   fi
 
   # -e is false for a dangling symlink, so both tests: the link is what is left
   # behind when the state directory was removed by hand first.
-  if [ -e "\${INSTALL_DIR}/weirdvault-agent" ] || [ -L "\${INSTALL_DIR}/weirdvault-agent" ]; then
-    rm -f "\${INSTALL_DIR}/weirdvault-agent"
-    removed="\${removed}  \${INSTALL_DIR}/weirdvault-agent\\n"
+  if [ -e "\${INSTALL_DIR}/weirdvault" ] || [ -L "\${INSTALL_DIR}/weirdvault" ]; then
+    rm -f "\${INSTALL_DIR}/weirdvault"
+    removed="\${removed}  \${INSTALL_DIR}/weirdvault\\n"
   fi
 
   # Where the binary the service runs lives, and the only thing in it.
@@ -227,8 +237,8 @@ case "$os" in
   *) echo "error: unsupported operating system $os" >&2; exit 1 ;;
 esac
 
-binary="weirdvault-agent_\${os}_\${arch}"
-echo "Installing weirdvault-agent for \${os}/\${arch}"
+binary="weirdvault_\${os}_\${arch}"
+echo "Installing weirdvault for \${os}/\${arch}"
 
 # ---------------------------------------------------------------- download
 
@@ -260,7 +270,7 @@ fetch "\${RELEASE_BASE}/\${binary}" "$tmp/agent" || {
 # verification that is skipped when the file is missing verifies nothing at all.
 if ! fetch "\${RELEASE_BASE}/checksums.txt" "$tmp/checksums.txt"; then
   echo "error: no checksums.txt beside the binary at \${RELEASE_BASE}" >&2
-  echo "       Publish one: sha256sum weirdvault-agent_* > checksums.txt" >&2
+  echo "       Publish one: sha256sum weirdvault_* > checksums.txt" >&2
   exit 1
 fi
 
@@ -290,23 +300,23 @@ fi
 #
 # On Linux the binary goes in a directory the service account owns, because the
 # agent replaces its own binary to update and cannot write to a root-owned one.
-# /usr/local/bin/weirdvault-agent is then a symlink, so the command people type
-# is unchanged and "weirdvault-agent upgrade" resolves it before replacing the
+# /usr/local/bin/weirdvault is then a symlink, so the command people type
+# is unchanged and "weirdvault upgrade" resolves it before replacing the
 # target. On macOS the daemon runs as root, so the binary stays where it was.
 
 if [ "$os" = "darwin" ]; then
-  BIN_TARGET="\${INSTALL_DIR}/weirdvault-agent"
+  BIN_TARGET="\${INSTALL_DIR}/weirdvault"
   mkdir -p "$INSTALL_DIR"
   install -m 0755 "$tmp/agent" "$BIN_TARGET"
 else
-  BIN_TARGET="\${BIN_DIR}/weirdvault-agent"
+  BIN_TARGET="\${BIN_DIR}/weirdvault"
   mkdir -p "$BIN_DIR" "$INSTALL_DIR"
   install -m 0755 "$tmp/agent" "$BIN_TARGET"
   # -f because an install from before this layout left a real file here, and a
   # symlink that cannot be created would leave the old binary shadowing the new
-  # one on PATH — the confusing half-state where "weirdvault-agent version"
+  # one on PATH — the confusing half-state where "weirdvault version"
   # disagrees with what the service is running.
-  ln -sf "$BIN_TARGET" "\${INSTALL_DIR}/weirdvault-agent"
+  ln -sf "$BIN_TARGET" "\${INSTALL_DIR}/weirdvault"
 fi
 
 # A dedicated account with no shell and no home. The agent needs no privileges
@@ -374,9 +384,9 @@ if [ "$os" = "darwin" ]; then
   echo
   "$BIN_TARGET" install-service --config-dir="$CONFIG_DIR"
   echo
-  echo "  weirdvault-agent status              is it running, and will it start at boot"
-  echo "  weirdvault-agent stop                stop it, and keep it stopped"
-  echo "  weirdvault-agent logs -f             what it is doing"
+  echo "  weirdvault status              is it running, and will it start at boot"
+  echo "  weirdvault stop                stop it, and keep it stopped"
+  echo "  weirdvault logs -f             what it is doing"
   exit 0
 fi
 
@@ -384,14 +394,14 @@ if ! command -v systemctl >/dev/null 2>&1; then
   echo
   echo "Enrolled. There is no service manager here that this script knows, so start"
   echo "the agent yourself:"
-  echo "  sudo \${INSTALL_DIR}/weirdvault-agent run --config=\${CONFIG_DIR}/agent.json"
+  echo "  sudo \${INSTALL_DIR}/weirdvault run --config=\${CONFIG_DIR}/agent.json"
   echo
   echo "To keep it running across reboots, wrap that in whatever this machine uses —"
   echo "an rc script, or a supervisor of your choice."
   exit 0
 fi
 
-cat > /etc/systemd/system/weirdvault-agent.service <<UNIT
+cat > /etc/systemd/system/weirdvault.service <<UNIT
 [Unit]
 Description=weirdvault agent
 Documentation=\${APP_URL}/docs/agent
@@ -441,7 +451,7 @@ ReadWritePaths=\${CONFIG_DIR}
 # /usr/local/bin. Two separate things are needed and only one of them is a
 # systemd directive:
 #
-#   StateDirectory   creates /var/lib/weirdvault-agent owned by User=, and
+#   StateDirectory   creates /var/lib/weirdvault owned by User=, and
 #                    exempts it from the read-only remount ProtectSystem=strict
 #                    applies to everything else.
 #   ownership        is what actually permits the write. An earlier version of
@@ -457,12 +467,12 @@ ReadWritePaths=\${CONFIG_DIR}
 #
 # If you would rather patch agents yourself, add --no-update to ExecStart above;
 # the agent then never touches its own binary.
-StateDirectory=weirdvault-agent
+StateDirectory=weirdvault
 
-# /run/weirdvault-agent, owned by the account below, where the daemon publishes
+# /run/weirdvault, owned by the account below, where the daemon publishes
 # what each identity is doing. One process can serve several accounts, so the
 # CLI cannot learn that from the process table — see runtimestate.go.
-RuntimeDirectory=weirdvault-agent
+RuntimeDirectory=weirdvault
 
 # MemoryDenyWriteExecute is deliberately absent. The Go runtime does not need
 # W+X pages, but re-exec after an update trips it on some kernels, and a
@@ -475,7 +485,7 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now weirdvault-agent
+systemctl enable --now weirdvault
 
 echo
 if [ "$MODE" = "repair" ]; then
@@ -484,11 +494,12 @@ else
   echo "Done. The agent is running and should appear at \${APP_URL} within a few seconds."
 fi
 echo
-echo "  weirdvault-agent status              is it running, and its fingerprint"
-echo "  weirdvault-agent list                every account with an agent here"
-echo "  weirdvault-agent stop [id]           stop one identity, or all of them"
-echo "  weirdvault-agent start [id]          start it again"
-echo "  weirdvault-agent logs -f             what it is doing"
+echo "  weirdvault status              is it running, and its fingerprint"
+echo "  weirdvault uninstall           remove all of this again"
+echo "  weirdvault list                every account with an agent here"
+echo "  weirdvault stop [id]           stop one identity, or all of them"
+echo "  weirdvault start [id]          start it again"
+echo "  weirdvault logs -f             what it is doing"
 echo
 echo "Another person can add this same machine to their own account: they run"
 echo "their own install command, and the two identities are independent."

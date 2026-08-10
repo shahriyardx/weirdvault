@@ -7,7 +7,7 @@ import "testing"
 //
 // The dashboard derives it from the agent id independently — identityName in
 // apps/web/src/app/dashboard/machines/page.tsx — so that a person looking at a
-// card and a person looking at `weirdvault-agent list` are talking about the
+// card and a person looking at `weirdvault list` are talking about the
 // same thing. Two derivations, one rule, and this is where the rule is written
 // down.
 func TestShortAgentID(t *testing.T) {

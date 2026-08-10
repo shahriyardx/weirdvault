@@ -74,7 +74,7 @@ func gatherIdentities(dir string, extra string) []listing {
 	add(extra)
 	// Where somebody testing without root would have put one.
 	if home, err := os.UserHomeDir(); err == nil {
-		personal := filepath.Join(home, ".config", "weirdvault-agent", "agent.json")
+		personal := filepath.Join(home, ".config", "weirdvault", "agent.json")
 		if fileExists(personal) {
 			add(personal)
 		}
@@ -146,7 +146,7 @@ func runList(args []string) error {
 	case st.Enabled:
 		fmt.Println("The service starts at boot.")
 	default:
-		fmt.Println("The service will not start at boot (weirdvault-agent start changes that).")
+		fmt.Println("The service will not start at boot (weirdvault start changes that).")
 	}
 
 	// Only worth saying when it is true, and it is the thing that explains a
@@ -164,7 +164,7 @@ func describeListing(row listing) string {
 		if row.stopped {
 			// Distinct from "not running": somebody decided this, and it will
 			// stay decided across a reboot.
-			return "stopped · will not start until `weirdvault-agent start " + row.name + "`"
+			return "stopped · will not start until `weirdvault start " + row.name + "`"
 		}
 		return "not running"
 	}
@@ -238,7 +238,7 @@ func resolveIdentity(dir, want string) (listing, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return listing{}, fmt.Errorf("no identity here matches %q. `weirdvault-agent list` shows them", want)
+		return listing{}, fmt.Errorf("no identity here matches %q. `weirdvault list` shows them", want)
 	default:
 		names := make([]string, 0, len(matches))
 		for _, row := range matches {
@@ -283,7 +283,7 @@ func stopIdentity(dir, want string) error {
 	}
 
 	marker := stoppedMarkerFor(row.path)
-	if err := os.WriteFile(marker, []byte("stopped by weirdvault-agent stop\n"), 0o644); err != nil {
+	if err := os.WriteFile(marker, []byte("stopped by weirdvault stop\n"), 0o644); err != nil {
 		return sudoHint(fmt.Errorf("could not write %s: %w", marker, err), "stop "+row.name)
 	}
 
@@ -295,7 +295,7 @@ func stopIdentity(dir, want string) error {
 		return nil
 	}
 
-	fmt.Printf("Stopped. It stays stopped across reboots until: weirdvault-agent start %s\n", row.name)
+	fmt.Printf("Stopped. It stays stopped across reboots until: weirdvault start %s\n", row.name)
 	fmt.Println("Every other identity on this machine is untouched.")
 	return nil
 }
@@ -314,7 +314,7 @@ func startIdentity(dir, want string) error {
 	// The daemon has to be running for this to mean anything. Saying so beats
 	// reporting success for an identity that nothing will serve.
 	if readRuntimeState() == nil {
-		fmt.Printf("%s will run when the agent starts: weirdvault-agent start\n", row.name)
+		fmt.Printf("%s will run when the agent starts: weirdvault start\n", row.name)
 		return nil
 	}
 
@@ -392,8 +392,8 @@ func runRemove(args []string) error {
 
 	name := fs.Arg(0)
 	if name == "" {
-		return fmt.Errorf("say which identity to remove:\n  weirdvault-agent remove <id>\n\n" +
-			"`weirdvault-agent list` prints them. There is no way to remove all of them at\n" +
+		return fmt.Errorf("say which identity to remove:\n  weirdvault remove <id>\n\n" +
+			"`weirdvault list` prints them. There is no way to remove all of them at\n" +
 			"once, on purpose — on a shared machine that would be somebody else's key too")
 	}
 

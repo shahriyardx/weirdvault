@@ -263,7 +263,7 @@ func (s *supervisor) runCommand(id *identity, command string) (detail string, er
 
 /*
 stopIdentityFile writes the marker and drops the loop, which is the same thing
-`weirdvault-agent stop <id>` does — deliberately, so a machine cannot end up in
+`weirdvault stop <id>` does — deliberately, so a machine cannot end up in
 a state only one of the two routes can produce.
 
 The loop is cancelled after a moment rather than immediately, and that delay is

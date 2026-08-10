@@ -105,7 +105,7 @@ type PresenceStatus = "ok" | "unknown"
  * What this machine calls the identity, on the machine.
  *
  * The agent names each identity after the first eight characters of its agent
- * id — that is the file in /etc/weirdvault-agent, the row `weirdvault-agent
+ * id — that is the file in /etc/weirdvault, the row `weirdvault
  * list` prints, and the argument `stop <id>` takes. Without it on the card,
  * somebody with two identities on one box has no way to tell which row the
  * thing in front of them corresponds to.
@@ -811,8 +811,8 @@ function AgentRow({
               It stops now and stays stopped across reboots.{" "}
               <strong>There is no start button</strong> — the connection a start command would
               arrive on is the thing being stopped, so turning it back on needs a shell on that
-              machine: <span className="font-mono">weirdvault-agent start</span>. Sessions already
-              open keep running until they end.
+              machine: <span className="font-mono">weirdvault start</span>. Sessions already open
+              keep running until they end.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1012,7 +1012,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
               Prefer not to pipe to a shell? Download the agent, then run{" "}
-              <code className="font-mono">weirdvault-agent enroll</code> with the same
+              <code className="font-mono">weirdvault enroll</code> with the same
               <code className="font-mono"> --token</code> and{" "}
               <code className="font-mono">--url</code>.
             </p>
@@ -1034,7 +1034,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
               <Label className="text-muted-foreground text-xs">Fingerprint</Label>
               <p className="mt-1 font-mono text-sm break-all">{state.agent.fingerprint}</p>
               <p className="text-muted-foreground mt-2 text-xs">
-                On the machine: <code className="font-mono">weirdvault-agent status</code>
+                On the machine: <code className="font-mono">weirdvault status</code>
               </p>
             </div>
 
@@ -1073,7 +1073,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
  * upgrade, it is how they will be able to tell that it worked.
  *
  * Two commands, not one, and the older one is not a fallback for the impatient:
- * `weirdvault-agent upgrade` did not exist before this release, so every machine
+ * `weirdvault upgrade` did not exist before this release, so every machine
  * that is currently out of date is, by definition, running a build without it.
  * The restart path is the one that works today; the named command is the one
  * that works from here on.
@@ -1141,8 +1141,8 @@ function UpgradeDialog({
               <CommandBlock
                 command={
                   mac
-                    ? "sudo launchctl kickstart -k system/com.weirdvault.agent"
-                    : "sudo systemctl restart weirdvault-agent"
+                    ? "sudo launchctl kickstart -k system/com.weirdvault"
+                    : "sudo systemctl restart weirdvault"
                 }
               />
             </div>
@@ -1156,7 +1156,7 @@ function UpgradeDialog({
           <div>
             <Label className="text-muted-foreground text-xs">From the next version onward</Label>
             <div className="mt-1">
-              <CommandBlock command="sudo weirdvault-agent upgrade" />
+              <CommandBlock command="sudo weirdvault upgrade" />
             </div>
             <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
               Same thing in one step, and it restarts the service itself.{" "}
@@ -1176,8 +1176,8 @@ function UpgradeDialog({
               Nothing changed after a restart?
             </summary>
             <p className="mt-2">
-              Look at the log — <span className="font-mono">weirdvault-agent logs</span>, or{" "}
-              <span className="font-mono">journalctl -u weirdvault-agent</span>. A line saying{" "}
+              Look at the log — <span className="font-mono">weirdvault logs</span>, or{" "}
+              <span className="font-mono">journalctl -u weirdvault</span>. A line saying{" "}
               <span className="font-mono">permission denied</span> means the machine was installed
               before the agent&rsquo;s binary was moved somewhere it can replace itself. One command
               fixes it, and it keeps this machine&rsquo;s identity — no new token, no re-enrolling:
@@ -1186,7 +1186,7 @@ function UpgradeDialog({
               <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --repair`} />
             </div>
             <p className="mt-2">
-              If instead <span className="font-mono">weirdvault-agent status</span> says{" "}
+              If instead <span className="font-mono">weirdvault status</span> says{" "}
               <span className="font-mono">Updates: off</span>, that agent was enrolled before
               self-update existed and has no release URL to check. That one does need revoking and
               installing again, and it keeps itself current from then on.
@@ -1246,7 +1246,6 @@ function RemovalDialog({
   // The agent self-reports its platform at enrolment. Nothing trusts it for
   // anything that matters; here it only picks which paragraph is true.
   const mac = agent.os === "darwin"
-  const origin = typeof window === "undefined" ? "" : window.location.origin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1278,10 +1277,10 @@ function RemovalDialog({
                 still on disk — useless now, since this side refuses it, but still there. Remove
                 just this identity and leave any other account&rsquo;s alone:
               </p>
-              <CommandBlock command={`sudo weirdvault-agent remove ${identityName(agent.id)}`} />
+              <CommandBlock command={`sudo weirdvault remove ${identityName(agent.id)}`} />
               <p className="text-muted-foreground text-xs leading-relaxed">
                 <span className="font-mono">{identityName(agent.id)}</span> is what{" "}
-                <span className="font-mono">weirdvault-agent list</span> calls it on that machine.
+                <span className="font-mono">weirdvault list</span> calls it on that machine.
               </p>
             </>
           )}
@@ -1290,7 +1289,7 @@ function RemovalDialog({
             To remove the agent from that machine altogether — binary, service and every identity on
             it:
           </p>
-          <CommandBlock command={`curl -fsSL ${origin}/install.sh | sudo sh -s -- --uninstall`} />
+          <CommandBlock command="sudo weirdvault uninstall" />
 
           <p className="text-muted-foreground text-sm leading-relaxed">
             {mac
@@ -1308,19 +1307,8 @@ function RemovalDialog({
             </summary>
             <div className="mt-2 space-y-1 font-mono">
               {(mac
-                ? [
-                    "sudo weirdvault-agent uninstall-service",
-                    "sudo rm /usr/local/bin/weirdvault-agent",
-                    "sudo rm -rf /etc/weirdvault-agent",
-                  ]
-                : [
-                    "sudo weirdvault-agent stop",
-                    "sudo rm /etc/systemd/system/weirdvault-agent.service",
-                    "sudo systemctl daemon-reload",
-                    "sudo rm /usr/local/bin/weirdvault-agent",
-                    "sudo rm -rf /etc/weirdvault-agent",
-                    "sudo userdel weirdvault-agent",
-                  ]
+                ? ["sudo weirdvault uninstall --yes"]
+                : ["sudo weirdvault uninstall --yes"]
               ).map((line) => (
                 <div key={line} className="break-all">
                   {line}

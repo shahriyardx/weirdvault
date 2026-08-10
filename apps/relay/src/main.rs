@@ -519,7 +519,7 @@ async fn connect_via_agent(
             close_with_reason(
                 browser,
                 "that machine's agent is not connected — is it powered on, and is \
-                 weirdvault-agent running there?"
+                 weirdvault running there?"
                     .into(),
             )
             .await;

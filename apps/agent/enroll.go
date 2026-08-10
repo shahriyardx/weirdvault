@@ -154,7 +154,7 @@ func runEnroll(args []string) error {
 	// The identity is named after the agent id the server just chose, because
 	// everybody pastes an identical install command and only the token in it
 	// differs — so there is no name to ask for and one has to be derived. Short,
-	// so `weirdvault-agent stop 3959f21b` is typeable.
+	// so `weirdvault stop 3959f21b` is typeable.
 	path := *configPath
 	if path == "" {
 		path = configPathFor(*configDir, shortAgentID(out.AgentID))
@@ -195,7 +195,7 @@ shortAgentID is the name an identity gets on disk.
 
 Eight characters of a UUID, which is enough to be unique among the handful of
 accounts that share a machine and short enough to type — it is what
-`weirdvault-agent list` prints and what `stop <id>` takes.
+`weirdvault list` prints and what `stop <id>` takes.
 */
 func shortAgentID(agentID string) string {
 	cleaned := strings.ReplaceAll(agentID, "-", "")
@@ -274,7 +274,7 @@ func runStatus(args []string) error {
 
 	rows := gatherIdentities(*dir, "")
 	if len(rows) == 0 {
-		return fmt.Errorf("no identity found in %s — run `weirdvault-agent enroll` first", *dir)
+		return fmt.Errorf("no identity found in %s — run `weirdvault enroll` first", *dir)
 	}
 
 	for i, row := range rows {
@@ -421,6 +421,6 @@ func printBootState(st serviceState) {
 	case st.Enabled:
 		fmt.Printf("At boot:     starts automatically\n")
 	default:
-		fmt.Printf("At boot:     stays stopped (weirdvault-agent start changes that)\n")
+		fmt.Printf("At boot:     stays stopped (weirdvault start changes that)\n")
 	}
 }

@@ -50,15 +50,15 @@ RUN set -eu; \
       goos="${target%/*}"; goarch="${target#*/}"; \
       CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath \
         -ldflags="-s -w -X main.version=${AGENT_VERSION}" \
-        -o "/out/weirdvault-agent_${goos}_${goarch}" .; \
+        -o "/out/weirdvault_${goos}_${goarch}" .; \
     done; \
     cd /out; \
-    sha256sum weirdvault-agent_* > checksums.txt; \
+    sha256sum weirdvault_* > checksums.txt; \
     { printf '{\n  "version": "%s",\n  "binaries": {\n' "$AGENT_VERSION"; \
       first=1; \
       while read -r sum file; do \
         [ "$first" -eq 1 ] || printf ',\n'; first=0; \
-        printf '    "%s": { "file": "%s", "sha256": "%s" }' "${file#weirdvault-agent_}" "$file" "$sum"; \
+        printf '    "%s": { "file": "%s", "sha256": "%s" }' "${file#weirdvault_}" "$file" "$sum"; \
       done < checksums.txt; \
       printf '\n  }\n}\n'; } > manifest.json
 

@@ -110,10 +110,10 @@ wrong one.
 **Where the binary lives, and why it is not `/usr/local/bin`.** Replacing itself
 means writing a temp file beside the binary and renaming it, so the *directory*
 has to be writable by the account the service runs as — an unprivileged one. On
-Linux the binary therefore lives in `/var/lib/weirdvault-agent/bin`, owned by
-that account, with `/usr/local/bin/weirdvault-agent` a symlink so the command
+Linux the binary therefore lives in `/var/lib/weirdvault/bin`, owned by
+that account, with `/usr/local/bin/weirdvault` a symlink so the command
 people type is unchanged; `replaceSelf` resolves the link before replacing the
-target. `StateDirectory=weirdvault-agent` in the unit is what exempts that
+target. `StateDirectory=weirdvault` in the unit is what exempts that
 directory from the read-only remount `ProtectSystem=strict` imposes.
 
 Both halves are load-bearing, and an earlier version of this had only one. The
@@ -141,12 +141,12 @@ produce a restart loop.
 `--no-update` disables it, and the agent then never touches its own binary.
 
 Agents enrolled before this existed have no release URL and never check;
-`weirdvault-agent status` says so rather than implying they are up to date.
+`weirdvault status` says so rather than implying they are up to date.
 
 ## Build
 
 ```bash
-go build -o weirdvault-agent ./apps/agent
+go build -o weirdvault ./apps/agent
 ```
 
 Cross-compiling for a release, with the version stamped in:
@@ -155,9 +155,9 @@ Cross-compiling for a release, with the version stamped in:
 for target in linux/amd64 linux/arm64 linux/arm darwin/arm64; do
   GOOS=${target%/*} GOARCH=${target#*/} go build \
     -ldflags "-X main.version=$(git describe --tags --always)" \
-    -o "weirdvault-agent_${target%/*}_${target#*/}" ./apps/agent
+    -o "weirdvault_${target%/*}_${target#*/}" ./apps/agent
 done
-sha256sum weirdvault-agent_* > checksums.txt
+sha256sum weirdvault_* > checksums.txt
 ```
 
 Or just `bun run agent`, which does all of that and writes `manifest.json`
@@ -173,9 +173,9 @@ directory. Unset, it defaults to `<your origin>/agent-bin`.
 ## Usage
 
 ```bash
-weirdvault-agent enroll --token=ENROLL_… --url=https://app.example.com
-weirdvault-agent run    --config=/etc/weirdvault-agent/agent.json
-weirdvault-agent status
+weirdvault enroll --token=ENROLL_… --url=https://app.example.com
+weirdvault run    --config=/etc/weirdvault/agent.json
+weirdvault status
 ```
 
 `enroll` generates the keypair locally and sends only the public half. It
@@ -226,7 +226,7 @@ and touches nothing.
 
 ### macOS
 
-`install-service` writes `/Library/LaunchDaemons/com.weirdvault.agent.plist` for
+`install-service` writes `/Library/LaunchDaemons/com.weirdvault.plist` for
 the enrolment already on the machine, and `uninstall-service` removes it. The
 installer runs the first of those, so a Mac survives a reboot the same way a
 Linux box does — before this, macOS was enrolled and then left with "start it
@@ -235,7 +235,7 @@ yourself".
 launchd has no equivalent of systemd's `RestartPreventExitStatus`, so a revoked
 agent — which exits 3 on purpose and would be right to stay down — is started
 again every ten seconds. The agent says so in the log line it prints before
-exiting, and `weirdvault-agent stop` is what ends it.
+exiting, and `weirdvault stop` is what ends it.
 
 ## Relay configuration
 
@@ -263,12 +263,12 @@ their own token, and gets their own agent id, key and row. Revoking one says
 nothing about the others, and nobody shares a secret.
 
 ```
-/etc/weirdvault-agent/
+/etc/weirdvault/
   3959f21b.json        one identity, named after its agent id
   3959f21b.stopped     marker: this one is stopped
   a41c0b93.json
-/var/lib/weirdvault-agent/bin/weirdvault-agent   one binary, shared
-/run/weirdvault-agent/state.json                 what each identity is doing
+/var/lib/weirdvault/bin/weirdvault   one binary, shared
+/run/weirdvault/state.json                 what each identity is doing
 ```
 
 **An agent grants no login.** It is a pipe to a loopback port; a second identity

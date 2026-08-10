@@ -50,7 +50,7 @@ import (
 /*
 How often the config directory is re-read.
 
-Long enough to be free, short enough that `weirdvault-agent stop <id>` feels
+Long enough to be free, short enough that `weirdvault stop <id>` feels
 like it did something. The CLI waits on the runtime state file rather than
 guessing, so this interval is what it waits out.
 */
@@ -187,7 +187,7 @@ func (s *supervisor) snapshot() []identitySnapshot {
 /*
 desired reads the config directory and reports what should be running.
 
-A `.stopped` marker beside a config is how `weirdvault-agent stop <id>` takes
+A `.stopped` marker beside a config is how `weirdvault stop <id>` takes
 one identity out without touching the file that holds its private key — and,
 because it is a file rather than a message, it survives a reboot and a restart
 of this process with no state to keep anywhere else.
@@ -450,10 +450,10 @@ func (s *supervisor) run(ctx context.Context) error {
 				// let a compromised relay strand a whole fleet.
 				//
 				// It is not a silent park. The rejection was logged in full, and
-				// `weirdvault-agent status` says what happened.
+				// `weirdvault status` says what happened.
 				if runtime.GOOS == "darwin" {
 					log.Printf("nothing left to run. Staying resident so launchd does not restart this")
-					log.Printf("every ten seconds; `weirdvault-agent stop` ends it.")
+					log.Printf("every ten seconds; `weirdvault stop` ends it.")
 					<-ctx.Done()
 					log.Printf("shutting down")
 					return finish(nil)

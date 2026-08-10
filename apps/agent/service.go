@@ -48,17 +48,23 @@ import (
 )
 
 const (
-	systemdUnit     = "weirdvault-agent.service"
-	systemdUnitPath = "/etc/systemd/system/weirdvault-agent.service"
+	// Where the installer puts things, so uninstall can find them without being
+	// told and without a second copy of the paths in a shell script.
+	installDir   = "/usr/local/bin"
+	binaryName   = "weirdvault"
+	stateDirBase = "/var/lib/weirdvault"
 
-	launchdLabel     = "com.weirdvault.agent"
-	launchdPlistPath = "/Library/LaunchDaemons/com.weirdvault.agent.plist"
-	launchdLogPath   = "/var/log/weirdvault-agent.log"
+	systemdUnit     = "weirdvault.service"
+	systemdUnitPath = "/etc/systemd/system/weirdvault.service"
+
+	launchdLabel     = "com.weirdvault"
+	launchdPlistPath = "/Library/LaunchDaemons/com.weirdvault.plist"
+	launchdLogPath   = "/var/log/weirdvault.log"
 
 	// The name a process must have been started as to be one of ours. Matched as
 	// a prefix because a release binary keeps its platform suffix when somebody
 	// runs it out of the download directory rather than installing it.
-	agentBinaryPrefix = "weirdvault-agent"
+	agentBinaryPrefix = "weirdvault"
 )
 
 // supervisorKind is what keeps the agent running on this machine.
@@ -91,7 +97,7 @@ type serviceState struct {
 	PID int
 }
 
-// agentProcess is a `weirdvault-agent run` seen in the process table.
+// agentProcess is a `weirdvault run` seen in the process table.
 //
 // Found by looking rather than by a pidfile: a pidfile is a claim about the
 // past that survives a kill -9, and the question being answered here is what is
@@ -260,7 +266,7 @@ func launchdDisabled() bool {
 
 // ---------------------------------------------------------------- processes
 
-// agentProcesses lists every `weirdvault-agent run` on this machine, including
+// agentProcesses lists every `weirdvault run` on this machine, including
 // ones no supervisor knows about.
 func agentProcesses() []agentProcess {
 	if runtime.GOOS == "linux" {
@@ -467,7 +473,7 @@ func runStart(args []string) error {
 			if out, err := runCmd("systemctl", "enable", systemdUnit); err != nil {
 				return sudoHint(fmt.Errorf("systemctl enable: %s", out), "start --boot-only")
 			}
-			fmt.Println("The agent will start at boot. It is not running yet — `weirdvault-agent start`.")
+			fmt.Println("The agent will start at boot. It is not running yet — `weirdvault start`.")
 			return nil
 		}
 		if out, err := runCmd("systemctl", "enable", "--now", systemdUnit); err != nil {
@@ -482,7 +488,7 @@ func runStart(args []string) error {
 			return sudoHint(fmt.Errorf("launchctl enable: %s", out), "start")
 		}
 		if *bootOnly {
-			fmt.Println("The agent will start at boot. It is not running yet — `weirdvault-agent start`.")
+			fmt.Println("The agent will start at boot. It is not running yet — `weirdvault start`.")
 			return nil
 		}
 		// Already-bootstrapped is not a failure here: `start` is a statement
@@ -522,10 +528,10 @@ func runStop(args []string) error {
 	if others := otherIdentities(*dir); len(others) > 1 && !*all {
 		return fmt.Errorf(
 			"this machine serves %d accounts, and `stop` would stop all of them.\n\n"+
-				"Name one:\n  weirdvault-agent stop <id>\n\n"+
+				"Name one:\n  weirdvault stop <id>\n\n"+
 				"They are: %s\n\n"+
 				"Or, if you really do mean every identity on this machine:\n"+
-				"  weirdvault-agent stop --all",
+				"  weirdvault stop --all",
 			len(others), strings.Join(others, ", "))
 	}
 
@@ -576,7 +582,7 @@ func runStop(args []string) error {
 		fmt.Println("Stopped. It will start again at the next boot.")
 	} else {
 		fmt.Println("Stopped, and it will stay stopped across reboots.")
-		fmt.Println("Start it again with: weirdvault-agent start")
+		fmt.Println("Start it again with: weirdvault start")
 	}
 
 	// A supervised stop says nothing about a copy somebody launched by hand, and
@@ -618,7 +624,7 @@ func runRestart(args []string) error {
 
 	fmt.Println("Restarted.")
 	if !st.Enabled {
-		fmt.Println("It is still set not to start at boot — `weirdvault-agent enable` changes that.")
+		fmt.Println("It is still set not to start at boot — `weirdvault enable` changes that.")
 	}
 	return nil
 }
@@ -648,7 +654,7 @@ func runEnable(args []string) error {
 
 	fmt.Println("It will start at boot.")
 	if !st.Active {
-		fmt.Println("It is not running now — `weirdvault-agent start`.")
+		fmt.Println("It is not running now — `weirdvault start`.")
 	}
 	return nil
 }
@@ -675,7 +681,7 @@ func runDisable(args []string) error {
 
 	fmt.Println("It will not start at boot.")
 	if st.Active {
-		fmt.Println("It is still running now — `weirdvault-agent stop` ends this run too.")
+		fmt.Println("It is still running now — `weirdvault stop` ends this run too.")
 	}
 	return nil
 }
@@ -688,16 +694,16 @@ func notInstalledError(st serviceState, verb string) error {
 		return fmt.Errorf("there is no %s here, so there is no service to %s.\n\n"+
 			"The installer writes it:\n"+
 			"  curl -fsSL <your weirdvault URL>/install.sh | sudo sh -s -- --token=ENROLL_…\n\n"+
-			"Or run the agent in the foreground: weirdvault-agent run", systemdUnit, verb)
+			"Or run the agent in the foreground: weirdvault run", systemdUnit, verb)
 	case supervisorLaunchd:
 		return fmt.Errorf("this machine is not set up as a service, so there is nothing to %s.\n\n"+
 			"Register one for the enrolment already on this machine:\n"+
-			"  sudo weirdvault-agent install-service\n\n"+
-			"Or run the agent in the foreground: weirdvault-agent run", verb)
+			"  sudo weirdvault install-service\n\n"+
+			"Or run the agent in the foreground: weirdvault run", verb)
 	default:
 		return fmt.Errorf("nothing here supervises services (no systemd, no launchd), so there is\n"+
 			"nothing to %s. Run the agent yourself, or under whatever this machine uses:\n"+
-			"  weirdvault-agent run --config=%s", verb, DefaultConfigPath)
+			"  weirdvault run --config=%s", verb, DefaultConfigPath)
 	}
 }
 
@@ -809,7 +815,7 @@ func runLogs(args []string) error {
 	default:
 		return fmt.Errorf("there is no service here collecting logs.\n\n" +
 			"Run the agent in the foreground and its output is the log:\n" +
-			"  weirdvault-agent run")
+			"  weirdvault run")
 	}
 }
 
@@ -852,7 +858,7 @@ func runInstallService(args []string) error {
 			"  curl -fsSL <your weirdvault URL>/install.sh | sudo sh -s -- --token=ENROLL_…")
 	}
 	if os.Geteuid() != 0 {
-		return errors.New("writing to /Library/LaunchDaemons needs root: sudo weirdvault-agent install-service")
+		return errors.New("writing to /Library/LaunchDaemons needs root: sudo weirdvault install-service")
 	}
 
 	// Refuse before writing a service that cannot start: a plist pointing at
@@ -863,7 +869,7 @@ func runInstallService(args []string) error {
 			return err
 		}
 	} else if len(gatherIdentities(*configDir, "")) == 0 {
-		return fmt.Errorf("no identity in %s — run `weirdvault-agent enroll` first", *configDir)
+		return fmt.Errorf("no identity in %s — run `weirdvault enroll` first", *configDir)
 	}
 
 	self, err := os.Executable()
@@ -905,7 +911,7 @@ func runUninstallService(args []string) error {
 		return nil
 	}
 	if os.Geteuid() != 0 {
-		return errors.New("removing from /Library/LaunchDaemons needs root: sudo weirdvault-agent uninstall-service")
+		return errors.New("removing from /Library/LaunchDaemons needs root: sudo weirdvault uninstall-service")
 	}
 
 	if out, err := runCmd("launchctl", "bootout", "system/"+launchdLabel); err != nil {
@@ -930,7 +936,7 @@ func runUninstallService(args []string) error {
 // It has no equivalent of systemd's RestartPreventExitStatus, so a revoked
 // agent, which exits 3 on purpose and would be right to stay down, is started
 // again every ten seconds. The agent says so in the log line it prints before
-// exiting, and `weirdvault-agent stop` is what ends it.
+// exiting, and `weirdvault stop` is what ends it.
 func launchdPlist(binary, configPath, configDir string, noUpdate bool) string {
 	// A directory unless one file was named, so a Mac shared by two accounts
 	// behaves the way a Linux box does.
@@ -985,4 +991,142 @@ func xmlEscape(s string) string {
 		">", "&gt;",
 		`"`, "&quot;",
 	).Replace(s)
+}
+
+// ---------------------------------------------------------------- uninstall
+
+/*
+Taking the whole thing off this machine.
+
+The installer can already do this — `install.sh --uninstall` — and needed to,
+because it is the only thing present when nothing else is. But asking somebody
+to pipe a script from the internet to remove software they already have
+installed is a strange thing to require, and it means the removal instructions
+are somewhere other than the program being removed.
+
+So the binary knows how, and the installer defers to it when it is there.
+
+# What it removes, and what it refuses to
+
+Everything this program put on the machine: the service, the binary, the
+identities and the account it runs as. It does not touch sshd, ~/.ssh, or
+anything else — the agent never had a relationship with them.
+
+It cannot revoke anything. The keys it deletes stay valid on the control plane
+until somebody revokes them there, so it says so with the ids it removed, which
+is the list a person needs in front of them on the dashboard. Saying nothing
+would leave somebody believing that deleting a key retired it.
+*/
+func runUninstall(args []string) error {
+	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+	dir := fs.String("config-dir", DefaultConfigDir, "where identities live")
+	keepIdentities := fs.Bool("keep-identities", false, "leave the identity files in place")
+	yes := fs.Bool("yes", false, "do not ask")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if os.Geteuid() != 0 {
+		return errors.New("removing a system service needs root: sudo weirdvault uninstall")
+	}
+
+	// Listed before anything is touched, because this is the last moment the
+	// list exists and it is what somebody needs to revoke them afterwards.
+	rows := gatherIdentities(*dir, "")
+
+	if !*yes {
+		fmt.Println("This removes weirdvault from this machine:")
+		fmt.Println()
+		fmt.Println("  the service, and the binary")
+		if !*keepIdentities && len(rows) > 0 {
+			for _, row := range rows {
+				fmt.Printf("  %s (%s) — its private key\n", row.name, row.agentID)
+			}
+		}
+		fmt.Println()
+		fmt.Println("Nothing else. Your SSH configuration, sshd and everything in ~/.ssh are")
+		fmt.Println("untouched — the agent never had anything to do with them.")
+		fmt.Println()
+		fmt.Println("Run it again with --yes to go ahead.")
+		return nil
+	}
+
+	var removed []string
+
+	// The service first. Removing the binary out from under a running daemon
+	// leaves a process nothing can restart and no file to explain it.
+	switch detectSupervisor() {
+	case supervisorSystemd:
+		if fileExists(systemdUnitPath) {
+			if out, err := runCmd("systemctl", "disable", "--now", systemdUnit); err != nil {
+				return fmt.Errorf("could not stop the service: %s", out)
+			}
+			if err := os.Remove(systemdUnitPath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("could not remove %s: %w", systemdUnitPath, err)
+			}
+			_, _ = runCmd("systemctl", "daemon-reload")
+			removed = append(removed, "the systemd service")
+		}
+	case supervisorLaunchd:
+		if fileExists(launchdPlistPath) {
+			if err := runUninstallService(nil); err != nil {
+				return err
+			}
+			removed = append(removed, "the launchd daemon")
+		}
+	default:
+		// Nothing supervising: whatever is running was started by hand, and it
+		// is the caller's to stop. Naming it beats removing its binary and
+		// leaving it running against a config that no longer exists.
+		if procs := agentProcesses(); len(procs) > 0 {
+			fmt.Printf("note: %d agent process(es) are running and nothing supervises them.\n",
+				len(procs))
+			fmt.Println("      Stop them yourself: kill", pidList(procs))
+			fmt.Println()
+		}
+	}
+
+	if !*keepIdentities {
+		if err := os.RemoveAll(*dir); err != nil {
+			return fmt.Errorf("could not remove %s: %w", *dir, err)
+		}
+		removed = append(removed, *dir+" (including every private key on this machine)")
+	}
+
+	// The binary last, and the symlink with it. This process is running from it;
+	// on every platform this supports, an unlinked file keeps running until it
+	// exits, which is what makes removing it from inside itself work at all.
+	self, err := os.Executable()
+	if err == nil {
+		if resolved, err := filepath.EvalSymlinks(self); err == nil {
+			self = resolved
+		}
+	}
+	for _, path := range []string{filepath.Join(installDir, binaryName), self} {
+		if path == "" || !fileExists(path) {
+			continue
+		}
+		if err := os.Remove(path); err == nil {
+			removed = append(removed, path)
+		}
+	}
+	if err := os.RemoveAll(stateDirBase); err == nil {
+		removed = append(removed, stateDirBase)
+	}
+
+	fmt.Println("Removed:")
+	for _, item := range removed {
+		fmt.Printf("  %s\n", item)
+	}
+
+	if len(rows) > 0 {
+		fmt.Println()
+		fmt.Println("These identities are gone from this machine and still valid on the")
+		fmt.Println("dashboard — deleting a key here does not retire it there. Revoke them at")
+		fmt.Println("Dashboard → Machines:")
+		for _, row := range rows {
+			fmt.Printf("  %s\n", row.agentID)
+		}
+	}
+	return nil
 }

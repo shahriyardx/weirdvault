@@ -37,7 +37,7 @@ import { configuredOrigin } from "@/lib/origin"
  *
  * Lowercase "weirdvault" survives wherever it is an identifier rather than a
  * name, and those are deliberately not renamed: the agent binary
- * (`weirdvault-agent`), its config directory, the cookie prefix, localStorage
+ * (`weirdvault`), its config directory, the cookie prefix, localStorage
  * keys, generated filenames, the Postgres role and database, and the HKDF
  * domain separator in the recovery route — that last one is part of a
  * cryptographic construction, and changing the string would invalidate every

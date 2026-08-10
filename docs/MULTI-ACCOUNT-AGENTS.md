@@ -176,12 +176,12 @@ casually, and it should be said out loud in the docs.
 ### On disk
 
 ```
-/etc/weirdvault-agent/
+/etc/weirdvault/
   ffa719fa.json          one identity per account (short agent id)
   ffa719fa.stopped       marker: this identity is stopped
   a41c0b93.json
-/var/lib/weirdvault-agent/bin/weirdvault-agent    one binary, shared
-/run/weirdvault-agent/state.json                  runtime state, see below
+/var/lib/weirdvault/bin/weirdvault    one binary, shared
+/run/weirdvault/state.json                  runtime state, see below
 ```
 
 Named after the agent id because everyone pastes an identical command — only the
@@ -192,7 +192,7 @@ characters, so `list` output and log lines stay readable.
 can read the directory. How many agents exist is unavoidable; whose they are is
 not the installer's fact to publish.
 
-`agent.json` and the existing `weirdvault-agent.service` stay valid exactly as
+`agent.json` and the existing `weirdvault.service` stay valid exactly as
 they are. Nothing already installed moves.
 
 ### One process, N control loops
@@ -216,7 +216,7 @@ left running.
 ### Runtime state
 
 The CLI is a different process and cannot see inside the daemon. So the daemon
-writes `/run/weirdvault-agent/state.json` (`RuntimeDirectory=weirdvault-agent`
+writes `/run/weirdvault/state.json` (`RuntimeDirectory=weirdvault`
 in the unit, owned by the service user) on every state change: per identity, its
 connection state, session count, last error, and when it last connected.
 
@@ -296,7 +296,7 @@ Every command writes an `audit_event`, and they are rate limited per agent.
 3. If it is offline, nothing is sent. The identity is refused on its next connect
    and the loop stops. The dead config stays on disk — a bare close code is not
    authority to delete a private key — and `list` shows it as rejected, with
-   `weirdvault-agent forget <id>` to clear it.
+   `weirdvault forget <id>` to clear it.
 
 For that account the machine is then unusable from the dashboard: no agent, no
 sessions. It says nothing about that person's SSH access by other routes, and

@@ -232,8 +232,8 @@ Two consequences worth planning around:
 - **It only takes effect on an agent restart.** `selfUpdate` runs before the
   control connection opens, so nothing is replaced mid-session — and a machine
   that stays up for months is running whatever it was installed with until
-  something restarts it. `weirdvault-agent upgrade` on the machine does both
-  steps; `systemctl restart weirdvault-agent` or a reboot does the same thing
+  something restarts it. `weirdvault upgrade` on the machine does both
+  steps; `systemctl restart weirdvault` or a reboot does the same thing
   the long way.
 
 **What the dashboard shows.** Every machine reports its build on each reconnect,
