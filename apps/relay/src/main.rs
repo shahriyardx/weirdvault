@@ -176,6 +176,25 @@ async fn main() {
     .expect("serve");
 }
 
+/// How often an idle session sends a WebSocket ping.
+///
+/// A session sitting at a shell prompt sends nothing for minutes, and nothing
+/// in the path tolerates that indefinitely. Cloudflare closes a proxied
+/// WebSocket after roughly a hundred seconds of silence; nginx defaults to a
+/// sixty-second `proxy_read_timeout`; a home router drops an idle NAT mapping
+/// on its own schedule. Each of those looks to the user like the product
+/// dropping their session for no reason.
+///
+/// So the relay keeps the connection observably alive rather than relying on
+/// every operator to raise every timeout. Thirty seconds is the same interval
+/// the agent's control connection already uses, and it is comfortably inside
+/// the shortest of the limits above.
+///
+/// Pings are invisible to the page: browsers answer them in the protocol layer,
+/// so nothing reaches the tab's WebSocket handlers and no bytes are counted
+/// against anybody's transfer allowance.
+const KEEPALIVE: Duration = Duration::from_secs(30);
+
 /// Probes our own /healthz. Exit 0 healthy, 1 not.
 async fn healthcheck() -> i32 {
     let addr = std::env::var("RELAY_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
@@ -553,17 +572,31 @@ async fn bridge(
     let down = tokio::spawn(async move {
         let mut total: u64 = 0;
         let mut buf = vec![0u8; 64 * 1024];
+        let mut keepalive = tokio::time::interval(KEEPALIVE);
+        // The first tick of an interval fires immediately; a ping before the
+        // session has said anything is noise.
+        keepalive.tick().await;
+
         loop {
-            match tcp_rx.read(&mut buf).await {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    total += n as u64;
-                    down_counter.add_down(n as u64);
-                    if ws_tx
-                        .send(Message::Binary(buf[..n].to_vec().into()))
-                        .await
-                        .is_err()
-                    {
+            // Both arms are cancel-safe — `AsyncReadExt::read` and `tick` both
+            // are — so a ping firing mid-read cannot lose buffered bytes.
+            tokio::select! {
+                read = tcp_rx.read(&mut buf) => match read {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        total += n as u64;
+                        down_counter.add_down(n as u64);
+                        if ws_tx
+                            .send(Message::Binary(buf[..n].to_vec().into()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                },
+                _ = keepalive.tick() => {
+                    if ws_tx.send(Message::Ping(Vec::new().into())).await.is_err() {
                         break;
                     }
                 }
@@ -623,7 +656,26 @@ async fn splice(
 
     let up = tokio::spawn(async move {
         let mut total = 0u64;
-        while let Some(Ok(msg)) = browser_rx.next().await {
+        // Pinged in this direction too. The agent reached us through a home
+        // router, and an idle NAT mapping is dropped there as readily as an
+        // idle connection is dropped by a proxy — which is why the agent's own
+        // control connection already does this.
+        let mut keepalive = tokio::time::interval(KEEPALIVE);
+        keepalive.tick().await;
+
+        loop {
+            let msg = tokio::select! {
+                next = browser_rx.next() => match next {
+                    Some(Ok(msg)) => msg,
+                    _ => break,
+                },
+                _ = keepalive.tick() => {
+                    if agent_tx.send(Message::Ping(Vec::new().into())).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+            };
             match msg {
                 Message::Binary(data) => {
                     total += data.len() as u64;
@@ -649,7 +701,22 @@ async fn splice(
         // turned "is sshd running?" into an unexplained disconnect.
         let mut closing: Option<axum::extract::ws::CloseFrame> = None;
 
-        while let Some(Ok(msg)) = agent_rx.next().await {
+        let mut keepalive = tokio::time::interval(KEEPALIVE);
+        keepalive.tick().await;
+
+        loop {
+            let msg = tokio::select! {
+                next = agent_rx.next() => match next {
+                    Some(Ok(msg)) => msg,
+                    _ => break,
+                },
+                _ = keepalive.tick() => {
+                    if browser_tx.send(Message::Ping(Vec::new().into())).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+            };
             match msg {
                 Message::Binary(data) => {
                     total += data.len() as u64;
