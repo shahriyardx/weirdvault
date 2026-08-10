@@ -10,6 +10,28 @@ import "./globals.css"
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 
+/**
+ * Every route renders per request, and the reason is the CSP.
+ *
+ * src/proxy.ts mints a fresh nonce per request and puts it in the
+ * Content-Security-Policy. Next applies that nonce to its own script tags only
+ * while it is *rendering* — a statically prerendered page was built long before
+ * the request, so its HTML carries no nonce at all, and every script in it is
+ * blocked by the very header meant to allow them. The page then serves, looks
+ * right, and does nothing: no hydration, no effects, no interactive controls.
+ *
+ * That is not a theoretical failure. It shipped: /sign-in was prerendered, all
+ * fifteen of its scripts loaded without a nonce, and the browser refused them
+ * all — which showed up as two missing buttons rather than as a broken page.
+ *
+ * So the choice is between static rendering and a nonce-based CSP, and the
+ * nonce wins. This is an application behind authentication, not a content site;
+ * what prerendering buys here is a few milliseconds on the marketing pages,
+ * and what it costs is the control docs/THREAT-MODEL.md names as the mitigation
+ * for the largest residual risk.
+ */
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: {
     default: "weirdvault — SSH in your browser",
