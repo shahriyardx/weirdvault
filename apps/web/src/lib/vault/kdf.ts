@@ -9,9 +9,9 @@
  * independent branches:
  *
  *     master     = Argon2id(password, salt)
- *     authToken  = HKDF(master, "webxterm/auth/v1")   → sent to the server
- *     vaultKey   = HKDF(master, "webxterm/vault/v1")  → NEVER leaves the device
- *     auditKey   = HKDF(master, "webxterm/audit/v1")  → NEVER leaves the device
+ *     authToken  = HKDF(master, "weirdvault/auth/v1")   → sent to the server
+ *     vaultKey   = HKDF(master, "weirdvault/vault/v1")  → NEVER leaves the device
+ *     auditKey   = HKDF(master, "weirdvault/audit/v1")  → NEVER leaves the device
  *
  * HKDF is one-way and the branches are domain-separated, so possession of
  * authToken says nothing about vaultKey. The server stores only a hash of
@@ -69,9 +69,9 @@ export const ARGON2_PARAMS = {
   hashLength: 32,
 } as const
 
-const AUTH_INFO = "webxterm/auth/v1"
-const VAULT_INFO = "webxterm/vault/v1"
-const AUDIT_INFO = "webxterm/audit/v1"
+const AUTH_INFO = "weirdvault/auth/v1"
+const VAULT_INFO = "weirdvault/vault/v1"
+const AUDIT_INFO = "weirdvault/audit/v1"
 
 const enc = new TextEncoder()
 
@@ -89,7 +89,7 @@ const enc = new TextEncoder()
  * emails, so it cannot be used as an account-existence oracle.
  */
 async function saltFor(email: string): Promise<Uint8Array> {
-  const material = enc.encode(`webxterm/salt/v1:${email.trim().toLowerCase()}`)
+  const material = enc.encode(`weirdvault/salt/v1:${email.trim().toLowerCase()}`)
   return new Uint8Array(await crypto.subtle.digest("SHA-256", material))
 }
 

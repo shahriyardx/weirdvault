@@ -324,7 +324,7 @@ export default function RecordingsPage() {
 
   function download(summary: RecordingSummary) {
     void open(summary, (cast) => {
-      const name = `webxterm-${stamp(summary.startedAt)}.cast`
+      const name = `weirdvault-${stamp(summary.startedAt)}.cast`
       downloadText(name, toAsciicast(cast), "application/x-asciicast")
       toast.success(`Saved ${name}`, {
         description:
@@ -351,7 +351,7 @@ export default function RecordingsPage() {
       })
       return
     }
-    const name = `webxterm-${stamp(cast.header.startedAt)}.cast`
+    const name = `weirdvault-${stamp(cast.header.startedAt)}.cast`
     downloadText(name, toAsciicast(cast), "application/x-asciicast")
     toast.success(`Saved ${name}`, {
       description:

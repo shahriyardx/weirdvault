@@ -12,13 +12,13 @@ const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 
 export const metadata: Metadata = {
   title: {
-    default: "webxterm — SSH in your browser",
-    template: "%s · webxterm",
+    default: "weirdvault — SSH in your browser",
+    template: "%s · weirdvault",
   },
   description:
     "A zero-install SSH client. Generate a key in the browser, connect to any server, " +
     "and get a terminal, file explorer and remote editor — with keys that never leave your device.",
-  applicationName: "webxterm",
+  applicationName: "weirdvault",
 }
 
 export const viewport: Viewport = {

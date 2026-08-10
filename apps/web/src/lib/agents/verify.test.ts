@@ -23,7 +23,7 @@ const GO = {
   nonce: "yJ3n0Qn8bC1sVv2mF7xLpR4tZ6aD5eG9hK0jN8uW1oI",
   publicKey: "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=",
   signature:
-    "9dHClQV+iZI4q/V4Gz7LlFyEHX8lmF9RYZBBmm9u2Sfv1ul68ODTqWPJg81Zik2Nfcu+ttc6Ap38XFdGyn2iDg==",
+    "5shjd/cz6MCOrkb2sxt6DKajnx9keRN1jfOq5G3y4h9zMLQ6xslQAmur88MNhPzKoVLby1zOd1MHFS4AlPWSAQ==",
   fingerprint: "SHA256:/oEsEvOrTOasXbaaw1L5BssbEe9D+zPiUu9/9VImOIk",
 }
 
@@ -46,7 +46,7 @@ describe("agent signatures", () => {
   })
 
   test("the signed message is exactly what both sides build", () => {
-    expect(verifyingMessage("a", "b").toString("utf8")).toBe("webxterm-agent-v1\na\nb")
+    expect(verifyingMessage("a", "b").toString("utf8")).toBe("weirdvault-agent-v1\na\nb")
   })
 
   test("a signature for one agent does not verify for another", () => {

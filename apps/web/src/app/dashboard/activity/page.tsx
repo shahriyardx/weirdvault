@@ -554,7 +554,7 @@ export default function ActivityPage() {
       metadata: item.row.metadata,
     }))
 
-    const name = `webxterm-activity-${stamp(readAt)}.${format}`
+    const name = `weirdvault-activity-${stamp(readAt)}.${format}`
     if (format === "json") {
       download(
         name,

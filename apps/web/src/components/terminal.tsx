@@ -430,7 +430,7 @@ export function TerminalView({
     // DOM and end-to-end tests have nothing to assert against. Expose the
     // instance in development only.
     if (process.env.NODE_ENV === "development") {
-      ;(window as unknown as { __webxtermTerm?: Terminal }).__webxtermTerm = term
+      ;(window as unknown as { __weirdvaultTerm?: Terminal }).__weirdvaultTerm = term
     }
 
     /**

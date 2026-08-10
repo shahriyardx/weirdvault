@@ -188,7 +188,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          "That key is already enrolled here. Delete /etc/webxterm-agent/agent.json on " +
+          "That key is already enrolled here. Delete /etc/weirdvault-agent/agent.json on " +
           "that machine and run the install command again — enrolment generates a fresh " +
           "key. If the old machine is listed as revoked, use Forget to remove it entirely.",
       },

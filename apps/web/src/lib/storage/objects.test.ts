@@ -27,8 +27,8 @@ import { signRequest } from "./sigv4"
  * there is not one. MinIO is enough — it verifies SigV4 strictly, which is the
  * property under test — and it is one container:
  *
- *   docker run -d --name webxterm-minio -p 9000:9000 \
- *     -e MINIO_ROOT_USER=webxtermtest -e MINIO_ROOT_PASSWORD=webxtermtestsecret \
+ *   docker run -d --name weirdvault-minio -p 9000:9000 \
+ *     -e MINIO_ROOT_USER=weirdvaulttest -e MINIO_ROOT_PASSWORD=weirdvaulttestsecret \
  *     minio/minio server /data
  *   TEST_S3_ENDPOINT=http://127.0.0.1:9000 bun test
  *
@@ -42,7 +42,7 @@ import { signRequest } from "./sigv4"
 
 const FULL = {
   R2_ENDPOINT: "https://abc123.r2.cloudflarestorage.com",
-  R2_BUCKET: "webxterm-recordings",
+  R2_BUCKET: "weirdvault-recordings",
   R2_ACCESS_KEY_ID: "key",
   R2_SECRET_ACCESS_KEY: "secret",
 }
@@ -60,7 +60,7 @@ describe("configuration", () => {
     const result = readStorageConfig(FULL)
     expect("store" in result).toBe(true)
     if (!("store" in result)) return
-    expect(result.store.bucket).toBe("webxterm-recordings")
+    expect(result.store.bucket).toBe("weirdvault-recordings")
     expect(result.store.endpoint.host).toBe("abc123.r2.cloudflarestorage.com")
     expect(result.store.credentials.service).toBe("s3")
   })
@@ -135,10 +135,10 @@ const live = endpoint ? describe : describe.skip
 live("against a real S3 server", () => {
   const store: ObjectStore = {
     endpoint: new URL(endpoint ?? "http://127.0.0.1:9000"),
-    bucket: process.env.TEST_S3_BUCKET ?? "webxterm-test",
+    bucket: process.env.TEST_S3_BUCKET ?? "weirdvault-test",
     credentials: {
-      accessKeyId: process.env.TEST_S3_ACCESS_KEY_ID ?? "webxtermtest",
-      secretAccessKey: process.env.TEST_S3_SECRET_ACCESS_KEY ?? "webxtermtestsecret",
+      accessKeyId: process.env.TEST_S3_ACCESS_KEY_ID ?? "weirdvaulttest",
+      secretAccessKey: process.env.TEST_S3_SECRET_ACCESS_KEY ?? "weirdvaulttestsecret",
       region: process.env.TEST_S3_REGION ?? "us-east-1",
       service: "s3",
     },

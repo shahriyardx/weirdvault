@@ -1,17 +1,17 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: webxterm-postgres
+    container_name: weirdvault-postgres
     environment:
-      POSTGRES_USER: webxterm
-      POSTGRES_PASSWORD: webxterm
-      POSTGRES_DB: webxterm
+      POSTGRES_USER: weirdvault
+      POSTGRES_PASSWORD: weirdvault
+      POSTGRES_DB: weirdvault
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U webxterm"]
+      test: ["CMD-SHELL", "pg_isready -U weirdvault"]
       interval: 5s
       timeout: 3s
       retries: 10

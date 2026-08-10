@@ -1,10 +1,10 @@
-# webxterm Threat Model
+# weirdvault Threat Model
 
 **Status:** living document. Written late — the split KDF shipped before this
 existed, which is the wrong order and is corrected here while there is still no
 production data to migrate.
 
-The point of this document is to state precisely what webxterm protects, what it
+The point of this document is to state precisely what weirdvault protects, what it
 does not, and who has to be trusted. A security claim that isn't written down
 this way isn't a claim, it's marketing.
 
@@ -173,7 +173,7 @@ control plane only. The relay never touches a recording and holds none of them.
 ### What we do NOT protect against
 Stated plainly rather than buried:
 
-1. **A malicious or compromised webxterm frontend.** We serve the JavaScript. A
+1. **A malicious or compromised weirdvault frontend.** We serve the JavaScript. A
    backdoored build could exfiltrate the vault key or misuse the signing oracle
    while keys stay "non-extractable". Non-extractability defeats *injected* and
    *third-party* code, not us. Mitigations: strict CSP, SRI, reproducible
@@ -212,14 +212,14 @@ portable copy, the key is gone. Onboarding must make this impossible to miss.
 
 ```
 master     = Argon2id(password, salt, m=64MiB, t=3, p=1)
-authToken  = HKDF(master, "webxterm/auth/v1")    → sent to the server
-vaultKey   = HKDF(master, "webxterm/vault/v1")   → never transmitted
+authToken  = HKDF(master, "weirdvault/auth/v1")    → sent to the server
+vaultKey   = HKDF(master, "weirdvault/vault/v1")   → never transmitted
 ```
 
 The server stores only a hash of `authToken`. HKDF is one-way and the branches
 are domain-separated, so a full database dump does not yield `vaultKey`.
 
-**Known weakness — deterministic salt.** `salt = SHA-256("webxterm/salt/v1:" +
+**Known weakness — deterministic salt.** `salt = SHA-256("weirdvault/salt/v1:" +
 lowercase(email))` so a new device can derive the key with only the password.
 The cost is that salts are not random, weakening cross-user precomputation
 resistance; Argon2id's memory hardness carries that load. Bitwarden uses the

@@ -560,7 +560,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
               Prefer not to pipe to a shell? Download the agent, then run{" "}
-              <code className="font-mono">webxterm-agent enroll</code> with the same
+              <code className="font-mono">weirdvault-agent enroll</code> with the same
               <code className="font-mono"> --token</code> and{" "}
               <code className="font-mono">--url</code>.
             </p>
@@ -582,7 +582,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
               <Label className="text-muted-foreground text-xs">Fingerprint</Label>
               <p className="mt-1 font-mono text-sm break-all">{state.agent.fingerprint}</p>
               <p className="text-muted-foreground mt-2 text-xs">
-                On the machine: <code className="font-mono">webxterm-agent status</code>
+                On the machine: <code className="font-mono">weirdvault-agent status</code>
               </p>
             </div>
 
@@ -672,17 +672,17 @@ function RemovalDialog({
             <div className="mt-2 space-y-1 font-mono">
               {(mac
                 ? [
-                    "sudo pkill -f 'webxterm-agent run'",
-                    "sudo rm /usr/local/bin/webxterm-agent",
-                    "sudo rm -rf /etc/webxterm-agent",
+                    "sudo pkill -f 'weirdvault-agent run'",
+                    "sudo rm /usr/local/bin/weirdvault-agent",
+                    "sudo rm -rf /etc/weirdvault-agent",
                   ]
                 : [
-                    "sudo systemctl disable --now webxterm-agent",
-                    "sudo rm /etc/systemd/system/webxterm-agent.service",
+                    "sudo systemctl disable --now weirdvault-agent",
+                    "sudo rm /etc/systemd/system/weirdvault-agent.service",
                     "sudo systemctl daemon-reload",
-                    "sudo rm /usr/local/bin/webxterm-agent",
-                    "sudo rm -rf /etc/webxterm-agent",
-                    "sudo userdel webxterm-agent",
+                    "sudo rm /usr/local/bin/weirdvault-agent",
+                    "sudo rm -rf /etc/weirdvault-agent",
+                    "sudo userdel weirdvault-agent",
                   ]
               ).map((line) => (
                 <div key={line} className="break-all">

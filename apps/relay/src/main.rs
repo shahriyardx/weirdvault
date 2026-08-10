@@ -1,9 +1,9 @@
-//! webxterm relay.
+//! weirdvault relay.
 //!
 //! Bridges a browser WebSocket to a TCP endpoint and forwards bytes it cannot
 //! read. The SSH handshake and every subsequent byte are encrypted inside the
 //! user's tab, so this process handles ciphertext only — that is what makes
-//! webxterm end-to-end encrypted rather than end-to-relay.
+//! weirdvault end-to-end encrypted rather than end-to-relay.
 //!
 //! What it does hold is metadata: who connected, to which host, when, and how
 //! much. That is stated plainly in docs/THREAT-MODEL.md rather than glossed
@@ -87,7 +87,7 @@ async fn main() {
         .json()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "webxterm_relay=info,tower_http=warn".into()),
+                .unwrap_or_else(|_| "weirdvault_relay=info,tower_http=warn".into()),
         )
         .init();
 
@@ -351,7 +351,7 @@ async fn connect_via_agent(
             close_with_reason(
                 browser,
                 "that machine's agent is not connected — is it powered on, and is \
-                 webxterm-agent running there?"
+                 weirdvault-agent running there?"
                     .into(),
             )
             .await;

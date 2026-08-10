@@ -1,4 +1,4 @@
-# webxterm
+# weirdvault
 
 Zero-install web SSH client. Open a browser, generate or import a key, connect
 to any server — terminal, file explorer, uploads, remote editing, nothing to install
@@ -28,10 +28,10 @@ key and the encryption would be end-to-relay rather than end-to-end.
 **On the server: nothing to install.** One line, once:
 
 ```bash
-echo 'ssh-ed25519 AAAA… you@webxterm' >> ~/.ssh/authorized_keys
+echo 'ssh-ed25519 AAAA… you@weirdvault' >> ~/.ssh/authorized_keys
 ```
 
-Or tick "use password once" and webxterm installs the key itself.
+Or tick "use password once" and weirdvault installs the key itself.
 
 **Unless the machine has no address to dial.** A box behind a home router cannot
 be connected to, so it connects outward instead: a small daemon
@@ -167,8 +167,8 @@ request signer against AWS's published vectors, and `objects.test.ts` runs the
 whole S3 client against a real server when one is pointed at it:
 
 ```bash
-docker run -d --name webxterm-minio -p 9000:9000 \
-  -e MINIO_ROOT_USER=webxtermtest -e MINIO_ROOT_PASSWORD=webxtermtestsecret \
+docker run -d --name weirdvault-minio -p 9000:9000 \
+  -e MINIO_ROOT_USER=weirdvaulttest -e MINIO_ROOT_PASSWORD=weirdvaulttestsecret \
   minio/minio server /data
 TEST_S3_ENDPOINT=http://127.0.0.1:9000 bun test   # skipped without it
 ```

@@ -8,7 +8,7 @@ import (
 
 // A deliberately small ~/.ssh/config reader.
 //
-// Only the directives that map onto a webxterm host are read. A full OpenSSH
+// Only the directives that map onto a weirdvault host are read. A full OpenSSH
 // config parser would have to model Match blocks, Include, canonicalisation,
 // and dozens of options we cannot honour anyway — and silently importing a
 // config we only half understand is worse than importing the obvious parts and

@@ -191,9 +191,9 @@ function EmptyState() {
             Nothing stored on this device yet
           </CardTitle>
           <CardDescription>
-            Three steps, none of which install anything. If you already use webxterm elsewhere, sign
-            in and unlock the vault instead — your hosts and portable keys arrive with the first
-            sync.
+            Three steps, none of which install anything. If you already use weirdvault elsewhere,
+            sign in and unlock the vault instead — your hosts and portable keys arrive with the
+            first sync.
           </CardDescription>
         </CardHeader>
 
@@ -206,7 +206,7 @@ function EmptyState() {
           <Step
             n={2}
             title="Authorize it on the server"
-            body="One line appended to ~/.ssh/authorized_keys on stock sshd. No agent, no daemon, no extra port. Or connect once with a password and webxterm installs the key for you."
+            body="One line appended to ~/.ssh/authorized_keys on stock sshd. No agent, no daemon, no extra port. Or connect once with a password and weirdvault installs the key for you."
           >
             <pre className="bg-terminal mt-3 overflow-x-auto border border-border px-3 py-2 text-[11px] leading-relaxed">
               <span className="text-muted-foreground">$ </span>

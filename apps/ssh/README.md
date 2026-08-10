@@ -1,7 +1,7 @@
 # apps/ssh — the SSH client, compiled to WebAssembly
 
 Go SSH and SFTP client that runs **inside the browser tab**. It is the reason
-webxterm can claim end-to-end encryption: the handshake, cipher negotiation and
+weirdvault can claim end-to-end encryption: the handshake, cipher negotiation and
 every byte of session traffic are handled here, in page memory, so the relay
 only ever forwards ciphertext.
 

@@ -9,7 +9,7 @@ import {
   SpinnerIcon,
 } from "@phosphor-icons/react";
 
-// webxterm is dark only — there is no theme state to read, so this asks
+// weirdvault is dark only — there is no theme state to read, so this asks
 // next-themes nothing and hardcodes what the rest of the app already assumes.
 const Toaster = ({ ...props }: ToasterProps) => {
   return (

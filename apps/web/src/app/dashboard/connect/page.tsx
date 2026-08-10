@@ -266,8 +266,8 @@ function ConnectForm() {
                   Use a password once
                 </Label>
                 <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
-                  Connect with your password and webxterm appends the public key to authorized_keys
-                  for you, so you never have to run a command by hand.
+                  Connect with your password and weirdvault appends the public key to
+                  authorized_keys for you, so you never have to run a command by hand.
                 </p>
               </div>
               <Switch id="usepw" checked={usePassword} onCheckedChange={setUsePassword} />
@@ -278,7 +278,7 @@ function ConnectForm() {
                 <Label htmlFor="password">Password</Label>
                 {/* autoComplete="off" is ignored on password fields by Chrome
                     and Safari; only "new-password" suppresses the fill. This is
-                    the remote host's password — filling the webxterm one here
+                    the remote host's password — filling the weirdvault one here
                     would send it to that host on connect. */}
                 <Input
                   id="password"

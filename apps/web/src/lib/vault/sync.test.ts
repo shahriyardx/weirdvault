@@ -175,7 +175,7 @@ describe("mergeVault", () => {
   })
 
   test("a vault written before snippets existed still merges", () => {
-    // Every account that used webxterm before this feature shipped has a blob
+    // Every account that used weirdvault before this feature shipped has a blob
     // in this shape. Dropping the local snippets here — or throwing — would be
     // the worst possible first sync after an upgrade.
     const legacy = {

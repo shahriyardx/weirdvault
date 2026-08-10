@@ -124,7 +124,7 @@ export interface ConnectConfig {
 
 declare global {
   interface Window {
-    webxtermSSH?: {
+    weirdvaultSSH?: {
       connect(config: ConnectConfig): Promise<SshSession>
       /** Rejects with the parse error, including "a passphrase is required". */
       importKey(pem: string, passphrase?: string): Promise<ImportedKey>

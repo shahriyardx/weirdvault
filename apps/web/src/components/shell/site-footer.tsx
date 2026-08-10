@@ -64,7 +64,7 @@ export function SiteFooter() {
 
       <div className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:px-6">
-          <span>© {new Date().getFullYear()} webxterm</span>
+          <span>© {new Date().getFullYear()} weirdvault</span>
           <span className="sm:ml-auto">End-to-end encrypted · open relay · self-hostable</span>
         </div>
       </div>

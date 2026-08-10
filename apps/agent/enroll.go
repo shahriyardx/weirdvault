@@ -43,7 +43,7 @@ type enrollResponse struct {
 func runEnroll(args []string) error {
 	fs := flag.NewFlagSet("enroll", flag.ExitOnError)
 	token := fs.String("token", "", "one-time enrollment token from the dashboard")
-	appURL := fs.String("url", "", "base URL of your webxterm deployment")
+	appURL := fs.String("url", "", "base URL of your weirdvault deployment")
 	configPath := fs.String("config", DefaultConfigPath, "where to write the agent identity")
 	port := fs.Int("ssh-port", 22, "the local sshd port to forward to")
 	force := fs.Bool("force", false, "overwrite an existing enrollment")
@@ -145,7 +145,7 @@ func runEnroll(args []string) error {
 	fmt.Printf("Fingerprint: %s\n", fingerprint(pub))
 	fmt.Printf("Forwarding to 127.0.0.1:%d\n\n", *port)
 	fmt.Printf("Check that fingerprint against the one on the enrollment page before\n")
-	fmt.Printf("you adopt this machine. Then: systemctl enable --now webxterm-agent\n")
+	fmt.Printf("you adopt this machine. Then: systemctl enable --now weirdvault-agent\n")
 	return nil
 }
 

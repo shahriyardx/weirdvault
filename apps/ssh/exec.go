@@ -26,7 +26,7 @@ var authorizedKeyPattern = regexp.MustCompile(
 // installKey appends a public key to the remote authorized_keys.
 //
 // This removes the worst step in onboarding: "copy this command and go run it
-// somewhere else." The user connects once with a password, and webxterm does
+// somewhere else." The user connects once with a password, and weirdvault does
 // the setup itself.
 func installKey(client *ssh.Client, line string) (string, error) {
 	line = strings.TrimSpace(line)

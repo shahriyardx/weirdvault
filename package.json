@@ -1,12 +1,12 @@
 {
-  "name": "webxterm",
+  "name": "weirdvault",
   "private": true,
   "type": "module",
   "description": "Zero-install web SSH client: browser, key, connect. Nothing to install on either end.",
   "scripts": {
     "wasm": "bun scripts/build-wasm.mjs",
     "agent": "bun scripts/build-agent.mjs",
-    "sshd": "docker build -q -t webxterm-sshd sshd && (docker rm -f webxterm-sshd >/dev/null 2>&1 || true) && docker run -d --name webxterm-sshd -p 2222:22 webxterm-sshd",
-    "sshd:stop": "docker rm -f webxterm-sshd"
+    "sshd": "docker build -q -t weirdvault-sshd sshd && (docker rm -f weirdvault-sshd >/dev/null 2>&1 || true) && docker run -d --name weirdvault-sshd -p 2222:22 weirdvault-sshd",
+    "sshd:stop": "docker rm -f weirdvault-sshd"
   }
 }

@@ -106,7 +106,7 @@ export default function KeysPage() {
 
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [importOpen, setImportOpen] = React.useState(false)
-  const [label, setLabel] = React.useState("webxterm")
+  const [label, setLabel] = React.useState("weirdvault")
   const [mode, setMode] = React.useState<KeyMode>("device-bound")
   const [generating, setGenerating] = React.useState(false)
 
@@ -181,7 +181,7 @@ export default function KeysPage() {
   function openDialog() {
     // `unlocked` is reactive, so it is already current here.
     setMode(unlocked ? "portable" : "device-bound")
-    setLabel("webxterm")
+    setLabel("weirdvault")
     setDialogOpen(true)
   }
 
@@ -206,7 +206,7 @@ export default function KeysPage() {
 
     setGenerating(true)
     try {
-      const created = await generateKey(label.trim() || "webxterm", mode, vaultKey ?? undefined)
+      const created = await generateKey(label.trim() || "weirdvault", mode, vaultKey ?? undefined)
       setDialogOpen(false)
       await afterCreated(created, "Generated")
     } catch (error) {
@@ -318,7 +318,7 @@ export default function KeysPage() {
                 id="key-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="webxterm"
+                placeholder="weirdvault"
                 autoComplete="off"
                 autoCapitalize="none"
                 spellCheck={false}
@@ -667,7 +667,7 @@ function ImportKeyDialog({
                   />
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Used once, here, to decrypt the file. It is not stored, and the key does not
-                    keep it — webxterm has nowhere to type a passphrase at connect time.
+                    keep it — weirdvault has nowhere to type a passphrase at connect time.
                   </p>
                 </div>
               )}
@@ -1083,7 +1083,7 @@ function EmptyState({ onGenerate, onImport }: { onGenerate: () => void; onImport
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Setting up a server is one line appended to ~/.ssh/authorized_keys on stock sshd. If you
-            would rather not paste it, connect once with a password and webxterm installs the line
+            would rather not paste it, connect once with a password and weirdvault installs the line
             for you.
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">

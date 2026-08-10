@@ -4,7 +4,7 @@ import { Pool } from "pg"
 import * as schema from "./schema"
 
 const connectionString =
-  process.env.DATABASE_URL ?? "postgres://webxterm:webxterm@localhost:5432/webxterm"
+  process.env.DATABASE_URL ?? "postgres://weirdvault:weirdvault@localhost:5432/weirdvault"
 
 // Reuse the pool across hot reloads in dev, or Next's module re-evaluation
 // exhausts Postgres connections within a few edits.

@@ -17,7 +17,7 @@ import { recordDeletion } from "./vault/tombstones"
  *
  * Only the *method* is stored, never the secret. A password host prompts on
  * every connection: writing the password into the vault would trade a real
- * credential for skipping one dialog, and the first thing webxterm does with a
+ * credential for skipping one dialog, and the first thing weirdvault does with a
  * password is install a key so it is not needed again.
  */
 export type HostAuth = "key" | "password"

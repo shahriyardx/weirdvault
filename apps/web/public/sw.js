@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 /**
- * webxterm service worker.
+ * weirdvault service worker.
  *
  * Two jobs:
  *
@@ -14,7 +14,7 @@
  *    so a multi-gigabyte file never has to exist in a Blob in memory.
  */
 
-const CACHE = "webxterm-v1";
+const CACHE = "weirdvault-v1";
 const PRECACHE = ["/ssh.wasm", "/wasm_exec.js"];
 
 self.addEventListener("install", (event) => {

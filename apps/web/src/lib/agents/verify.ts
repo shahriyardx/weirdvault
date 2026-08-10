@@ -24,7 +24,7 @@ import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto
  * test below that pins it against a fixture the Go implementation produced.
  */
 export function verifyingMessage(agentId: string, nonce: string): Buffer {
-  return Buffer.from(`webxterm-agent-v1\n${agentId}\n${nonce}`, "utf8")
+  return Buffer.from(`weirdvault-agent-v1\n${agentId}\n${nonce}`, "utf8")
 }
 
 /**
@@ -45,7 +45,7 @@ const ED25519_SIGNATURE_BYTES = 64
  *
  * Same format because it appears beside one, and because the whole point of a
  * fingerprint is that a person compares two renderings of it — one on screen,
- * one from `webxterm-agent status` on the machine in front of them. Two formats
+ * one from `weirdvault-agent status` on the machine in front of them. Two formats
  * for one idea is one too many.
  *
  * Must match `fingerprint` in apps/agent/main.go.

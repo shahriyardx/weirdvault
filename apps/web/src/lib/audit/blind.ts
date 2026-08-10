@@ -19,7 +19,7 @@
  * the relay already observes each connection as it happens.
  */
 
-const DOMAIN = "webxterm/audit/host/v1"
+const DOMAIN = "weirdvault/audit/host/v1"
 const REF_BYTES = 16
 
 function b64url(bytes: Uint8Array): string {

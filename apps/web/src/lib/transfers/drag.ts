@@ -23,7 +23,7 @@ import type { SftpEntry } from "@/lib/ssh/types"
  * drop spec lowercases type strings, so a mixed-case name silently never
  * matches on the receiving end.
  */
-export const REMOTE_DRAG_TYPE = "application/x-webxterm-remote-files"
+export const REMOTE_DRAG_TYPE = "application/x-weirdvault-remote-files"
 
 export interface RemoteDrag {
   /** Which pane started it, so a pane can refuse a drop onto itself. */

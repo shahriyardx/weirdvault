@@ -1,0 +1,19 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    The favicon, and the one place the mark cannot use currentColor: a browser
+    tab renders this with no CSS around it, on chrome that may be light or dark
+    and is not ours to know.
+
+    So the field is solid rather than transparent. A transparent glyph tinted
+    for a dark tab bar disappears on a light one, and the tab strip is exactly
+    where this has to survive — see components/shell/mark.tsx for the version
+    that inherits its colour.
+  -->
+  <rect width="32" height="32" rx="7.5" fill="#5b95f0" />
+  <g stroke="#0e1116" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19.6 7.4H11A3.6 3.6 0 0 0 7.4 11v10A3.6 3.6 0 0 0 11 24.6h8.6" stroke-width="2.2" />
+    <path d="M23.4 8.8A3.6 3.6 0 0 1 24.9 11.8v8.4a3.6 3.6 0 0 1-1.5 3" stroke-width="2.2" />
+    <path d="m12.4 13.1 2.9 2.9-2.9 2.9" stroke-width="2.4" />
+    <path d="M17.4 18.9h3.2" stroke-width="2.4" />
+  </g>
+</svg>

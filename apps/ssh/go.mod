@@ -1,4 +1,4 @@
-module github.com/shahriyar/webxterm/apps/ssh
+module github.com/shahriyar/weirdvault/apps/ssh
 
 go 1.26.5
 

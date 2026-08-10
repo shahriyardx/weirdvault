@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://webxterm:webxterm@localhost:5432/webxterm",
+    url: process.env.DATABASE_URL ?? "postgres://weirdvault:weirdvault@localhost:5432/weirdvault",
   },
 })

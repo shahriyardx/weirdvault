@@ -278,7 +278,7 @@ export default function TerminalPage() {
   )
 }
 
-const FONT_SIZE_KEY = "webxterm:terminal-font-size"
+const FONT_SIZE_KEY = "weirdvault:terminal-font-size"
 
 /**
  * The terminal's text size, remembered across visits.

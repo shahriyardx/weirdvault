@@ -52,7 +52,7 @@ const (
 	updateTimeout = 60 * time.Second
 
 	// Set before re-exec, checked at startup. One update attempt per start.
-	updatedMarker = "WEBXTERM_AGENT_UPDATED"
+	updatedMarker = "WEIRDVAULT_AGENT_UPDATED"
 )
 
 type releaseManifest struct {
@@ -180,7 +180,7 @@ func replaceSelf(ctx context.Context, base, file, wantSHA string) error {
 	// filesystem, and a cross-device rename would fall back to a copy that can
 	// be interrupted halfway — leaving a truncated binary where the agent was.
 	dir := filepath.Dir(self)
-	tmp, err := os.CreateTemp(dir, ".webxterm-agent-*")
+	tmp, err := os.CreateTemp(dir, ".weirdvault-agent-*")
 	if err != nil {
 		return fmt.Errorf("cannot write to %s: %w", dir, err)
 	}

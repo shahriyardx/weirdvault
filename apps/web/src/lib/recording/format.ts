@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * The recording format: webxterm cast v1.
+ * The recording format: weirdvault cast v1.
  *
  * A recording is the terminal's output stream and nothing else — the bytes the
  * server sent back, stamped with when they arrived, plus the size the terminal

@@ -93,7 +93,7 @@ export function RemoteEditor({ sftp, path, onClose, onSaved }: Props) {
       // there is no stable element for a test to type into. Expose the
       // instance in development, as the terminal does.
       if (process.env.NODE_ENV === "development") {
-        ;(window as unknown as { __webxtermEditor?: unknown }).__webxtermEditor = editor
+        ;(window as unknown as { __weirdvaultEditor?: unknown }).__weirdvaultEditor = editor
       }
 
       cleanup = () => editor.dispose()

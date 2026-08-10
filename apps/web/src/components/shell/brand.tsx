@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { Mark } from "@/components/shell/mark"
 import { cn } from "@/lib/utils"
 
 /**
@@ -28,17 +29,13 @@ export function Brand({
         className,
       )}
     >
-      <span
-        aria-hidden
+      <Mark
         className={cn(
-          "grid place-items-center rounded-sm border border-border bg-card text-primary",
-          "transition-colors group-hover:border-primary/60",
-          size === "sm" ? "size-5 text-[10px]" : "size-6 text-[11px]",
+          "text-primary transition-colors group-hover:text-primary/80",
+          size === "sm" ? "size-5" : "size-6",
         )}
-      >
-        {">_"}
-      </span>
-      <span className={labelClassName}>webxterm</span>
+      />
+      <span className={labelClassName}>weirdvault</span>
     </Link>
   )
 }

@@ -79,7 +79,7 @@ async function wrapWithVault(
 /* ------------------------------------------------------------ generation */
 
 export async function generateKey(
-  label = "webxterm",
+  label = "weirdvault",
   mode: KeyMode = "portable",
   vaultKey?: CryptoKey,
 ): Promise<SshKey> {
@@ -513,7 +513,7 @@ export function authorizedKeysLine(key: { publicKeyRaw: Uint8Array; label: strin
   for (const b of blob) s += String.fromCharCode(b)
   // Comments are interpolated into a remote shell command by installKey, and
   // the Go side rejects anything outside [A-Za-z0-9@._-].
-  const comment = key.label.replace(/[^A-Za-z0-9@._-]/g, "-") || "webxterm"
+  const comment = key.label.replace(/[^A-Za-z0-9@._-]/g, "-") || "weirdvault"
   return `ssh-ed25519 ${btoa(s)} ${comment}`
 }
 

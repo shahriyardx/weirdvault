@@ -69,7 +69,7 @@ export interface SessionEntry {
 
 export interface ConnectRequest extends SessionTarget {
   /**
-   * Omit for a password-only host. With both, webxterm logs in with the
+   * Omit for a password-only host. With both, weirdvault logs in with the
    * password once and installs the key so the next connection does not need it.
    */
   key?: SshKey

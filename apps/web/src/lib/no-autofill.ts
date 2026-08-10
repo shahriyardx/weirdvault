@@ -4,7 +4,7 @@
  * This app has two completely different kinds of secret in its UI and they must
  * never be confused:
  *
- *   1. The webxterm account password, on sign-in, unlock and password change.
+ *   1. The weirdvault account password, on sign-in, unlock and password change.
  *      Autofill is CORRECT there. A password manager filling it is the manager
  *      doing its job, and these helpers must not be used on those fields.
  *
@@ -13,7 +13,7 @@
  *      merely untidy.
  *
  * The failure it prevents is specific and bad. A browser sees `type="password"`
- * on a page it has a saved login for, fills in the webxterm account password,
+ * on a page it has a saved login for, fills in the weirdvault account password,
  * and the user presses Connect — sending their vault-deriving password, in
  * plaintext inside the SSH channel, to someone else's server. The password that
  * derives the vault key is the one secret in this system that must never leave

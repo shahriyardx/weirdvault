@@ -1,4 +1,4 @@
-# webxterm — Zero-Install Web SSH Workspace
+# weirdvault — Zero-Install Web SSH Workspace
 
 > Open a browser. Generate or import a key. Connect to any server, anywhere.
 > Terminal, file explorer, uploads, remote editing — no client software, ever.
@@ -8,7 +8,7 @@
 ## Part 0 — Scope
 
 **What the user does:**
-1. Opens `webxterm.app` on any device — laptop, tablet, someone else's machine
+1. Opens `weirdvault.app` on any device — laptop, tablet, someone else's machine
 2. Generates an SSH key in the browser (or imports an existing one)
 3. Copies a one-liner to authorize it on their server
 4. Instantly gets a terminal, a file explorer, drag-drop upload, and a remote code editor
@@ -37,7 +37,7 @@ The full competitive breakdown is in [`docs/COMPETITORS.md`](docs/COMPETITORS.md
 
 **The unclaimed position:** every existing web SSH tool (Guacamole, Shellngn, Wetty, WebSSH) proxies SSH *server-side* — the gateway holds your private key and sees your plaintext. Nobody has shipped a polished, end-to-end-encrypted browser SSH client where the server is mathematically incapable of reading your session.
 
-That is webxterm.
+That is weirdvault.
 
 ---
 
@@ -142,7 +142,7 @@ A WebSocket→TCP relay is an SSRF cannon if built naively. Hard requirements:
 The entire server-side setup is one line, once:
 
 ```bash
-echo 'ssh-ed25519 AAAAC3Nza… you@webxterm' >> ~/.ssh/authorized_keys
+echo 'ssh-ed25519 AAAAC3Nza… you@weirdvault' >> ~/.ssh/authorized_keys
 ```
 
 Stock `sshd`. No agent, no daemon, no extra port, no root. Uninstalling is deleting that line.
@@ -158,7 +158,7 @@ Stock `sshd`. No agent, no daemon, no extra port, no root. Uninstalling is delet
 
 **The NAT exception.** A box with no inbound path can't work zero-install. Options are a VPN (Tailscale/WireGuard) or a small opt-in agent. Label this clearly as the one case where the promise doesn't hold — do not quietly ship an agent.
 
-**Onboarding trick — build this in Phase 1.** For a fresh server the user has never keyed: let them connect with their password once, and webxterm appends the public key itself. "Copy this command and run it somewhere else" is where non-expert users bail; removing that step is worth more than any feature on the Phase 1 list.
+**Onboarding trick — build this in Phase 1.** For a fresh server the user has never keyed: let them connect with their password once, and weirdvault appends the public key itself. "Copy this command and run it somewhere else" is where non-expert users bail; removing that step is worth more than any feature on the Phase 1 list.
 
 **Optional, user's choice:**
 - `tmux`/`screen` — enables one-click reattach after a tab close. Usually already installed
@@ -172,7 +172,7 @@ Stock `sshd`. No agent, no daemon, no extra port, no root. Uninstalling is delet
 ### 3.1 Onboarding — must be under 60 seconds
 
 ```
-1. Land on webxterm.app                     → terminal preview, no signup wall
+1. Land on weirdvault.app                     → terminal preview, no signup wall
 2. "Add a server"  → host, port, username
 3. "Generate key"  → Ed25519, non-extractable, created in ~5ms
 4. Show a copy-paste one-liner:
@@ -272,14 +272,14 @@ If the login password is also the vault passphrase, the server sees it at sign-i
 
 ```
 master     = Argon2id(password, salt)          // never transmitted
-auth_token = HKDF(master, "webxterm/auth/v1")  // sent to Better Auth as the "password"
-vault_key  = HKDF(master, "webxterm/vault/v1") // NEVER leaves the device
+auth_token = HKDF(master, "weirdvault/auth/v1")  // sent to Better Auth as the "password"
+vault_key  = HKDF(master, "weirdvault/vault/v1") // NEVER leaves the device
 ```
 
 One password for the user, and the server only ever receives a value that is useless for decryption. Better Auth allows a custom password hasher, so this is a supported integration rather than a fight. Write it into `docs/THREAT-MODEL.md` before any auth code exists — retrofitting it later means a migration of every user's vault.
 
 ```
-webxterm/
+weirdvault/
 ├─ apps/web/                    # Next.js — marketing, auth, billing, API, workspace
 │  ├─ app/(marketing)/          # landing, pricing, docs         [RSC]
 │  ├─ app/(auth)/               # Better Auth flows              [RSC]

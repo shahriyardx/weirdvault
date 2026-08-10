@@ -258,8 +258,8 @@ function decodeQr(code: ReturnType<typeof encodeQr>): string {
 describe("encodeQr", () => {
   const cases = [
     "a",
-    "otpauth://totp/webxterm:ada@example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEH&issuer=webxterm",
-    "otpauth://totp/webxterm:a-really-quite-long-address@some-organisation.example?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=webxterm",
+    "otpauth://totp/weirdvault:ada@example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEH&issuer=weirdvault",
+    "otpauth://totp/weirdvault:a-really-quite-long-address@some-organisation.example?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=weirdvault",
     "x".repeat(1),
     "x".repeat(14), // the exact capacity of version 1
     "x".repeat(15), // one over, so version 2
@@ -275,7 +275,7 @@ describe("encodeQr", () => {
   }
 
   test("multi-byte characters are counted in bytes, not characters", () => {
-    const value = "webxterm — ünïcode ✓"
+    const value = "weirdvault — ünïcode ✓"
     expect(decodeQr(encodeQr(value))).toBe(value)
   })
 
@@ -293,7 +293,7 @@ describe("encodeQr", () => {
 })
 
 describe("matrix structure", () => {
-  const code = encodeQr("otpauth://totp/webxterm:ada@example.com?secret=JBSWY3DPEHPK3PXP")
+  const code = encodeQr("otpauth://totp/weirdvault:ada@example.com?secret=JBSWY3DPEHPK3PXP")
   const { size, modules } = code
 
   test("is square and sized to its version", () => {

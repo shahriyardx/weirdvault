@@ -8,7 +8,7 @@
  * localStorage.
  */
 
-const DB_NAME = "webxterm"
+const DB_NAME = "weirdvault"
 const DB_VERSION = 2
 const STORES = ["keys", "hosts", "hostkeys", "vault"] as const
 

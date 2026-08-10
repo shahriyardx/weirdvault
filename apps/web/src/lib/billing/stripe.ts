@@ -84,7 +84,7 @@ export function stripeClient(): Stripe {
     // One retry on a network-level failure. Stripe's client adds an idempotency
     // key to the retry, so a create that actually landed is not repeated.
     maxNetworkRetries: 1,
-    appInfo: { name: "webxterm" },
+    appInfo: { name: "weirdvault" },
   })
   return globalForStripe.stripe
 }

@@ -66,7 +66,7 @@ export function loadSSH(onProgress?: (p: SshLoadProgress) => void): Promise<void
     // go.run() sets up globals synchronously before it parks, but yield once
     // so the export is definitely visible.
     await new Promise((r) => setTimeout(r, 0))
-    if (!window.webxtermSSH) throw new Error("ssh.wasm did not export webxtermSSH")
+    if (!window.weirdvaultSSH) throw new Error("ssh.wasm did not export weirdvaultSSH")
     ready = true
     emit({ ...lastProgress, done: true })
   })().catch((error: unknown) => {
@@ -122,7 +122,7 @@ function injectScript(src: string): Promise<void> {
 
 export async function connect(config: ConnectConfig): Promise<SshSession> {
   await loadSSH()
-  return window.webxtermSSH!.connect(config)
+  return window.weirdvaultSSH!.connect(config)
 }
 
 /**
@@ -134,12 +134,12 @@ export async function connect(config: ConnectConfig): Promise<SshSession> {
  */
 export async function importKey(pem: string, passphrase?: string): Promise<ImportedKey> {
   await loadSSH()
-  return window.webxtermSSH!.importKey(pem, passphrase)
+  return window.weirdvaultSSH!.importKey(pem, passphrase)
 }
 
 export async function parseSSHConfig(text: string): Promise<ParsedConfigHost[]> {
   await loadSSH()
-  return window.webxtermSSH!.parseSSHConfig(text)
+  return window.weirdvaultSSH!.parseSSHConfig(text)
 }
 
 /**

@@ -62,7 +62,7 @@ import { getTombstones, setTombstones } from "./tombstones"
 export class VaultFormatError extends Error {
   constructor(version: unknown) {
     super(
-      `This file declares vault format v${String(version)}, which this build cannot read. It was written by a newer version of webxterm.`,
+      `This file declares vault format v${String(version)}, which this build cannot read. It was written by a newer version of weirdvault.`,
     )
     this.name = "VaultFormatError"
   }

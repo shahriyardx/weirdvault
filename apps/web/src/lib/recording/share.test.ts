@@ -152,7 +152,7 @@ describe("the token and the key", () => {
 
 describe("the link", () => {
   test("puts the key after the hash and nowhere else", () => {
-    const link = buildShareLink("https://webxterm.test", "TOKEN", "KEYMATERIAL")
+    const link = buildShareLink("https://weirdvault.test", "TOKEN", "KEYMATERIAL")
     const url = new URL(link)
 
     expect(url.pathname).toBe("/share/TOKEN")
@@ -165,7 +165,7 @@ describe("the link", () => {
 
   test("round trips a real key through building and parsing", async () => {
     const { material } = await newShareKey()
-    const link = buildShareLink("https://webxterm.test", newShareToken(), material)
+    const link = buildShareLink("https://weirdvault.test", newShareToken(), material)
     expect(parseShareFragment(new URL(link).hash)).toBe(material)
   })
 

@@ -1079,8 +1079,8 @@ function TwoFactorSection({ email, enabled }: { email: string | null; enabled: b
           <GeneratedCodes
             codes={codes}
             format={(c) => c}
-            filename={`webxterm-backup-codes-${new Date().toISOString().slice(0, 10)}.txt`}
-            fileTitle="webxterm two-factor backup codes"
+            filename={`weirdvault-backup-codes-${new Date().toISOString().slice(0, 10)}.txt`}
+            fileTitle="weirdvault two-factor backup codes"
             fileNote="Each code works once, in place of a code from your authenticator app. Anyone holding one can complete a sign-in that has already got past your password."
             warning="Shown once. Save them before you leave this page."
             onAcknowledge={() => setCodes(null)}
@@ -2294,8 +2294,8 @@ function GeneratedCodes({
   codes,
   onAcknowledge,
   format = formatRecoveryCode,
-  filename = `webxterm-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`,
-  fileTitle = "webxterm recovery codes",
+  filename = `weirdvault-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`,
+  fileTitle = "weirdvault recovery codes",
   fileNote = "Each code works once. Anyone holding one can sign in and read your vault.",
   warning = "Shown once. Save them before you leave this page.",
 }: {
@@ -2390,7 +2390,11 @@ function ExportSection() {
       }
 
       const stamp = new Date().toISOString().slice(0, 10)
-      download(`webxterm-vault-v${payload.version}-${stamp}.json`, payload.blob, "application/json")
+      download(
+        `weirdvault-vault-v${payload.version}-${stamp}.json`,
+        payload.blob,
+        "application/json",
+      )
       toast.success(`Exported vault version ${payload.version}`, {
         description:
           "The file is the same ciphertext the server holds. Only your password can open it.",
@@ -2496,8 +2500,8 @@ function ImportSection() {
           // the remedy differs: update the app rather than go looking for the
           // right file.
           reason: looksLikeEnvelope(parsed)
-            ? `This is a vault export in format v${String((parsed as { v: unknown }).v)}, which this build cannot read. It was written by a newer version of webxterm.`
-            : "This is not a webxterm vault export. Expected a JSON object with v, iv and ct fields.",
+            ? `This is a vault export in format v${String((parsed as { v: unknown }).v)}, which this build cannot read. It was written by a newer version of weirdvault.`
+            : "This is not a weirdvault vault export. Expected a JSON object with v, iv and ct fields.",
         })
         return
       }

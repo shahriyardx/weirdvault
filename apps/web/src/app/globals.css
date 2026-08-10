@@ -10,7 +10,7 @@
   primitives; anything that would have been a bespoke class is expressed as
   utilities at the call site instead.
 
-  webxterm is dark only: no light palette, no toggle, no theme state. A terminal
+  weirdvault is dark only: no light palette, no toggle, no theme state. A terminal
   emulator sits inside this UI rendering someone else's colour scheme, and a
   light chrome around a dark terminal fights it constantly. The `dark` variant
   is mapped to :root so shadcn's dark: utilities still resolve, and because

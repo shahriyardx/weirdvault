@@ -1,4 +1,4 @@
-# Self-hosted webxterm: the whole product on one machine.
+# Self-hosted weirdvault: the whole product on one machine.
 #
 # This is the answer to a security review. Run it on your own network and the
 # relay metadata that a hosted deployment would see — which host, when, how
@@ -42,20 +42,20 @@
 # defaults to 60s and will cut an SSH session sitting at a prompt), and
 # proxy_buffering off (or interactive typing arrives in clumps).
 
-name: webxterm
+name: weirdvault
 
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-webxterm}
+      POSTGRES_USER: ${POSTGRES_USER:-weirdvault}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-webxterm}
+      POSTGRES_DB: ${POSTGRES_DB:-weirdvault}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-webxterm}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-weirdvault}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -144,11 +144,11 @@ services:
       # relay — which is what this file describes — is unaffected.
       RELAY_AGENT_VERIFY_URL: ${RELAY_AGENT_VERIFY_URL:-http://web:3000/api/agents/verify}
       RELAY_AGENT_SECRET: ${RELAY_AGENT_SECRET:-}
-      RUST_LOG: ${RUST_LOG:-webxterm_relay=info}
+      RUST_LOG: ${RUST_LOG:-weirdvault_relay=info}
     ports:
       - "${RELAY_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD", "/usr/local/bin/webxterm-relay", "--healthcheck"]
+      test: ["CMD", "/usr/local/bin/weirdvault-relay", "--healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3

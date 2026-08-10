@@ -9,7 +9,7 @@
 > **unmodified** OpenSSH server using a **non-extractable WebCrypto key** that
 > the client itself is structurally incapable of reading?
 
-If no, webxterm collapses to a conventional server-side gateway that holds
+If no, weirdvault collapses to a conventional server-side gateway that holds
 users' private keys — the thing every existing web SSH tool already is, and the
 thing the whole product thesis exists to avoid.
 
@@ -28,7 +28,7 @@ thing the whole product thesis exists to avoid.
 | WASM cold boot | — | 46 ms | — |
 
 Browser: Chromium 151 headless. Target: `alpine:3` + stock `openssh-server`, no
-patches, no agent, no webxterm-specific configuration.
+patches, no agent, no weirdvault-specific configuration.
 
 Measured on the standalone Phase 0 harness, since deleted — `git log -- spike/`
 if the measurement ever needs repeating. The browser suites that later checked

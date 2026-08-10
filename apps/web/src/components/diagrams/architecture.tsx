@@ -16,10 +16,10 @@ export function ArchitectureDiagram({ className }: { className?: string }) {
       role="img"
       aria-labelledby="arch-title arch-desc"
     >
-      <title id="arch-title">How a webxterm connection is encrypted</title>
+      <title id="arch-title">How a weirdvault connection is encrypted</title>
       <desc id="arch-desc">
         The SSH client runs inside your browser, holding non-extractable keys. It sends SSH
-        ciphertext over a WebSocket to the webxterm relay, which forwards it to your server on TCP
+        ciphertext over a WebSocket to the weirdvault relay, which forwards it to your server on TCP
         port 22 and cannot decrypt it. Your server runs unmodified sshd.
       </desc>
 
@@ -88,7 +88,7 @@ export function ArchitectureDiagram({ className }: { className?: string }) {
           strokeDasharray="4 3"
         />
         <text x="56" y="162" className="fill-foreground text-[11px] font-medium">
-          webxterm relay
+          weirdvault relay
         </text>
         <text x="56" y="180" className="fill-muted-foreground text-[10px]">
           Stateless · forwards bytes

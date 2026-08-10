@@ -18,9 +18,15 @@
       // Generated SQL. drizzle-kit owns the formatting.
       "!drizzle",
 
-      // Static assets, not source. Next's starter SVGs live here and would
-      // otherwise be reported for having no <title>.
+      // Static assets, not source.
       "!public",
+
+      // Standalone SVG files are images. `src/app/icon.svg` is the favicon, and
+      // an accessible name on it means nothing — the browser renders it as a
+      // tab icon, not as markup in a document. Inline SVG inside .tsx is still
+      // linted, which is where a missing <title> actually costs somebody
+      // something.
+      "!**/*.svg",
 
       // shadcn output: generated components, updated by re-running the
       // generator, so local edits made to satisfy a linter are lost the next

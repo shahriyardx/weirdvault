@@ -34,7 +34,7 @@ import { RELAY_QUOTA_EXCEEDED } from "@/lib/usage"
 const TTL_SECONDS = 60
 /** Anonymous sessions get a shorter window, since nothing binds them to a person. */
 const ANON_TTL_SECONDS = 30
-const ANON_COOKIE = "webxterm.anon"
+const ANON_COOKIE = "weirdvault.anon"
 const MAX_PORT = 65535
 
 function b64url(buf: Buffer): string {
@@ -44,7 +44,7 @@ function b64url(buf: Buffer): string {
 /**
  * Identifies the caller for quota accounting.
  *
- * Signing in is not required to use webxterm — the free tier works with local
+ * Signing in is not required to use weirdvault — the free tier works with local
  * storage and no account, and the landing page says so. But the relay still
  * needs a subject to meter, so anonymous visitors get a random id in a cookie.
  *

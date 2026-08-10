@@ -1,4 +1,4 @@
-module github.com/shahriyar/webxterm/apps/agent
+module github.com/shahriyar/weirdvault/apps/agent
 
 go 1.26.5
 

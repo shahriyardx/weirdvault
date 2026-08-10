@@ -130,7 +130,7 @@ function decoyBytes(label: string, length: number): Buffer {
   let counter = 0
   while (written < length) {
     const block = createHmac("sha256", DECOY_SECRET)
-      .update(`webxterm/recovery/decoy/v1:${label}:${counter}`)
+      .update(`weirdvault/recovery/decoy/v1:${label}:${counter}`)
       .digest()
     const take = Math.min(block.length, length - written)
     block.copy(out, written, 0, take)

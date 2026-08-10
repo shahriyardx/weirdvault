@@ -136,7 +136,7 @@ const PAYLOAD_BYTES = 1 + SECRET_BRANCH_BYTES * 3
  */
 const CIPHERTEXT_BYTES = PAYLOAD_BYTES + 16
 
-const ID_INFO = "webxterm/recovery/id/v1:"
+const ID_INFO = "weirdvault/recovery/id/v1:"
 /** 16 bytes of SHA-256 is 128 bits of selector — collisions are not a concern. */
 const ID_BYTES = 16
 
@@ -316,7 +316,7 @@ function unpackPayload(payload: Uint8Array): RawSecretBytes {
 /* -------------------------------------------------------------- enrolment */
 
 /** Sixteen bytes of nothing in particular; only whether it round-trips matters. */
-const PROBE = new TextEncoder().encode("webxterm/probe/1")
+const PROBE = new TextEncoder().encode("weirdvault/probe/1")
 
 /**
  * Proves that the derived vault key is the one this session is unlocked with,

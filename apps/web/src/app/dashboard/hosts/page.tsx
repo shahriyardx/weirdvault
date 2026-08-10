@@ -655,7 +655,7 @@ const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
  * Bulk import from ~/.ssh/config.
  *
  * The parser is deliberately partial, so the review step is not decoration:
- * it is where the difference between what the file says and what webxterm can
+ * it is where the difference between what the file says and what weirdvault can
  * honour gets stated, entry by entry, before anything is written.
  */
 function ImportConfigDialog({

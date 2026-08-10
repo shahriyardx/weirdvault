@@ -126,8 +126,8 @@ function header(name: string, size: number, mtimeMs: number, type = "0"): Uint8A
   put(156, 1, type)
   put(257, 6, "ustar\0")
   put(263, 2, "00")
-  put(265, 32, "webxterm") // uname
-  put(297, 32, "webxterm") // gname
+  put(265, 32, "weirdvault") // uname
+  put(297, 32, "weirdvault") // gname
 
   // Checksum is the unsigned sum of all header bytes with the checksum field
   // read as spaces, stored as six octal digits, NUL, space.

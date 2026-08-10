@@ -201,7 +201,7 @@ func (c *wsConn) Close() error {
 type wsAddr struct{}
 
 func (wsAddr) Network() string { return "websocket" }
-func (wsAddr) String() string  { return "webxterm-relay" }
+func (wsAddr) String() string  { return "weirdvault-relay" }
 
 func (c *wsConn) LocalAddr() net.Addr  { return wsAddr{} }
 func (c *wsConn) RemoteAddr() net.Addr { return wsAddr{} }

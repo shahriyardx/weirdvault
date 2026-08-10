@@ -11,7 +11,7 @@ import (
 // DefaultConfigPath is where the installer puts the file. Overridable with
 // --config so the agent can be run as an unprivileged user for testing without
 // touching /etc.
-const DefaultConfigPath = "/etc/webxterm-agent/agent.json"
+const DefaultConfigPath = "/etc/weirdvault-agent/agent.json"
 
 // Config is everything the agent knows about itself.
 //
@@ -76,7 +76,7 @@ func loadConfig(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%s does not exist — run `webxterm-agent enroll` first", path)
+			return nil, fmt.Errorf("%s does not exist — run `weirdvault-agent enroll` first", path)
 		}
 		return nil, err
 	}

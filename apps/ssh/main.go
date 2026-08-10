@@ -1,6 +1,6 @@
 //go:build js && wasm
 
-// Command ssh is the webxterm browser SSH core.
+// Command ssh is the weirdvault browser SSH core.
 //
 // It compiles to WASM and runs entirely inside the tab. It speaks real SSH to
 // an unmodified sshd, over a WebSocket that the relay forwards to TCP as
@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	js.Global().Set("webxtermSSH", js.ValueOf(map[string]any{
+	js.Global().Set("weirdvaultSSH", js.ValueOf(map[string]any{
 		"connect":        js.FuncOf(connect),
 		"importKey":      js.FuncOf(importKeyJS),
 		"parseSSHConfig": js.FuncOf(parseSSHConfigJS),

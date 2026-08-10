@@ -1,4 +1,4 @@
-// Command webxterm-agent makes a machine reachable that cannot be dialled.
+// Command weirdvault-agent makes a machine reachable that cannot be dialled.
 //
 // A server behind a home router, a laptop on hotel wifi, a box on a corporate
 // network with no inbound rule — none of them have an address the relay can
@@ -26,9 +26,9 @@
 //
 // # Usage
 //
-//	webxterm-agent enroll --token=ENROLL_… --url=https://app.example.com
-//	webxterm-agent run [--config=/etc/webxterm-agent/agent.json]
-//	webxterm-agent status
+//	weirdvault-agent enroll --token=ENROLL_… --url=https://app.example.com
+//	weirdvault-agent run [--config=/etc/weirdvault-agent/agent.json]
+//	weirdvault-agent status
 package main
 
 import (
@@ -54,7 +54,7 @@ var version = "dev"
 // This must stay byte-identical to verifyingMessage in
 // apps/web/src/lib/agents/verify.ts.
 func signingMessage(agentID, nonce string) []byte {
-	return []byte("webxterm-agent-v1\n" + agentID + "\n" + nonce)
+	return []byte("weirdvault-agent-v1\n" + agentID + "\n" + nonce)
 }
 
 // fingerprint renders a public key the way SSH renders host keys, because it is
@@ -103,7 +103,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `webxterm-agent — reach this machine without opening a port
+	fmt.Fprint(os.Stderr, `weirdvault-agent — reach this machine without opening a port
 
   enroll --token=… --url=…   register this machine with your account
   run [--config=…]           hold the connection open (what systemd runs)

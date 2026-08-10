@@ -1,4 +1,4 @@
-# Deploying webxterm
+# Deploying weirdvault
 
 Three pieces, and one of them constrains everything else.
 
@@ -43,8 +43,8 @@ plaintext WebSocket from an https page** — so if the app is on https, the rela
 must be on wss. Caddy makes this two lines:
 
 ```
-webxterm.example.com     { reverse_proxy localhost:3000 }
-relay.webxterm.example.com { reverse_proxy localhost:8080 }
+weirdvault.example.com     { reverse_proxy localhost:3000 }
+relay.weirdvault.example.com { reverse_proxy localhost:8080 }
 ```
 
 nginx needs the upgrade headers spelled out:
@@ -61,7 +61,7 @@ location / {
 ```
 
 That `proxy_read_timeout` matters. The default 60s will silently drop idle SSH
-sessions, and it will look like a webxterm bug.
+sessions, and it will look like a weirdvault bug.
 
 Once a proxy is in front, set `TRUSTED_PROXY_HOPS` to the number of proxies
 between the internet and the web container — `1` for the Caddy or nginx block
@@ -146,7 +146,7 @@ deployment's problem and not a home server's.
 
 ```bash
 R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com   # the bucket's S3 API endpoint
-R2_BUCKET=webxterm-recordings
+R2_BUCKET=weirdvault-recordings
 R2_ACCESS_KEY_ID=...        # an API token scoped to Object Read & Write, this bucket only
 R2_SECRET_ACCESS_KEY=...
 ```

@@ -90,7 +90,7 @@ func runAgent(args []string) error {
 	defer stop()
 
 	log.SetFlags(0) // journald stamps its own timestamps
-	log.Printf("webxterm-agent %s starting: agent=%s relay=%s", version, cfg.AgentID, cfg.RelayURL)
+	log.Printf("weirdvault-agent %s starting: agent=%s relay=%s", version, cfg.AgentID, cfg.RelayURL)
 
 	// Before anything connects. An update that landed while this machine was
 	// asleep should take effect now rather than after the next reboot, and
@@ -385,7 +385,7 @@ func readJSON(ctx context.Context, conn *websocket.Conn, out *controlMessage) er
 // exec rather than exit-and-let-systemd-restart: it keeps the PID, the unit and
 // the open file descriptors, so a supervisor sees a process that never stopped
 // rather than a restart it might count against a rate limit. It also means this
-// works when nothing is supervising at all — a plain `webxterm-agent run` in a
+// works when nothing is supervising at all — a plain `weirdvault-agent run` in a
 // terminal comes back as the new version.
 func reexec() error {
 	self, err := os.Executable()

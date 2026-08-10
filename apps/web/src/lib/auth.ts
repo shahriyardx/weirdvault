@@ -346,7 +346,7 @@ export const auth = betterAuth({
     twoFactor({
       // What an authenticator app shows above the code. The account's email is
       // the label; this is the line beside it.
-      issuer: "webxterm",
+      issuer: "weirdvault",
       /**
        * Backup codes encrypted at rest, which is NOT the default.
        *
@@ -382,7 +382,7 @@ export const auth = betterAuth({
     }),
     passkey({
       ...relyingParty,
-      rpName: "webxterm",
+      rpName: "weirdvault",
       /**
        * Registration keeps its default of requiring a session, and better-auth
        * enforces that with `freshSessionMiddleware`: the session must have been
@@ -660,7 +660,7 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    cookiePrefix: "webxterm",
+    cookiePrefix: "weirdvault",
 
     /**
      * Which X-Forwarded-For entry is real.

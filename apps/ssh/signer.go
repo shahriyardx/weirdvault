@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// webCryptoSigner is the whole thesis of webxterm in one type.
+// webCryptoSigner is the whole thesis of weirdvault in one type.
 //
 // x/crypto/ssh needs something that can sign the authentication challenge. The
 // obvious implementation holds the private key in memory — which means any

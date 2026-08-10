@@ -1,9 +1,9 @@
 [package]
-name = "webxterm-relay"
+name = "weirdvault-relay"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Stateless WebSocket-to-TCP relay for webxterm. Forwards SSH ciphertext it cannot read."
+description = "Stateless WebSocket-to-TCP relay for weirdvault. Forwards SSH ciphertext it cannot read."
 
 [dependencies]
 axum = { version = "0.8", features = ["ws", "query"] }

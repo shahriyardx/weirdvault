@@ -53,7 +53,7 @@ relay → agent   {"type":"open","ticket":"…","port":22}     (per session)
 The signed message is domain-separated and carries the agent id:
 
 ```
-webxterm-agent-v1\n<agentId>\n<nonce>
+weirdvault-agent-v1\n<agentId>\n<nonce>
 ```
 
 A signature over a bare nonce is a signature over anything of that length, which
@@ -107,12 +107,12 @@ install directory, since `ProtectSystem=strict` makes `/usr` read-only — the
 unit written by `install.sh` includes it, and says how to drop it.
 
 Agents enrolled before this existed have no release URL and never check;
-`webxterm-agent status` says so rather than implying they are up to date.
+`weirdvault-agent status` says so rather than implying they are up to date.
 
 ## Build
 
 ```bash
-go build -o webxterm-agent ./apps/agent
+go build -o weirdvault-agent ./apps/agent
 ```
 
 Cross-compiling for a release, with the version stamped in:
@@ -121,9 +121,9 @@ Cross-compiling for a release, with the version stamped in:
 for target in linux/amd64 linux/arm64 linux/arm darwin/arm64; do
   GOOS=${target%/*} GOARCH=${target#*/} go build \
     -ldflags "-X main.version=$(git describe --tags --always)" \
-    -o "webxterm-agent_${target%/*}_${target#*/}" ./apps/agent
+    -o "weirdvault-agent_${target%/*}_${target#*/}" ./apps/agent
 done
-sha256sum webxterm-agent_* > checksums.txt
+sha256sum weirdvault-agent_* > checksums.txt
 ```
 
 Or just `bun run agent`, which does all of that and writes `manifest.json`
@@ -139,9 +139,9 @@ directory. Unset, it defaults to `<your origin>/agent-bin`.
 ## Usage
 
 ```bash
-webxterm-agent enroll --token=ENROLL_… --url=https://app.example.com
-webxterm-agent run    --config=/etc/webxterm-agent/agent.json
-webxterm-agent status
+weirdvault-agent enroll --token=ENROLL_… --url=https://app.example.com
+weirdvault-agent run    --config=/etc/weirdvault-agent/agent.json
+weirdvault-agent status
 ```
 
 `enroll` generates the keypair locally and sends only the public half. It

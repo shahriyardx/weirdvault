@@ -5,7 +5,7 @@
 # of, close to users — relay latency is felt directly in typing.
 #
 # Build from the repo root:
-#   docker build -f apps/relay/Dockerfile -t webxterm-relay .
+#   docker build -f apps/relay/Dockerfile -t weirdvault-relay .
 
 FROM rust:1-slim AS build
 WORKDIR /src
@@ -25,7 +25,7 @@ RUN touch src/main.rs && cargo build --release
 # Distroless: the relay opens sockets and nothing else. No shell means a
 # compromised process has no shell to use.
 FROM gcr.io/distroless/cc-debian12:nonroot
-COPY --from=build /src/target/release/webxterm-relay /usr/local/bin/webxterm-relay
+COPY --from=build /src/target/release/weirdvault-relay /usr/local/bin/weirdvault-relay
 
 # Runs as nonroot (uid 65532) with no cloud IAM role attached — see
 # docs/THREAT-MODEL.md §7.
@@ -33,4 +33,4 @@ USER nonroot
 EXPOSE 8080
 ENV RELAY_ADDR=0.0.0.0:8080
 
-ENTRYPOINT ["/usr/local/bin/webxterm-relay"]
+ENTRYPOINT ["/usr/local/bin/weirdvault-relay"]

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const base = agentReleaseUrl(origin)
 
   const script = `#!/bin/sh
-# webxterm-agent installer
+# weirdvault-agent installer
 #
 # Makes this machine reachable from ${origin} without opening a port.
 # The agent dials out; nothing dials in.
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 #   curl -fsSL ${origin}/install.sh | sh -s -- --token=ENROLL_...
 #
 # It installs a binary to /usr/local/bin, writes an identity to
-# /etc/webxterm-agent, and registers a systemd service. It does not touch your
+# /etc/weirdvault-agent, and registers a systemd service. It does not touch your
 # SSH configuration, and the agent it installs holds no SSH credentials.
 #
 # To remove all of that again:
@@ -49,8 +49,8 @@ set -eu
 APP_URL="${origin}"
 RELEASE_BASE="${base}"
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="/etc/webxterm-agent"
-SERVICE_USER="webxterm-agent"
+CONFIG_DIR="/etc/weirdvault-agent"
+SERVICE_USER="weirdvault-agent"
 SSH_PORT="22"
 TOKEN=""
 MODE="install"
@@ -81,28 +81,28 @@ if [ "$MODE" = "uninstall" ]; then
   removed=""
 
   if command -v systemctl >/dev/null 2>&1; then
-    if systemctl list-unit-files webxterm-agent.service >/dev/null 2>&1; then
-      systemctl disable --now webxterm-agent 2>/dev/null || true
+    if systemctl list-unit-files weirdvault-agent.service >/dev/null 2>&1; then
+      systemctl disable --now weirdvault-agent 2>/dev/null || true
       removed="\${removed}  the systemd service (stopped and disabled)\\n"
     fi
-    if [ -f /etc/systemd/system/webxterm-agent.service ]; then
-      rm -f /etc/systemd/system/webxterm-agent.service
+    if [ -f /etc/systemd/system/weirdvault-agent.service ]; then
+      rm -f /etc/systemd/system/weirdvault-agent.service
       systemctl daemon-reload 2>/dev/null || true
-      removed="\${removed}  /etc/systemd/system/webxterm-agent.service\\n"
+      removed="\${removed}  /etc/systemd/system/weirdvault-agent.service\\n"
     fi
   else
     # No systemd: whatever is running was started by hand or by a supervisor
     # this script did not write, so it says so rather than guessing.
-    if pgrep -f "webxterm-agent run" >/dev/null 2>&1; then
+    if pgrep -f "weirdvault-agent run" >/dev/null 2>&1; then
       echo "note: an agent process is running and this machine has no systemd," >&2
-      echo "      so stop it however you started it (or: pkill -f 'webxterm-agent run')." >&2
+      echo "      so stop it however you started it (or: pkill -f 'weirdvault-agent run')." >&2
       echo >&2
     fi
   fi
 
-  if [ -f "\${INSTALL_DIR}/webxterm-agent" ]; then
-    rm -f "\${INSTALL_DIR}/webxterm-agent"
-    removed="\${removed}  \${INSTALL_DIR}/webxterm-agent\\n"
+  if [ -f "\${INSTALL_DIR}/weirdvault-agent" ]; then
+    rm -f "\${INSTALL_DIR}/weirdvault-agent"
+    removed="\${removed}  \${INSTALL_DIR}/weirdvault-agent\\n"
   fi
 
   # The config holds this machine's Ed25519 private key. It is the one thing
@@ -125,7 +125,7 @@ if [ "$MODE" = "uninstall" ]; then
 
   echo
   if [ -z "$removed" ]; then
-    echo "Nothing to remove — no webxterm agent is installed here."
+    echo "Nothing to remove — no weirdvault agent is installed here."
   else
     echo "Removed:"
     printf "%b" "$removed"
@@ -159,8 +159,8 @@ case "$os" in
   *) echo "error: unsupported operating system $os" >&2; exit 1 ;;
 esac
 
-binary="webxterm-agent_\${os}_\${arch}"
-echo "Installing webxterm-agent for \${os}/\${arch}"
+binary="weirdvault-agent_\${os}_\${arch}"
+echo "Installing weirdvault-agent for \${os}/\${arch}"
 
 # ---------------------------------------------------------------- download
 
@@ -192,7 +192,7 @@ fetch "\${RELEASE_BASE}/\${binary}" "$tmp/agent" || {
 # verification that is skipped when the file is missing verifies nothing at all.
 if ! fetch "\${RELEASE_BASE}/checksums.txt" "$tmp/checksums.txt"; then
   echo "error: no checksums.txt beside the binary at \${RELEASE_BASE}" >&2
-  echo "       Publish one: sha256sum webxterm-agent_* > checksums.txt" >&2
+  echo "       Publish one: sha256sum weirdvault-agent_* > checksums.txt" >&2
   exit 1
 fi
 
@@ -221,7 +221,7 @@ fi
 # ---------------------------------------------------------------- install
 
 mkdir -p "$INSTALL_DIR"
-install -m 0755 "$tmp/agent" "\${INSTALL_DIR}/webxterm-agent"
+install -m 0755 "$tmp/agent" "\${INSTALL_DIR}/weirdvault-agent"
 
 # A dedicated account with no shell and no home. The agent needs no privileges
 # beyond reading its own config and opening outbound sockets, and running it as
@@ -249,7 +249,7 @@ fi
 # ---------------------------------------------------------------- enroll
 
 echo
-"\${INSTALL_DIR}/webxterm-agent" enroll \\
+"\${INSTALL_DIR}/weirdvault-agent" enroll \\
   --token="$TOKEN" \\
   --url="$APP_URL" \\
   --config="\${CONFIG_DIR}/agent.json" \\
@@ -264,16 +264,16 @@ chmod 0600 "\${CONFIG_DIR}/agent.json"
 if ! command -v systemctl >/dev/null 2>&1; then
   echo
   echo "Enrolled. There is no systemd here, so start the agent yourself:"
-  echo "  sudo \${INSTALL_DIR}/webxterm-agent run --config=\${CONFIG_DIR}/agent.json"
+  echo "  sudo \${INSTALL_DIR}/weirdvault-agent run --config=\${CONFIG_DIR}/agent.json"
   echo
   echo "To keep it running across reboots, wrap that in whatever this machine"
   echo "uses — launchd on macOS, an rc script, or a supervisor of your choice."
   exit 0
 fi
 
-cat > /etc/systemd/system/webxterm-agent.service <<UNIT
+cat > /etc/systemd/system/weirdvault-agent.service <<UNIT
 [Unit]
-Description=webxterm agent
+Description=weirdvault agent
 Documentation=\${APP_URL}/docs/agent
 After=network-online.target
 Wants=network-online.target
@@ -281,7 +281,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=\${SERVICE_USER}
-ExecStart=\${INSTALL_DIR}/webxterm-agent run --config=\${CONFIG_DIR}/agent.json
+ExecStart=\${INSTALL_DIR}/weirdvault-agent run --config=\${CONFIG_DIR}/agent.json
 Restart=always
 RestartSec=5
 
@@ -327,14 +327,14 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now webxterm-agent
+systemctl enable --now weirdvault-agent
 
 echo
 echo "Done. The agent is running and should appear at \${APP_URL} within a few seconds."
 echo
-echo "  systemctl status webxterm-agent    is it running"
-echo "  journalctl -u webxterm-agent -f    what it is doing"
-echo "  webxterm-agent status              this machine's fingerprint"
+echo "  systemctl status weirdvault-agent    is it running"
+echo "  journalctl -u weirdvault-agent -f    what it is doing"
+echo "  weirdvault-agent status              this machine's fingerprint"
 `
 
   return new Response(script, {

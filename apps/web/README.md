@@ -587,7 +587,7 @@ retention was invented for it here.
 From the repo root, since the Dockerfile expects that context:
 
 ```bash
-docker build -f apps/web/Dockerfile -t webxterm-web .
+docker build -f apps/web/Dockerfile -t weirdvault-web .
 ```
 
 The image builds `ssh.wasm` itself in a Go stage, so it never ships a stale one.

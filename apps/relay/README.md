@@ -100,7 +100,7 @@ relay into an open proxy into whatever network it sits on.
 | `RELAY_USAGE_URL` | Where to POST transfer counts, e.g. `http://web:3000/api/relay/usage`. `http://` only. Unset means nothing is counted |
 | `RELAY_USAGE_SECRET` | Bearer token for that POST. Must match `RELAY_USAGE_SECRET` on the web app. Unset means nothing is counted |
 | `RELAY_USAGE_INTERVAL_SECS` | How often to flush. Default `60` |
-| `RUST_LOG` | e.g. `webxterm_relay=info` |
+| `RUST_LOG` | e.g. `weirdvault_relay=info` |
 
 Shutdown is on SIGINT or SIGTERM, and the reporter flushes one last batch on
 either. A `docker stop` therefore costs at most the seconds since the last
@@ -120,7 +120,7 @@ asserts a refusal rather than a success.
 From the repo root, since the Dockerfile expects that context:
 
 ```bash
-docker build -f apps/relay/Dockerfile -t webxterm-relay .
+docker build -f apps/relay/Dockerfile -t weirdvault-relay .
 ```
 
 Distroless with no shell: the relay opens sockets and does nothing else, so a
