@@ -63,6 +63,13 @@ location / {
 That `proxy_read_timeout` matters. The default 60s will silently drop idle SSH
 sessions, and it will look like a weirdvault bug.
 
+`deploy/nginx/` has a working config for a single hostname serving both the app
+and the relay. The Cloudflare real-IP handling is a **separate** file on
+purpose: `real_ip_header` may be declared only once per nginx, and on a server
+that already has it — from another site, or a global include — a second
+declaration is not a warning but "directive is duplicate", and nginx refuses to
+start. Install `cloudflare-realip.conf` only if nothing else sets it.
+
 Once a proxy is in front, set `TRUSTED_PROXY_HOPS` to the number of proxies
 between the internet and the web container — `1` for the Caddy or nginx block
 above, `2` if a CDN sits in front of that — and `TRUSTED_PROXY_IPS` to the
