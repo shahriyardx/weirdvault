@@ -1,6 +1,9 @@
 "use client"
 
+import * as React from "react"
+import { useRouter } from "next/navigation"
 import { LockKeyIcon, LockKeyOpenIcon, SignOutIcon } from "@phosphor-icons/react/dist/ssr"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -10,6 +13,42 @@ import { lock, requestUnlock, useVaultUnlocked } from "@/lib/vault/session"
 
 export function DashboardTopBar() {
   const vaultUnlocked = useVaultUnlocked()
+  const router = useRouter()
+  const [signingOut, setSigningOut] = React.useState(false)
+
+  /**
+   * Sign out, lock, leave — in that order, and all three.
+   *
+   * This used to be `void signOut()` and nothing else, which ended the session
+   * on the server and changed nothing on screen. The dashboard's gate is in a
+   * server layout, and Next does not re-run a layout on a client transition
+   * between its own children, so nothing was left to notice: the user stayed on
+   * a dashboard that looked signed in until they happened to reload.
+   *
+   * The vault is the half that matters more than the redirect. The key lives in
+   * tab memory, so a sign-out that does not lock leaves every host, key and
+   * snippet decrypted and on screen after the session that authorised reading
+   * them is gone — on a shared machine, for whoever sits down next. Settings has
+   * always done both; this control did neither.
+   *
+   * `replace` rather than `push`: Back from here should not restore a cached
+   * dashboard that this session can no longer load.
+   */
+  async function handleSignOut() {
+    setSigningOut(true)
+    try {
+      await signOut()
+      lock()
+      router.replace("/sign-in")
+    } catch (e) {
+      // Left signed in and told why, rather than navigating to /sign-in over a
+      // session that is still open.
+      toast.error("Sign out failed", {
+        description: e instanceof Error ? e.message : String(e),
+      })
+      setSigningOut(false)
+    }
+  }
 
   return (
     <header className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
@@ -52,7 +91,8 @@ export function DashboardTopBar() {
               variant="ghost"
               size="icon"
               aria-label="Sign out"
-              onClick={() => void signOut()}
+              disabled={signingOut}
+              onClick={() => void handleSignOut()}
             >
               <SignOutIcon />
             </Button>

@@ -1936,7 +1936,9 @@ function SessionsSection() {
       await signOut()
       // The vault key lives in memory only; drop it before leaving the page.
       lock()
-      router.push("/sign-in")
+      // replace, not push: Back from here should not restore a cached dashboard
+      // that this session can no longer load.
+      router.replace("/sign-in")
     } catch (e) {
       toast.error("Sign out failed", { description: message(e) })
       setBusy(null)
@@ -1951,7 +1953,7 @@ function SessionsSection() {
       await signOut()
       lock()
       toast.success("Every session revoked")
-      router.push("/sign-in")
+      router.replace("/sign-in")
     } catch (e) {
       toast.error("Could not revoke sessions", { description: message(e) })
       setBusy(null)
