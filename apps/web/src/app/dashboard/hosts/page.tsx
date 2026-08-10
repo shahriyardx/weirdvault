@@ -92,6 +92,8 @@ interface HostForm {
   id?: string
   createdAt?: number
   lastUsedAt?: number
+  /** Set when this host is reached through an enrolled machine. Never edited. */
+  agentId?: string
   label: string
   hostname: string
   port: string
@@ -117,6 +119,13 @@ const blankForm = (): HostForm => ({
 
 const formFor = (host: Host): HostForm => ({
   id: host.id,
+  // Carried, not shown. A host reached through a machine has no address to
+  // dial: `hostname` is a display name and `agentId` is what says where it
+  // actually is. Rebuilding the record without this — which is what editing
+  // used to do — turned a working machine into a host pointing at a name that
+  // resolves nowhere, and the failure surfaced at connect time as the relay
+  // being unreachable.
+  agentId: host.agentId,
   createdAt: host.createdAt,
   lastUsedAt: host.lastUsedAt,
   label: host.label,
@@ -240,6 +249,7 @@ export default function HostsPage() {
         id: form.id,
         createdAt: form.createdAt,
         lastUsedAt: form.lastUsedAt,
+        agentId: form.agentId,
         label: form.label.trim() || `${username}@${hostname}`,
         hostname,
         port,
@@ -423,16 +433,27 @@ export default function HostsPage() {
               </Field>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_5.5rem]">
-                <Field id="host-hostname" label="Hostname" required>
+                {/* For a machine-backed host this is a display name, not an
+                    address — the agent decides where the connection goes. The
+                    connect form already says so; saying something different
+                    here invites somebody to "correct" a working host into a
+                    hostname that resolves nowhere. */}
+                <Field id="host-hostname" label={form.agentId ? "Show it as" : "Hostname"} required>
                   <Input
                     id="host-hostname"
                     name="remote-hostname"
                     value={form.hostname}
                     onChange={(e) => setForm({ ...form, hostname: e.target.value })}
-                    placeholder="10.0.4.21"
+                    placeholder={form.agentId ? "home-server" : "10.0.4.21"}
                     {...noAutofillText}
                     required
                   />
+                  {form.agentId && (
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      A label for your host list. This host is reached through an enrolled machine,
+                      so there is no address to dial.
+                    </p>
+                  )}
                 </Field>
                 <Field id="host-port" label="Port" required>
                   <Input

@@ -51,7 +51,6 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -107,9 +106,9 @@ export function AppSidebar() {
   const manage = [
     { href: "/dashboard", label: "Overview", icon: SquaresFourIcon, exact: true },
     { href: "/dashboard/files", label: "Files", icon: FolderOpenIcon },
-    { href: "/dashboard/hosts", label: "Hosts", icon: HardDrivesIcon, badge: hosts.length },
+    { href: "/dashboard/hosts", label: "Hosts", icon: HardDrivesIcon },
     { href: "/dashboard/machines", label: "Machines", icon: DesktopTowerIcon },
-    { href: "/dashboard/keys", label: "Keys", icon: KeyIcon, badge: keys.length },
+    { href: "/dashboard/keys", label: "Keys", icon: KeyIcon },
     { href: "/dashboard/snippets", label: "Snippets", icon: CodeIcon },
     { href: "/dashboard/recordings", label: "Recordings", icon: FilmReelIcon },
   ] as const
@@ -364,7 +363,6 @@ function NavGroup({
     label: string
     icon: React.ComponentType<{ className?: string }>
     exact?: boolean
-    badge?: number
   }[]
   pathname: string
 }) {
@@ -384,11 +382,6 @@ function NavGroup({
                     <span>{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
-                {item.badge ? (
-                  <SidebarMenuBadge className="group-data-[collapsible=icon]:hidden">
-                    {item.badge}
-                  </SidebarMenuBadge>
-                ) : null}
               </SidebarMenuItem>
             )
           })}
