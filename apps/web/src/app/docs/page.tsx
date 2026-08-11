@@ -67,7 +67,7 @@ export default function Docs() {
         description="From an empty tab to a live shell. Everything below is the whole setup — nothing to install on the machine you are sitting at, and nothing on the server either unless it has no public address at all."
         actions={
           <Button asChild size="sm">
-            <Link href="/dashboard/terminal">
+            <Link href="/dashboard">
               Open the dashboard <ArrowRightIcon />
             </Link>
           </Button>
@@ -643,7 +643,7 @@ export default function Docs() {
               That is the whole of it. The next step is a terminal.
             </p>
             <Button asChild size="sm" className="sm:ml-auto">
-              <Link href="/dashboard/terminal">
+              <Link href="/dashboard">
                 Open the dashboard <ArrowRightIcon />
               </Link>
             </Button>

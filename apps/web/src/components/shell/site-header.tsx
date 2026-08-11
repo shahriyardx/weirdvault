@@ -60,7 +60,13 @@ export function SiteHeader({ authed = false }: { authed?: boolean }) {
                 <Link href="/sign-in">Sign in</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/dashboard/terminal">Launch dashboard</Link>
+                {/* The overview, not the terminal. A button labelled "Launch
+                    dashboard" that opens a terminal is answering a different
+                    question than the one it was asked, and the overview is
+                    where somebody arriving without a destination in mind can
+                    see what they have. Links that say "Open terminal" still go
+                    straight there. */}
+                <Link href="/dashboard">Launch dashboard</Link>
               </Button>
             </>
           )}

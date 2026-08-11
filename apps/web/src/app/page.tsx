@@ -140,7 +140,7 @@ export default function Home() {
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild size="lg">
-                  <Link href="/dashboard/terminal">
+                  <Link href="/dashboard">
                     Launch the dashboard <ArrowRightIcon />
                   </Link>
                 </Button>
